@@ -1,0 +1,169 @@
+﻿@page "/my-subscription"
+@using System.Globalization
+@inject NavigationManager Nav
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">My Subscription</h2>
+        <p class="text-muted mb-0 page-sub">@BusinessName · plan, limits, billing status and renewal schedule.</p>
+    </div>
+    <button type="button" class="btn-outline-lg" @onclick="GoSettings">Business settings</button>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="row g-3">
+    <!-- PLAN USAGE -->
+    <div class="col-12 col-lg-8">
+        <div class="stat-card h-100">
+            <div class="panel-title">Plan usage</div>
+            <div class="panel-sub">@plan.Name allows @plan.Branches branches, @plan.Staff staff accounts and @plan.StorageGb GB storage.</div>
+
+            <div class="usage">
+                <div class="usage-row">
+                    <span class="usage-label"><i class="bi bi-shop"></i> Branches</span>
+                    <span class="usage-count">@branchesUsed / @plan.Branches</span>
+                </div>
+                <div class="bar-track"><div class="bar-fill" style="width:@Pct(branchesUsed, plan.Branches)%"></div></div>
+            </div>
+
+            <div class="usage">
+                <div class="usage-row">
+                    <span class="usage-label"><i class="bi bi-people"></i> Staff accounts</span>
+                    <span class="usage-count">@staffUsed / @plan.Staff</span>
+                </div>
+                <div class="bar-track"><div class="bar-fill" style="width:@Pct(staffUsed, plan.Staff)%"></div></div>
+            </div>
+
+            <div class="included-title">Included in your plan</div>
+            <ul class="included-list">
+                @foreach (var f in plan.Features)
+                {
+                    <li>@f</li>
+                }
+            </ul>
+        </div>
+    </div>
+
+    <!-- SUBSCRIPTION STATUS -->
+    <div class="col-12 col-lg-4">
+        <div class="stat-card h-100 p-0">
+            <div class="status-head">
+                <div class="panel-title">Subscription status</div>
+                <div class="panel-sub mb-0">Recorded billing history for this tenant</div>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Plan</th>
+                            <th>Renewal</th>
+                            <th>Amount</th>
+                            <th>Payment</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var h in history)
+                        {
+                            <tr>
+                                <td class="fw-medium">@h.Plan</td>
+                                <td class="text-nowrap">@h.Renewal.ToString("MMM d, yyyy", Inv)</td>
+                                <td class="text-nowrap">@Peso(h.Amount)</td>
+                                <td><span class="pill @(h.Payment == "Paid" ? "pill-green" : "pill-yellow")">@h.Payment</span></td>
+                                <td><span class="pill pill-green">@h.Status</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // ---------- MODELS ----------
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record PlanInfo(string Name, decimal Price, string Cycle, int Branches, int Staff, int StorageGb, string[] Features);
+    record HistoryRow(string Plan, DateTime Renewal, decimal Amount, string Payment, string Status);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // TODO: kuhaa ang business name, plan ug billing info gikan sa naka-login nga tenant
+    const string BusinessName = "Verdant Agri Ventures";
+
+    readonly PlanInfo plan = new(
+        "Growth", 3999m, "month", 3, 25, 50,
+        new[]
+        {
+            "3 branches",
+            "25 staff accounts",
+            "Labor and attendance monitoring",
+            "Cash drawer and daily collections",
+            "Production costing",
+            "Consolidated business reports",
+        });
+
+    // TODO: i-compute gikan sa Branches ug Staff modules kung naa na ang database
+    const int branchesUsed = 3;
+    const int staffUsed = 11;
+
+    const string BillingStatus = "paid";
+    readonly DateTime lastPaid = new(2026, 10, 5);
+    readonly DateTime nextRenewal = new(2026, 11, 30);
+    const bool AutoRenew = true;
+
+    readonly List<HistoryRow> history = new()
+    {
+        new("Growth", new(2026, 11, 30), 3999m, "Paid", "Active"),
+    };
+
+    // ---------- COMPUTED ----------
+    int DaysRemaining => (nextRenewal.Date - DateTime.Today).Days;
+
+    string RemainingText => DaysRemaining switch
+    {
+        0 => "Renews today",
+        1 => "1 day remaining",
+        > 1 => DaysRemaining + " days remaining",
+        -1 => "1 day overdue",
+        _ => -DaysRemaining + " days overdue"
+    };
+
+    List<Stat> Stats => new()
+    {
+        new("CURRENT PLAN", plan.Name, Peso(plan.Price) + " per " + plan.Cycle, "bi-credit-card", ""),
+        new("BILLING STATUS", BillingStatus, "Last paid " + lastPaid.ToString("MMM d, yyyy", Inv), "bi-arrow-repeat", ""),
+        new("NEXT RENEWAL", nextRenewal.ToString("MMM d, yyyy", Inv), RemainingText, "bi-calendar-check", "stat-icon-warn"),
+        new("AUTO-RENEW", AutoRenew ? "Enabled" : "Disabled", "Managed by the platform administrator", "bi-calendar-check", "stat-icon-plain"),
+    };
+
+    // ---------- HELPERS ----------
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+
+    static int Pct(int used, int limit) => limit <= 0 ? 0 : (int)Math.Min(100, Math.Round(used * 100.0 / limit));
+
+    // ---------- ACTIONS ----------
+    void GoSettings() => Nav.NavigateTo("settings");
+}

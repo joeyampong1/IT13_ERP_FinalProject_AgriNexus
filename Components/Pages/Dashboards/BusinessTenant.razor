@@ -1,0 +1,306 @@
+﻿@page "/business-dashboard"
+@using System.Globalization
+@inject NavigationManager Nav
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Business Dashboard</h2>
+        <p class="text-muted mb-0 page-sub">@BusinessName · @(branches.Count) branches · @(branches.Sum(b => b.Plots)) plots under management</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn-outline-lg" @onclick="GoReports">Consolidated reports</button>
+        <button type="button" class="btn-solid" @onclick="GoStaff">Manage staff</button>
+    </div>
+</div>
+
+<!-- TOP STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in TopStats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- CHARTS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-8">
+        <div class="stat-card h-100">
+            <div class="panel-title">Revenue trend</div>
+            <div class="panel-sub">Total sales value over the last 6 months</div>
+
+            <svg viewBox="0 0 640 300" class="w-100" style="max-height:340px" role="img" aria-label="Revenue trend">
+                @for (int i = 0; i <= 4; i++)
+                {
+                    var y = 20 + i * 60;
+                    var val = AxisMax / 4 * (4 - i);
+                    <g>
+                        <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                        <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
+                    </g>
+                }
+                @for (int i = 0; i < revenue.Count; i++)
+                {
+                    var r = revenue[i];
+                    var slot = 568.0 / revenue.Count;
+                    var w = slot * 0.8;
+                    var x = 62 + i * slot + (slot - w) / 2;
+                    var h = r.Amount / AxisMax * 240;
+                    <g>
+                        <rect x="@F(x)" y="@F(260 - h)" width="@F(w)" height="@F(h)" rx="5" fill="#62A834" />
+                        <text x="@F(x + w / 2)" y="282" text-anchor="middle" font-size="11" fill="#475569">@r.Month</text>
+                    </g>
+                }
+            </svg>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="stat-card h-100">
+            <div class="panel-title">Expense allocation</div>
+            <div class="panel-sub">Where branch spending goes</div>
+
+            <div class="d-flex justify-content-center my-3">
+                <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Expense allocation">
+                    @{
+                        double offset = 0;
+                    }
+                    @foreach (var e in expenseSlices)
+                    {
+                        var len = e.Amount / ExpenseTotal * Circ;
+                        var dash = Math.Max(len - 2, 0.5);
+                        <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@e.Color" stroke-width="30"
+                                stroke-dasharray="@F(dash) @F(Circ - dash)"
+                                stroke-dashoffset="@F(-offset)"
+                                transform="rotate(-90 100 100)" />
+                        offset += len;
+                    }
+                </svg>
+            </div>
+
+            <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
+                @foreach (var e in LegendSlices)
+                {
+                    <span><span class="legend-dot" style="background:@e.Color"></span>@e.Label</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BRANCH PERFORMANCE -->
+<div class="panel mb-4">
+    <div class="panel-head d-flex justify-content-between align-items-start">
+        <div>
+            <div class="panel-title">Branch performance</div>
+            <div class="panel-sub mb-0">Sales and expenses per branch</div>
+        </div>
+        <button type="button" class="btn-outline" @onclick="GoBranches"><i class="bi bi-shop"></i> Branches</button>
+    </div>
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Branch</th>
+                    <th>Manager</th>
+                    <th>Plots</th>
+                    <th>Staff</th>
+                    <th>Sales</th>
+                    <th>Expenses</th>
+                    <th>Margin</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in branches)
+                {
+                    var margin = b.Sales - b.Expenses;
+                    <tr>
+                        <td class="fw-semibold">@b.Name</td>
+                        <td>@b.Manager</td>
+                        <td>@b.Plots</td>
+                        <td>@b.Staff</td>
+                        <td class="fw-semibold text-nowrap">@Peso(b.Sales)</td>
+                        <td class="muted-amt text-nowrap">@Peso(b.Expenses)</td>
+                        <td class="text-nowrap @(margin < 0 ? "neg" : "")">@PesoSigned(margin)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- LATEST SALES -->
+<div class="panel mb-4">
+    <div class="panel-head">
+        <div class="panel-title">Latest sales</div>
+        <div class="panel-sub mb-0">Most recent transactions across all branches</div>
+    </div>
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Sale no.</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th>Total</th>
+                    <th>Balance</th>
+                    <th>Payment</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in sales)
+                {
+                    <tr>
+                        <td class="fw-medium">@s.No</td>
+                        <td>@s.Customer</td>
+                        <td class="text-nowrap">@s.Date.ToString("MMM d, yyyy", Inv)</td>
+                        <td class="text-nowrap">@Peso(s.Total)</td>
+                        <td class="text-nowrap">@Peso(s.Balance)</td>
+                        <td><span class="pill @(s.Balance == 0 ? "pill-green" : "pill-yellow")">@(s.Balance == 0 ? "Paid" : "Partial")</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- BOTTOM STAT CARDS -->
+<div class="row g-3">
+    @foreach (var s in BottomStats)
+    {
+        <div class="col-12 col-md-4">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // ---------- MODELS ----------
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record Branch(string Name, string Manager, int Plots, int Staff, decimal Sales, decimal Expenses);
+    record Sale(string No, string Customer, DateTime Date, decimal Total, decimal Balance);
+    record RevPoint(string Month, double Amount);
+    record ExpenseSlice(string Label, double Amount, string Color);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    const double Radius = 70;
+    static readonly double Circ = 2 * Math.PI * Radius;
+    const double AxisMax = 60000;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // TODO: kuhaa ang business name gikan sa naka-login nga tenant
+    const string BusinessName = "Verdant Agri Ventures";
+
+    readonly List<Branch> branches = new()
+    {
+        new("North Field Branch", "Ramon Delos Santos", 3, 4, 50680m, 63100m),
+        new("South Valley Branch", "Liza Fernandez", 2, 4, 55300m, 28450m),
+        new("Central Packing Branch", "Noel Bautista", 1, 1, 17300m, 5160m),
+    };
+
+    readonly List<Sale> sales = new()
+    {
+        new("SO-0014", "Municipal Market Vendors", new(2026, 10, 24), 4400m, 0m),
+        new("SO-0013", "Walk-in customers", new(2026, 10, 23), 2600m, 0m),
+        new("SO-0012", "Barangay Nutrition Program", new(2026, 10, 21), 10580m, 0m),
+        new("SO-0011", "Bayanihan Trading", new(2026, 10, 18), 11100m, 0m),
+        new("SO-0010", "Rural Bank Cooperative Store", new(2026, 10, 12), 13860m, 7000m),
+        new("SO-0009", "Verdant Fresh Retail", new(2026, 10, 6), 9880m, 0m),
+    };
+
+    readonly List<RevPoint> revenue = new()
+    {
+        new("Jun", 8800), new("Jul", 14000), new("Aug", 23000),
+        new("Sep", 25000), new("Oct", 52500), new("Nov", 0),
+    };
+
+    // Clockwise gikan sa taas
+    readonly List<ExpenseSlice> expenseSlices = new()
+    {
+        new("Labor", 24300, "#206A3B"),
+        new("Seeds", 2000, "#7BC043"),
+        new("Equipment", 8500, "#2F7D45"),
+        new("Transport", 1200, "#7FA9A3"),
+        new("Repairs", 3100, "#3B8EA5"),
+        new("Utilities", 7000, "#A86B4C"),
+        new("Fuel", 10200, "#92D050"),
+        new("Supplies", 40410, "#62A834"),
+    };
+
+    // Temporary summary values (wala pa naay ubang tables para i-compute)
+    const decimal OutstandingCollections = 31160m;
+    const int ActivePlantings = 4;
+    const int HarvestRecords = 7;
+    const int StaffAccounts = 11;
+    const int ActiveStaff = 10;
+    const int PlotAreaHa = 10;
+
+    // ---------- COMPUTED ----------
+    double ExpenseTotal => expenseSlices.Sum(e => e.Amount);
+
+    // Legend: ang unang upat ra, sama sa prototype
+    IEnumerable<ExpenseSlice> LegendSlices => new[] { "Labor", "Supplies", "Fuel", "Utilities" }
+        .Select(n => expenseSlices.First(e => e.Label == n));
+
+    List<Stat> TopStats
+    {
+        get
+        {
+            var today = DateTime.Today;
+            var monthSales = sales.Where(s => s.Date.Year == today.Year && s.Date.Month == today.Month).ToList();
+            return new()
+            {
+                new("SALES THIS MONTH", Peso(monthSales.Sum(s => s.Total)), monthSales.Count + " transactions", "bi-graph-up-arrow", ""),
+                new("EXPENSES THIS MONTH", Peso(0m), "0 entries", "bi-cash-coin", "stat-icon-plain"),
+                new("OUTSTANDING COLLECTIONS", Peso(OutstandingCollections), "Unpaid and partial payments", "bi-receipt", "stat-icon-warn"),
+                new("ACTIVE PLANTINGS", ActivePlantings.ToString(), HarvestRecords + " harvest records", "bi-flower1", "stat-icon-plain"),
+            };
+        }
+    }
+
+    List<Stat> BottomStats => new()
+    {
+        new("BRANCHES", branches.Count.ToString(), "", "bi-shop", ""),
+        new("STAFF ACCOUNTS", StaffAccounts.ToString(), ActiveStaff + " active", "bi-people", "stat-icon-blue"),
+        new("PLOT AREA (HA)", PlotAreaHa.ToString(), "", "bi-wallet2", "stat-icon-plain"),
+    };
+
+    // ---------- HELPERS ----------
+    static string F(double d) => d.ToString("0.##", Inv);
+
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+
+    static string PesoSigned(decimal v) => v < 0 ? "-₱" + (-v).ToString("N2", Inv) : Peso(v);
+
+    static string AxisLabel(double v) => v == 0 ? "₱0" : "₱" + (v / 1000).ToString("0", Inv) + "K";
+
+    // ---------- ACTIONS ----------
+    void GoReports() => Nav.NavigateTo("reports");
+    void GoStaff() => Nav.NavigateTo("staff");
+    void GoBranches() => Nav.NavigateTo("branches");
+}

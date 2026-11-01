@@ -1,0 +1,412 @@
+﻿@page "/staff"
+@using System.Globalization
+
+<div class="mb-4">
+    <h2 class="page-title">Staff Account Management</h2>
+    <p class="text-muted mb-0 page-sub">@BusinessName · create staff accounts, assign branch and role, and review what each role can access.</p>
+</div>
+
+<!-- TABS -->
+<div class="tabs mb-4">
+    <button type="button" class="tab-btn @(activeTab == "staff" ? "active" : "")" @onclick='() => SetTab("staff")'>Staff accounts</button>
+    <button type="button" class="tab-btn @(activeTab == "roles" ? "active" : "")" @onclick='() => SetTab("roles")'>Roles &amp; permissions</button>
+</div>
+
+@if (activeTab == "staff")
+{
+    <!-- TOOLBAR -->
+    <div class="toolbar mb-3">
+        <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" placeholder="Search staff by name, email or role.." @bind="searchText" @bind:event="oninput" />
+        </div>
+        <span class="text-muted small">@Filtered.Count staff @(Filtered.Count == 1 ? "account" : "accounts")</span>
+        <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+            <i class="bi bi-plus-lg"></i> New staff account
+        </button>
+    </div>
+
+    <!-- TABLE -->
+    <div class="panel">
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Branch</th>
+                        <th>Contact</th>
+                        <th>Hired</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in Filtered)
+                    {
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">@s.Name</div>
+                                <div class="sub">@s.Email</div>
+                            </td>
+                            <td>@RoleName(s.Role)</td>
+                            <td>@(string.IsNullOrWhiteSpace(s.Branch) ? "Unassigned" : s.Branch)</td>
+                            <td class="text-nowrap">@(string.IsNullOrWhiteSpace(s.Contact) ? "—" : s.Contact)</td>
+                            <td class="text-nowrap">@(s.Hired.HasValue ? s.Hired.Value.ToString("MMM d, yyyy", Inv) : "—")</td>
+                            <td><span class="pill @(s.Status == "active" ? "pill-green" : "pill-red")">@Cap(s.Status)</span></td>
+                            <td class="text-end action-cell">
+                                <button type="button" class="btn-dots" @onclick="() => ToggleMenu(s.Id)" aria-label="Actions">
+                                    <i class="bi bi-three-dots"></i>
+                                </button>
+                                @if (openMenuId == s.Id)
+                                {
+                                    <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                                    <div class="row-menu">
+                                        <button type="button" class="row-menu-item" @onclick="() => OpenEdit(s)">
+                                            <i class="bi bi-pencil"></i> Edit
+                                        </button>
+                                        <button type="button" class="row-menu-item" @onclick="() => ToggleSuspend(s)">
+                                            <i class="bi"></i> @(s.Status == "active" ? "Suspend access" : "Restore access")
+                                        </button>
+                                        <div class="menu-sep"></div>
+                                        <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(s)">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </button>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (Filtered.Count == 0)
+                    {
+                        <tr><td colspan="7" class="text-center text-muted py-5">No staff accounts found.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else
+{
+    <!-- ======================= ROLES & PERMISSIONS ======================= -->
+    <div class="info-banner mb-4">
+        <i class="bi bi-shield-check"></i>
+        <span>Seven user types are defined for this system. Modules below are the access level granted to each role — switching the role in the top bar changes the navigation, dashboards and records you can reach.</span>
+    </div>
+
+    <div class="row g-3">
+        @foreach (var r in roles)
+        {
+            <div class="col-12 col-lg-6">
+                <div class="role-card h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="role-name">@r.Name</div>
+                        <span class="module-badge">@r.Modules.Length modules</span>
+                    </div>
+                    <div class="role-access">@r.Access</div>
+                    <p class="role-desc">@r.Description</p>
+                    <ul class="module-list">
+                        @foreach (var m in r.Modules)
+                        {
+                            <li><i class="bi bi-check-circle"></i> <span>@m</span></li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="modal-heading mb-0">@(editingId == null ? "New staff account" : "Edit staff account")</h5>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Full name <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
+                    {
+                        <div class="err">Full name is required.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Email address</label>
+                    <input type="email" class="form-control @(showErrors && EmailTaken ? "is-invalid" : "")" @bind="form.Email" />
+                    @if (showErrors && EmailTaken)
+                    {
+                        <div class="err">This email is already used.</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Contact number</label>
+                    <input class="form-control" @bind="form.Contact" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Role</label>
+                    <select class="form-select" value="@form.Role" @onchange="OnRoleChanged">
+                        @foreach (var r in AssignableRoles)
+                        {
+                            <option value="@r.Key" selected="@(form.Role == r.Key)">@r.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Assigned branch</label>
+                    @if (IsWide(form.Role))
+                    {
+                        <input class="form-control" value="Business-wide" disabled />
+                    }
+                    else
+                    {
+                        <select class="form-select" @bind="form.Branch">
+                            <option value="">Select...</option>
+                            @foreach (var b in branchNames)
+                            {
+                                <option value="@b">@b</option>
+                            }
+                        </select>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Date hired</label>
+                    <input type="date" class="form-control" @bind="form.Hired" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="form.Status">
+                        <option value="active">active</option>
+                        <option value="suspended">suspended</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class StaffRec
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Contact { get; set; } = "";
+        public string Role { get; set; } = "branch-manager";
+        public string Branch { get; set; } = "";
+        public DateTime? Hired { get; set; }
+        public string Status { get; set; } = "active";   // active | suspended
+
+        public StaffRec Clone() => (StaffRec)MemberwiseClone();
+    }
+
+    record RoleDef(string Key, string Name, string Access, string Description, string[] Modules);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    // TODO: kuhaa ang business name ug branch list gikan sa naka-login nga tenant / Branches module
+    const string BusinessName = "Verdant Agri Ventures";
+    readonly string[] branchNames = { "North Field Branch", "South Valley Branch", "Central Packing Branch" };
+
+    // ---------- STATE ----------
+    string activeTab = "staff";
+    string searchText = "";
+    string toast = "";
+    bool showModal;
+    bool showErrors;
+    int? editingId;
+    int? openMenuId;
+    StaffRec form = new();
+
+    // ---------- ROLES (ang 7 ka user types sa system) ----------
+    static readonly RoleDef[] roles =
+    {
+        new("super-admin", "Super Admin", "Platform-wide access",
+            "Manages all registered businesses, subscription plans and platform settings. Access to each business’s private financial records is not automatically granted.",
+            new[] { "Super Admin Dashboard", "Business / Tenant Management", "Subscription Plan Management", "Feature Management",
+                    "Subscription Monitoring and Renewal", "Platform Settings", "System-wide Audit Logs", "Synchronization Status Monitoring" }),
+
+        new("tenant-admin", "Business Owner / Tenant Admin", "Business-wide access",
+            "Manages the business, branches, staff accounts, permissions and overall business performance.",
+            new[] { "Business Dashboard", "Business Profile", "Branch Management", "Staff Account Management",
+                    "Role and Permission Management", "My Subscription", "Consolidated Business Reports", "Business Settings" }),
+
+        new("branch-manager", "Branch Manager", "Assigned branch access",
+            "Supervises day-to-day operations of the assigned branch. Sensitive financial transactions may be restricted based on permissions.",
+            new[] { "Branch Dashboard", "Farm and Plot Management", "Crop Planning and Planting", "Inventory Monitoring",
+                    "Labor and Worker Monitoring", "Harvest Monitoring", "Sales Monitoring", "Branch Expense Monitoring",
+                    "Branch Operational Reports" }),
+
+        new("inventory-officer", "Inventory Officer", "Assigned branch access",
+            "Tracks seeds, fertilizers, tools, and other farm supplies. Harvested produce is managed as a distinct inventory category.",
+            new[] { "Item and Supply Management", "Supplier Records", "Stock Receiving", "Stock Issuance",
+                    "Inventory Adjustments", "Stock Movement History", "Low-stock Monitoring", "Inventory Reports" }),
+
+        new("labor-officer", "Labor & Harvest Officer", "Assigned branch access",
+            "Manages labor records and harvesting activities, including recording quantities and updating produce inventory once a harvest is approved.",
+            new[] { "Worker Records", "Work Assignments", "Labor Attendance and Work Logs", "Labor Cost Records",
+                    "Worker Activity Reports", "Harvest Recording", "Harvest Lot Management", "Harvest Quality and Quantity",
+                    "Produce Stock Recording", "Harvest History and Reports" }),
+
+        new("sales-officer", "Sales & Cashier Officer", "Assigned branch access",
+            "Manages customers, sales transactions, payment collection and receipts. For partial payments the remaining balance stays outstanding.",
+            new[] { "Customer Management", "Produce Availability", "Sales Transactions", "Sale Items and Pricing",
+                    "Sales Order History", "Sales Reports", "Payment Collection", "Partial and Full Payments",
+                    "Receipt Generation", "Cash Session / Cash Drawer", "Cash Movements", "Payment History",
+                    "Daily Collection Reports" }),
+
+        new("accountant", "Accountant / Finance Officer", "Business-wide access",
+            "Reviews expenses, production costs, revenue and estimated profitability. Editing completed payments is restricted to protect cashier records.",
+            new[] { "Expense Management", "Production Costing", "Cost Allocation", "Labor and Supply Cost Review",
+                    "Sales and Collection Reports", "Revenue and Profit Estimation", "Financial Reports", "Financial Audit Trail" }),
+    };
+
+    // Ang Super Admin kay platform staff, dili ma-create sa tenant
+    static IEnumerable<RoleDef> AssignableRoles => roles.Where(r => r.Key != "super-admin");
+
+    static readonly HashSet<string> WideRoles = new() { "tenant-admin", "accountant" };
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    readonly List<StaffRec> staff = new()
+    {
+        new() { Id = 1,  Name = "Maria L. Santos",     Email = "maria.santos@verdantagri.ph", Contact = "0917 555 0142", Role = "tenant-admin",      Branch = "Business-wide",         Hired = new(2024, 2, 14), Status = "active" },
+        new() { Id = 2,  Name = "Ramon Delos Santos",  Email = "ramon.ds@verdantagri.ph",     Contact = "0917 220 1145", Role = "branch-manager",    Branch = "North Field Branch",    Hired = new(2024, 3, 1),  Status = "active" },
+        new() { Id = 3,  Name = "Liza Fernandez",      Email = "liza.f@verdantagri.ph",       Contact = "0918 771 3320", Role = "branch-manager",    Branch = "South Valley Branch",   Hired = new(2024, 9, 15), Status = "active" },
+        new() { Id = 4,  Name = "Allan Mercado",       Email = "allan.m@verdantagri.ph",      Contact = "0917 889 4402", Role = "inventory-officer", Branch = "North Field Branch",    Hired = new(2024, 4, 11), Status = "suspended" },
+        new() { Id = 5,  Name = "Cristina Yabut",      Email = "cristina.y@verdantagri.ph",   Contact = "0920 331 7788", Role = "inventory-officer", Branch = "South Valley Branch",   Hired = new(2025, 1, 6),  Status = "active" },
+        new() { Id = 6,  Name = "Dante Villamor",      Email = "dante.v@verdantagri.ph",      Contact = "0919 445 2210", Role = "labor-officer",     Branch = "North Field Branch",    Hired = new(2024, 5, 2),  Status = "active" },
+        new() { Id = 7,  Name = "Marites Aquino",      Email = "marites.a@verdantagri.ph",    Contact = "0921 778 5567", Role = "labor-officer",     Branch = "South Valley Branch",   Hired = new(2025, 2, 18), Status = "active" },
+        new() { Id = 8,  Name = "Paolo Gutierrez",     Email = "paolo.g@verdantagri.ph",      Contact = "0922 614 9083", Role = "sales-officer",     Branch = "North Field Branch",    Hired = new(2024, 6, 10), Status = "active" },
+        new() { Id = 9,  Name = "Jenny Ramos",         Email = "jenny.r@verdantagri.ph",      Contact = "0923 105 7741", Role = "sales-officer",     Branch = "South Valley Branch",   Hired = new(2025, 3, 3),  Status = "active" },
+        new() { Id = 10, Name = "Noel Bautista",       Email = "noel.b@verdantagri.ph",       Contact = "0920 553 8891", Role = "branch-manager",    Branch = "Central Packing Branch",Hired = new(2025, 5, 20), Status = "active" },
+        new() { Id = 11, Name = "Bernardo Ocampo",     Email = "bernardo.o@verdantagri.ph",   Contact = "0925 880 3316", Role = "accountant",        Branch = "Business-wide",         Hired = new(2024, 7, 22), Status = "active" },
+    };
+
+    // ---------- COMPUTED ----------
+    List<StaffRec> Filtered => string.IsNullOrWhiteSpace(searchText)
+        ? staff
+        : staff.Where(s =>
+            s.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            s.Email.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            RoleName(s.Role).Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            s.Branch.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    bool EmailTaken => !string.IsNullOrWhiteSpace(form.Email) &&
+        staff.Any(s => s.Id != (editingId ?? -1) &&
+                       string.Equals(s.Email, form.Email.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    static string RoleName(string key) => roles.FirstOrDefault(r => r.Key == key)?.Name ?? key;
+    static bool IsWide(string key) => WideRoles.Contains(key);
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    // ---------- ACTIONS ----------
+    void SetTab(string key)
+    {
+        activeTab = key;
+        openMenuId = null;
+    }
+
+    void OpenNew()
+    {
+        form = new StaffRec { Role = "branch-manager", Status = "active" };
+        editingId = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void OpenEdit(StaffRec s)
+    {
+        form = s.Clone();
+        editingId = s.Id;
+        showErrors = false;
+        openMenuId = null;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    void OnRoleChanged(ChangeEventArgs e)
+    {
+        var key = e.Value?.ToString() ?? form.Role;
+        form.Role = key;
+        if (IsWide(key)) form.Branch = "Business-wide";
+        else if (form.Branch == "Business-wide") form.Branch = "";
+    }
+
+    void Save()
+    {
+        showErrors = true;
+        if (string.IsNullOrWhiteSpace(form.Name) || EmailTaken) return;
+
+        form.Name = form.Name.Trim();
+        form.Email = (form.Email ?? "").Trim();
+        form.Hired ??= DateTime.Today;
+        if (IsWide(form.Role)) form.Branch = "Business-wide";
+
+        if (editingId == null)
+        {
+            form.Id = staff.Count == 0 ? 1 : staff.Max(s => s.Id) + 1;
+            staff.Add(form);
+        }
+        else
+        {
+            var idx = staff.FindIndex(s => s.Id == editingId);
+            if (idx >= 0) staff[idx] = form;
+        }
+        showModal = false;
+    }
+
+    async Task ToggleSuspend(StaffRec s)
+    {
+        openMenuId = null;
+        if (s.Role == "tenant-admin")
+        {
+            await ShowToast("The business owner account can’t be suspended.");
+            return;
+        }
+        s.Status = s.Status == "active" ? "suspended" : "active";
+        // TODO: i-log sa Audit Logs
+    }
+
+    async Task Delete(StaffRec s)
+    {
+        openMenuId = null;
+        if (s.Role == "tenant-admin")
+        {
+            await ShowToast("The business owner account can’t be deleted.");
+            return;
+        }
+        staff.Remove(s);
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3000);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

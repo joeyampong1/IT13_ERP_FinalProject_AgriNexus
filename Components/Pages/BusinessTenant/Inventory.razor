@@ -1,0 +1,598 @@
+﻿@page "/inventory"
+@using System.Globalization
+@inject NavigationManager Nav
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Inventory</h2>
+        <p class="text-muted mb-0 page-sub">@ActiveBranch · seeds, fertilizers, tools, fuel and harvested produce held in stock.</p>
+    </div>
+    <button type="button" class="btn-solid" @onclick="GoStock">Receive / issue stock</button>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TABS -->
+<div class="tabs mb-4">
+    <button type="button" class="tab-btn @(activeTab == "items" ? "active" : "")" @onclick='() => SetTab("items")'>Item and supply management</button>
+    <button type="button" class="tab-btn @(activeTab == "low" ? "active" : "")" @onclick='() => SetTab("low")'>Low-stock monitoring</button>
+    <button type="button" class="tab-btn @(activeTab == "produce" ? "active" : "")" @onclick='() => SetTab("produce")'>Produce stock</button>
+    <button type="button" class="tab-btn @(activeTab == "reports" ? "active" : "")" @onclick='() => SetTab("reports")'>Inventory reports</button>
+</div>
+
+<!-- ======================= ITEMS ======================= -->
+@if (activeTab == "items")
+{
+    <div class="toolbar mb-3">
+        <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" placeholder="Search items..." @bind="searchText" @bind:event="oninput" />
+        </div>
+        <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "item" : "items")</span>
+        <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+            <i class="bi bi-plus-lg"></i> New item
+        </button>
+    </div>
+
+    <div class="panel">
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Category</th>
+                        <th>On hand</th>
+                        <th>Stock<br />level</th>
+                        <th>Reorder<br />at</th>
+                        <th>Unit cost</th>
+                        <th>Stock<br />value</th>
+                        <th>Supplier</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in Filtered)
+                    {
+                        <tr>
+                            <td class="col-item">
+                                <div class="fw-semibold">@i.Name</div>
+                                <div class="sub">@i.Sku@(string.IsNullOrWhiteSpace(i.Location) ? "" : " · " + i.Location)</div>
+                            </td>
+                            <td>@Cap(i.Category)</td>
+                            <td class="text-nowrap">@Qty(i.OnHand) @i.Unit</td>
+                            <td><span class="pill @(IsLow(i) ? "pill-yellow" : "pill-green")">@(IsLow(i) ? "Pending" : "Active")</span></td>
+                            <td class="num-muted">@(i.Reorder > 0 ? Qty(i.Reorder) : "—")</td>
+                            <td class="text-nowrap">@Peso(i.UnitCost)</td>
+                            <td class="text-nowrap">@Peso(i.OnHand * i.UnitCost)</td>
+                            <td class="col-supplier">@(string.IsNullOrWhiteSpace(i.Supplier) ? "—" : i.Supplier)</td>
+                            <td class="text-end action-cell">
+                                <button type="button" class="btn-dots" @onclick="() => ToggleMenu(i.Id)" aria-label="Actions">
+                                    <i class="bi bi-three-dots"></i>
+                                </button>
+                                @if (openMenuId == i.Id)
+                                {
+                                    <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                                    <div class="row-menu">
+                                        <button type="button" class="row-menu-item" @onclick="() => OpenEdit(i)">
+                                            <i class="bi bi-pencil"></i> Edit
+                                        </button>
+                                        <div class="menu-sep"></div>
+                                        <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(i)">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </button>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (Filtered.Count == 0)
+                    {
+                        <tr><td colspan="9" class="text-center text-muted py-5">No items found.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<!-- ======================= LOW STOCK ======================= -->
+@if (activeTab == "low")
+{
+    <div class="panel">
+        <div class="panel-head">
+            <div class="panel-title">Low-stock monitoring</div>
+            <div class="panel-sub mb-0">Items at or below their reorder level</div>
+        </div>
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Category</th>
+                        <th>On hand</th>
+                        <th>Reorder at</th>
+                        <th>Shortage</th>
+                        <th>Suggested order</th>
+                        <th>Supplier</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in LowItems)
+                    {
+                        <tr>
+                            <td class="col-item">
+                                <div class="fw-semibold">@i.Name</div>
+                                <div class="sub">@i.Sku</div>
+                            </td>
+                            <td>@Cap(i.Category)</td>
+                            <td class="text-nowrap fw-medium neg">@Qty(i.OnHand) @i.Unit</td>
+                            <td class="text-nowrap">@Qty(i.Reorder) @i.Unit</td>
+                            <td class="text-nowrap">@Qty(Math.Max(0, i.Reorder - i.OnHand)) @i.Unit</td>
+                            <td class="text-nowrap fw-medium">@Qty(Math.Max(0, i.Reorder * 2 - i.OnHand)) @i.Unit</td>
+                            <td class="col-supplier">@(string.IsNullOrWhiteSpace(i.Supplier) ? "—" : i.Supplier)</td>
+                        </tr>
+                    }
+                    @if (LowItems.Count == 0)
+                    {
+                        <tr><td colspan="7" class="text-center text-muted py-5">All items are above their reorder level.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="sub mt-2">Suggested order brings each item back to twice its reorder level.</div>
+}
+
+<!-- ======================= PRODUCE ======================= -->
+@if (activeTab == "produce")
+{
+    <div class="panel">
+        <div class="panel-head">
+            <div class="panel-title">Produce stock</div>
+            <div class="panel-sub mb-0">Harvested produce, managed as a separate inventory category</div>
+        </div>
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Lot</th>
+                        <th>Source plot</th>
+                        <th>On hand</th>
+                        <th>Unit value</th>
+                        <th>Stock value</th>
+                        <th>Storage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in ProduceItems)
+                    {
+                        <tr>
+                            <td class="col-item">
+                                <div class="fw-semibold">@i.Name</div>
+                                <div class="sub">@i.Sku</div>
+                            </td>
+                            <td>@(string.IsNullOrWhiteSpace(i.Source) ? "—" : i.Source)</td>
+                            <td class="text-nowrap">@Qty(i.OnHand) @i.Unit</td>
+                            <td class="text-nowrap">@Peso(i.UnitCost)</td>
+                            <td class="text-nowrap">@Peso(i.OnHand * i.UnitCost)</td>
+                            <td>@(string.IsNullOrWhiteSpace(i.Location) ? "—" : i.Location)</td>
+                        </tr>
+                    }
+                    @if (ProduceItems.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center text-muted py-5">No produce in stock.</td></tr>
+                    }
+                </tbody>
+                @if (ProduceItems.Count > 0)
+                {
+                    <tfoot>
+                        <tr>
+                            <td class="fw-semibold">Total</td>
+                            <td></td>
+                            <td class="fw-semibold text-nowrap">@Qty(ProduceKg) kg</td>
+                            <td></td>
+                            <td class="fw-semibold text-nowrap">@Peso(ProduceItems.Sum(p => p.OnHand * p.UnitCost))</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                }
+            </table>
+        </div>
+    </div>
+    <div class="sub mt-2">New produce lots are added when a harvest is approved in Harvest Recording.</div>
+}
+
+<!-- ======================= REPORTS ======================= -->
+@if (activeTab == "reports")
+{
+    <div class="panel">
+        <div class="panel-head">
+            <div class="panel-title">Stock value by category</div>
+            <div class="panel-sub mb-0">How inventory value is distributed</div>
+        </div>
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Items</th>
+                        <th>Low stock</th>
+                        <th>Stock value</th>
+                        <th class="col-share">Share</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in CategorySummary)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@Cap(c.Category)</td>
+                            <td>@c.Items</td>
+                            <td class="@(c.Low > 0 ? "neg fw-medium" : "num-muted")">@c.Low</td>
+                            <td class="text-nowrap">@Peso(c.Value)</td>
+                            <td>
+                                <div class="share-cell">
+                                    <div class="bar-track"><div class="bar-fill" style="width:@Share(c.Value)%"></div></div>
+                                    <span class="share-text">@Share(c.Value)%</span>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td class="fw-semibold">Total</td>
+                        <td class="fw-semibold">@items.Count</td>
+                        <td class="fw-semibold">@items.Count(IsLow)</td>
+                        <td class="fw-semibold text-nowrap">@Peso(TotalValue)</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+}
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="modal-heading mb-0">@(editingId == null ? "New item" : "Edit item")</h5>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Item name <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
+                    {
+                        <div class="err">Item name is required.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">SKU / code</label>
+                    <input class="form-control @(showErrors && SkuTaken ? "is-invalid" : "")" placeholder="@NextSku(form.Category)" @bind="form.Sku" />
+                    @if (showErrors && SkuTaken)
+                    {
+                        <div class="err">This code is already used.</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Category</label>
+                    @if (form.Category == "produce")
+                    {
+                        <input class="form-control" value="produce" disabled />
+                    }
+                    else
+                    {
+                        <select class="form-select" @bind="form.Category">
+                            @foreach (var c in CategoryOptions)
+                            {
+                                <option value="@c">@c</option>
+                            }
+                        </select>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Unit</label>
+                    <select class="form-select" @bind="form.Unit">
+                        @foreach (var u in UnitOptions)
+                        {
+                            <option value="@u">@u</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Quantity on hand</label>
+                    <input type="number" min="0" step="any" class="form-control @(showErrors && Negative(qtyInput) ? "is-invalid" : "")" @bind="qtyInput" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Reorder level</label>
+                    <input type="number" min="0" step="any" class="form-control @(showErrors && Negative(reorderInput) ? "is-invalid" : "")" @bind="reorderInput" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Unit cost (₱)</label>
+                    <input type="number" min="0" step="0.01" class="form-control @(showErrors && Negative(costInput) ? "is-invalid" : "")" @bind="costInput" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Supplier</label>
+                    <input class="form-control" @bind="form.Supplier" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Storage location</label>
+                    <input class="form-control" @bind="form.Location" />
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                </div>
+            </div>
+
+            @if (showErrors && AnyNegative)
+            {
+                <div class="err mt-3"><i class="bi bi-exclamation-circle"></i> Quantity, reorder level and cost can’t be negative.</div>
+            }
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class ItemRec
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Sku { get; set; } = "";
+        public string Location { get; set; } = "";
+        public string Category { get; set; } = "supplies";
+        public string Unit { get; set; } = "kg";
+        public decimal OnHand { get; set; }
+        public decimal Reorder { get; set; }
+        public decimal UnitCost { get; set; }
+        public string Supplier { get; set; } = "";
+        public string Source { get; set; } = "";    // para sa produce: plot nga gigikanan
+        public string Notes { get; set; } = "";
+
+        public ItemRec Clone() => (ItemRec)MemberwiseClone();
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record CatRow(string Category, int Items, int Low, decimal Value);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    static readonly string[] CategoryOptions = { "seeds", "fertilizer", "pesticide", "tools", "fuel", "packaging", "supplies" };
+    static readonly string[] UnitOptions = { "kg", "sack", "bottle", "liter", "piece", "pair", "box" };
+
+    // TODO: kuhaa gikan sa naka-login nga tenant
+    const string ActiveBranch = "North Field Branch";
+
+    // ---------- STATE ----------
+    string activeTab = "items";
+    string searchText = "";
+    string toast = "";
+    bool showModal;
+    bool showErrors;
+    int? editingId;
+    int? openMenuId;
+    ItemRec form = new();
+    decimal? qtyInput, reorderInput, costInput;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    readonly List<ItemRec> items = new()
+    {
+        new() { Id = 1,  Name = "Certified rice seeds (NSIC Rc222)", Sku = "SEED-001", Location = "Dry storage A",   Category = "seeds",      Unit = "kg",     OnHand = 180, Reorder = 100, UnitCost = 55,   Supplier = "Pioneer Seeds Depot" },
+        new() { Id = 2,  Name = "Hybrid corn seeds (Pioneer 30T80)", Sku = "SEED-002", Location = "Dry storage A",   Category = "seeds",      Unit = "kg",     OnHand = 30,  Reorder = 40,  UnitCost = 320,  Supplier = "Pioneer Seeds Depot" },
+        new() { Id = 3,  Name = "Urea (46-0-0)",                     Sku = "FER-001",  Location = "Fertilizer shed",  Category = "fertilizer", Unit = "sack",   OnHand = 6,   Reorder = 10,  UnitCost = 1450, Supplier = "Central Luzon Agri Supply" },
+        new() { Id = 4,  Name = "Complete fertilizer (14-14-14)",    Sku = "FER-002",  Location = "Fertilizer shed",  Category = "fertilizer", Unit = "sack",   OnHand = 26,  Reorder = 15,  UnitCost = 1680, Supplier = "Central Luzon Agri Supply" },
+        new() { Id = 5,  Name = "Organic compost",                   Sku = "FER-003",  Location = "Fertilizer shed",  Category = "fertilizer", Unit = "sack",   OnHand = 42,  Reorder = 20,  UnitCost = 480,  Supplier = "Central Luzon Agri Supply" },
+        new() { Id = 6,  Name = "Insecticide (lambda-cyhalothrin)",  Sku = "PES-001",  Location = "Chemical cabinet", Category = "pesticide",  Unit = "bottle", OnHand = 2,   Reorder = 5,   UnitCost = 780,  Supplier = "GreenShield Crop Protection" },
+        new() { Id = 7,  Name = "Herbicide (glyphosate)",            Sku = "PES-002",  Location = "Chemical cabinet", Category = "pesticide",  Unit = "liter",  OnHand = 9,   Reorder = 6,   UnitCost = 620,  Supplier = "GreenShield Crop Protection" },
+        new() { Id = 8,  Name = "Knapsack sprayer 16L",             Sku = "TOOL-001", Location = "Tool room",        Category = "tools",      Unit = "piece",  OnHand = 4,   Reorder = 2,   UnitCost = 2350, Supplier = "FarmTech Machinery & Tools" },
+        new() { Id = 9,  Name = "Hand trowel",                       Sku = "TOOL-002", Location = "Tool room",        Category = "tools",      Unit = "piece",  OnHand = 22,  Reorder = 10,  UnitCost = 180,  Supplier = "FarmTech Machinery & Tools" },
+        new() { Id = 10, Name = "Work gloves",                       Sku = "TOOL-003", Location = "Tool room",        Category = "tools",      Unit = "pair",   OnHand = 7,   Reorder = 10,  UnitCost = 110,  Supplier = "FarmTech Machinery & Tools" },
+        new() { Id = 11, Name = "Diesel fuel",                       Sku = "FUEL-001", Location = "Fuel storage",     Category = "fuel",       Unit = "liter",  OnHand = 380, Reorder = 100, UnitCost = 62,   Supplier = "Valley Fuel Station" },
+        new() { Id = 12, Name = "Empty sacks (50 kg)",               Sku = "PKG-001",  Location = "Warehouse",        Category = "packaging",  Unit = "piece",  OnHand = 352, Reorder = 100, UnitCost = 12,   Supplier = "Central Luzon Agri Supply" },
+
+        // Produce lots (gikan sa approved harvests)
+        new() { Id = 13, Name = "Palay (rice)",  Sku = "LOT-001", Location = "Warehouse bay 1", Category = "produce", Unit = "kg", OnHand = 1000, UnitCost = 22, Source = "North Plot A" },
+        new() { Id = 14, Name = "Yellow corn",   Sku = "LOT-002", Location = "Warehouse bay 2", Category = "produce", Unit = "kg", OnHand = 600,  UnitCost = 18, Source = "North Plot B" },
+        new() { Id = 15, Name = "Cabbage",       Sku = "LOT-003", Location = "Cold room",       Category = "produce", Unit = "kg", OnHand = 650,  UnitCost = 25, Source = "South Plot D" },
+        new() { Id = 16, Name = "Ampalaya",      Sku = "LOT-004", Location = "Cold room",       Category = "produce", Unit = "kg", OnHand = 400,  UnitCost = 40, Source = "South Plot E" },
+    };
+
+    // ---------- COMPUTED ----------
+    List<ItemRec> Filtered => string.IsNullOrWhiteSpace(searchText)
+        ? items
+        : items.Where(i =>
+            i.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            i.Sku.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            i.Category.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            i.Supplier.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    List<ItemRec> LowItems => items.Where(IsLow)
+        .OrderBy(i => i.Reorder == 0 ? 1 : i.OnHand / i.Reorder).ToList();
+
+    List<ItemRec> ProduceItems => items.Where(i => i.Category == "produce").ToList();
+
+    decimal ProduceKg => ProduceItems.Sum(p => p.OnHand);
+    decimal TotalValue => items.Sum(i => i.OnHand * i.UnitCost);
+
+    List<CatRow> CategorySummary => items
+        .GroupBy(i => i.Category)
+        .Select(g => new CatRow(g.Key, g.Count(), g.Count(IsLow), g.Sum(i => i.OnHand * i.UnitCost)))
+        .OrderByDescending(c => c.Value)
+        .ToList();
+
+    List<Stat> Stats => new()
+    {
+        new("ITEMS TRACKED", items.Count.ToString(), ProduceItems.Count + " produce lots", "bi-boxes", ""),
+        new("STOCK VALUE", Peso(TotalValue), "", "bi-cash-coin", "stat-icon-plain"),
+        new("LOW STOCK", items.Count(IsLow).ToString(), "At or below reorder level", "bi-exclamation-triangle", "stat-icon-warn"),
+        new("PRODUCE ON HAND", Qty(ProduceKg) + " kg", "", "bi-flower2", "stat-icon-plain"),
+    };
+
+    bool SkuTaken => !string.IsNullOrWhiteSpace(form.Sku) &&
+        items.Any(i => i.Id != (editingId ?? -1) &&
+                       string.Equals(i.Sku, form.Sku.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    bool AnyNegative => Negative(qtyInput) || Negative(reorderInput) || Negative(costInput);
+
+    // ---------- HELPERS ----------
+    static bool IsLow(ItemRec i) => i.Reorder > 0 && i.OnHand <= i.Reorder;
+
+    static bool Negative(decimal? v) => v.HasValue && v.Value < 0;
+
+    static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
+
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    int Share(decimal value) => TotalValue <= 0 ? 0 : (int)Math.Round(value * 100 / TotalValue);
+
+    string NextSku(string category)
+    {
+        var prefix = category switch
+        {
+            "seeds" => "SEED",
+            "fertilizer" => "FER",
+            "pesticide" => "PES",
+            "tools" => "TOOL",
+            "fuel" => "FUEL",
+            "packaging" => "PKG",
+            "produce" => "LOT",
+            _ => "SUP"
+        };
+
+        var max = 0;
+        foreach (var i in items)
+        {
+            var parts = i.Sku.Split('-');
+            if (parts.Length == 2 && parts[0].Equals(prefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(parts[1], out var n))
+                max = Math.Max(max, n);
+        }
+        return prefix + "-" + (max + 1).ToString("000");
+    }
+
+    // ---------- ACTIONS ----------
+    void SetTab(string key)
+    {
+        activeTab = key;
+        openMenuId = null;
+    }
+
+    void GoStock() => Nav.NavigateTo("stock");
+
+    void OpenNew()
+    {
+        form = new ItemRec { Category = "supplies", Unit = "kg" };
+        qtyInput = reorderInput = costInput = null;
+        editingId = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void OpenEdit(ItemRec i)
+    {
+        form = i.Clone();
+        qtyInput = i.OnHand;
+        reorderInput = i.Reorder;
+        costInput = i.UnitCost;
+        editingId = i.Id;
+        showErrors = false;
+        openMenuId = null;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    void Save()
+    {
+        showErrors = true;
+        if (string.IsNullOrWhiteSpace(form.Name) || SkuTaken || AnyNegative) return;
+
+        form.Name = form.Name.Trim();
+        form.Sku = string.IsNullOrWhiteSpace(form.Sku) ? NextSku(form.Category) : form.Sku.Trim();
+        form.OnHand = qtyInput ?? 0;
+        form.Reorder = reorderInput ?? 0;
+        form.UnitCost = costInput ?? 0;
+
+        if (editingId == null)
+        {
+            form.Id = items.Count == 0 ? 1 : items.Max(i => i.Id) + 1;
+            items.Add(form);
+        }
+        else
+        {
+            var idx = items.FindIndex(i => i.Id == editingId);
+            if (idx >= 0)
+            {
+                form.Source = items[idx].Source;
+                items[idx] = form;
+            }
+        }
+        // TODO: i-log sa Audit Logs / Stock Movements kung nausab ang quantity
+        showModal = false;
+    }
+
+    async Task Delete(ItemRec i)
+    {
+        openMenuId = null;
+        if (i.Category == "produce")
+        {
+            await ShowToast("Produce lots come from approved harvests and can’t be deleted here.");
+            return;
+        }
+        items.Remove(i);
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3500);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

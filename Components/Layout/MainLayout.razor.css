@@ -1,0 +1,134 @@
+/* ===== MAIN LAYOUT ===== */
+.page {
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+.sidebar {
+    background-color: var(--sidebar-bg);
+    width: 260px;
+    min-width: 260px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    border-right: 1px solid rgba(0,0,0,0.1);
+}
+
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background-color: var(--bg-main);
+}
+
+.top-row {
+    background-color: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    justify-content: space-between;
+    height: 4.5rem;
+    display: flex;
+    align-items: center;
+    padding: 0 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+.content {
+    padding: 2rem;
+    flex-grow: 1;
+}
+
+/* ===== USER MENU DROPDOWN ===== */
+.user-menu {
+    position: relative;
+    min-width: 220px;
+}
+
+.user-menu-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: .55rem .9rem;
+    background: #EEF5F0;
+    border: 1px solid #CFE0D4;
+    border-radius: 12px;
+    font-weight: 600;
+    color: var(--text-main);
+    cursor: pointer;
+}
+
+    .user-menu-btn:hover {
+        background: #E4EFE8;
+    }
+
+    .user-menu-btn .rot {
+        transform: rotate(180deg);
+    }
+
+.user-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 19;
+}
+
+.user-menu-list {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    width: 100%;
+    z-index: 20;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 10px 25px rgba(0,0,0,.1);
+}
+
+.user-menu-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    margin: 0 !important;
+    box-sizing: border-box;
+    font-family: inherit;
+    line-height: 1.2;
+    background: none;
+    border: 0;
+    padding: .6rem .8rem;
+    border-radius: 8px;
+    font-size: .9rem;
+    text-align: left;
+    cursor: pointer;
+    color: var(--text-main);
+    text-decoration: none !important;
+}
+
+    .user-menu-item i {
+        width: 20px;
+        text-align: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+        line-height: 1;
+    }
+
+    .user-menu-item:hover {
+        background: #F1F5F9;
+    }
+
+.user-menu-sep {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 0;
+}

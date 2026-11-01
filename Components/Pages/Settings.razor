@@ -1,0 +1,516 @@
+﻿@page "/settings"
+@inject AgriNexus.Services.AuthService Auth
+
+<div class="mb-4">
+    <h2 class="page-title">Settings</h2>
+    <p class="text-muted mb-0 page-sub">Manage your profile, security, notifications, and preferences for your role.</p>
+</div>
+
+<div class="settings-layout">
+
+    <!-- LEFT: TAB NAV -->
+    <aside class="settings-nav">
+        @foreach (var t in Tabs)
+        {
+            <button type="button" class="settings-tab @(activeTab == t.Key ? "active" : "")" @onclick="() => SetTab(t.Key)">
+                <i class="bi @t.Icon"></i> <span>@t.Label</span>
+            </button>
+        }
+    </aside>
+
+    <!-- RIGHT: CONTENT -->
+    <section class="settings-content">
+
+        @if (!string.IsNullOrEmpty(toast))
+        {
+            <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+        }
+
+        <!-- ================= PROFILE ================= -->
+        @if (activeTab == "profile")
+        {
+            <div class="card-box">
+                <div class="card-head">
+                    <div class="panel-title">Profile</div>
+                    <div class="panel-sub">Your personal information shown across the platform.</div>
+                </div>
+
+                <div class="profile-row">
+                    <div class="avatar">@Initials</div>
+                    <div>
+                        <div class="fw-semibold">@Auth.CurrentUserName</div>
+                        <div class="role-chip"><i class="bi bi-shield-lock"></i> @Auth.AccessLevel</div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Full name <span class="req">*</span></label>
+                        <input class="form-control @(profileErrors && string.IsNullOrWhiteSpace(fullName) ? "is-invalid" : "")" @bind="fullName" />
+                        @if (profileErrors && string.IsNullOrWhiteSpace(fullName))
+                        {
+                            <div class="err">Full name is required.</div>
+                        }
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" placeholder="name@company.ph" @bind="email" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Contact number</label>
+                        <input class="form-control" placeholder="09XX XXX XXXX" @bind="contact" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Role</label>
+                        <input class="form-control" value="@RoleLabel" disabled />
+                    </div>
+                </div>
+
+                <div class="card-actions">
+                    <button type="button" class="btn-save" @onclick="SaveProfile">Save changes</button>
+                </div>
+            </div>
+        }
+
+        <!-- ================= SECURITY ================= -->
+        @if (activeTab == "security")
+        {
+            <div class="card-box">
+                <div class="card-head">
+                    <div class="panel-title">Change password</div>
+                    <div class="panel-sub">Use at least 8 characters with a mix of letters and numbers.</div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label">Current password</label>
+                        <input type="password" class="form-control" @bind="currentPw" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">New password</label>
+                        <input type="password" class="form-control" @bind="newPw" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Confirm new password</label>
+                        <input type="password" class="form-control" @bind="confirmPw" />
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(pwError))
+                {
+                    <div class="err mt-3"><i class="bi bi-exclamation-circle"></i> @pwError</div>
+                }
+
+                <div class="card-actions">
+                    <button type="button" class="btn-save" @onclick="ChangePassword">Update password</button>
+                </div>
+            </div>
+
+            <div class="card-box">
+                <div class="card-head">
+                    <div class="panel-title">Session</div>
+                    <div class="panel-sub">Extra protection for your account.</div>
+                </div>
+
+                <div class="toggle-row">
+                    <div>
+                        <div class="fw-medium">Two-step verification</div>
+                        <div class="sub">Ask for a code when signing in from a new device.</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" @bind="twoStep" /><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="fw-medium">Auto sign-out when idle</div>
+                        <div class="sub">Sign out automatically after 30 minutes of inactivity.</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" @bind="autoSignOut" /><span class="slider"></span></label>
+                </div>
+
+                <div class="card-actions">
+                    <button type="button" class="btn-save" @onclick='() => Toast("Security settings saved.")'>Save changes</button>
+                </div>
+            </div>
+        }
+
+        <!-- ================= NOTIFICATIONS ================= -->
+        @if (activeTab == "notifications")
+        {
+            <div class="card-box">
+                <div class="card-head">
+                    <div class="panel-title">Notifications</div>
+                    <div class="panel-sub">Choose what you want to be alerted about.</div>
+                </div>
+
+                <div class="toggle-row">
+                    <div>
+                        <div class="fw-medium">Email notifications</div>
+                        <div class="sub">Receive summaries and important alerts by email.</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" @bind="notifEmail" /><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="fw-medium">Synchronization alerts</div>
+                        <div class="sub">Tell me when data is pending or offline.</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" @bind="notifSync" /><span class="slider"></span></label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="fw-medium">Weekly summary</div>
+                        <div class="sub">A short report every Monday morning.</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" @bind="notifWeekly" /><span class="slider"></span></label>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6">
+                        <label class="form-label">Language</label>
+                        <select class="form-select" @bind="language">
+                            <option>English</option>
+                            <option>Filipino</option>
+                            <option>Bisaya</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Time zone</label>
+                        <select class="form-select" @bind="timezone">
+                            <option>Asia/Manila (UTC+8)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card-actions">
+                    <button type="button" class="btn-save" @onclick='() => Toast("Notification preferences saved.")'>Save changes</button>
+                </div>
+            </div>
+        }
+
+        <!-- ================= ROLE-SPECIFIC ================= -->
+        @if (activeTab == "role")
+        {
+            <div class="card-box">
+                <div class="card-head">
+                    <div class="panel-title">@RoleTab.Label</div>
+                    <div class="panel-sub">@RoleTab.Description</div>
+                </div>
+
+                @if (Auth.CurrentRole == AgriNexus.Services.UserRole.SuperAdmin)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Default trial length (days)</label>
+                            <input type="number" min="1" class="form-control" @bind="trialDays" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Sync check interval (minutes)</label>
+                            <input type="number" min="1" class="form-control" @bind="syncMinutes" />
+                        </div>
+                    </div>
+                    <div class="toggle-row mt-3">
+                        <div>
+                            <div class="fw-medium">Allow new business registrations</div>
+                            <div class="sub">When off, new tenants can only be created by a Super Admin.</div>
+                        </div>
+                        <label class="switch"><input type="checkbox" @bind="allowRegistration" /><span class="slider"></span></label>
+                    </div>
+                    <div class="toggle-row">
+                        <div>
+                            <div class="fw-medium">Maintenance mode</div>
+                            <div class="sub">Temporarily block tenant access while you update the platform.</div>
+                        </div>
+                        <label class="switch"><input type="checkbox" @bind="maintenance" /><span class="slider"></span></label>
+                    </div>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.TenantAdmin)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Business name</label>
+                            <input class="form-control" @bind="bizName" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Currency</label>
+                            <select class="form-select" @bind="currency">
+                                <option>PHP (₱)</option>
+                                <option>USD ($)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Fiscal year starts</label>
+                            <select class="form-select" @bind="fiscalMonth">
+                                @foreach (var m in Months)
+                                {
+                                    <option>@m</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Contact number</label>
+                            <input class="form-control" @bind="bizContact" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Business address</label>
+                            <input class="form-control" @bind="bizAddress" />
+                        </div>
+                    </div>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.BranchManager)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Expense approval limit (₱)</label>
+                            <input type="number" min="0" class="form-control" @bind="approvalLimit" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Low stock alert level</label>
+                            <input type="number" min="0" class="form-control" @bind="lowStock" />
+                        </div>
+                    </div>
+                    <div class="toggle-row mt-3">
+                        <div>
+                            <div class="fw-medium">Require approval for harvest lots</div>
+                            <div class="sub">Harvest records stay pending until you approve them.</div>
+                        </div>
+                        <label class="switch"><input type="checkbox" @bind="requireHarvestApproval" /><span class="slider"></span></label>
+                    </div>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.InventoryOfficer)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Low stock alert level</label>
+                            <input type="number" min="0" class="form-control" @bind="lowStock" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Default unit</label>
+                            <select class="form-select" @bind="defaultUnit">
+                                <option>pcs</option>
+                                <option>kg</option>
+                                <option>sack</option>
+                                <option>bottle</option>
+                                <option>liter</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="toggle-row mt-3">
+                        <div>
+                            <div class="fw-medium">Remind me about stock counts</div>
+                            <div class="sub">Monthly reminder to do a physical count.</div>
+                        </div>
+                        <label class="switch"><input type="checkbox" @bind="countReminder" /><span class="slider"></span></label>
+                    </div>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.LaborOfficer)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Workday starts</label>
+                            <input type="time" class="form-control" @bind="workStart" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Overtime after (hours)</label>
+                            <input type="number" min="1" class="form-control" @bind="overtimeHours" />
+                        </div>
+                    </div>
+                    <div class="toggle-row mt-3">
+                        <div>
+                            <div class="fw-medium">Flag late arrivals</div>
+                            <div class="sub">Mark workers as late if they log in after the start time.</div>
+                        </div>
+                        <label class="switch"><input type="checkbox" @bind="flagLate" /><span class="slider"></span></label>
+                    </div>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.SalesOfficer)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Default payment method</label>
+                            <select class="form-select" @bind="defaultPayment">
+                                <option>Cash</option>
+                                <option>GCash</option>
+                                <option>Bank transfer</option>
+                                <option>On account</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Receipt footer note</label>
+                            <input class="form-control" @bind="receiptNote" />
+                        </div>
+                    </div>
+                    <div class="toggle-row mt-3">
+                        <div>
+                            <div class="fw-medium">Print receipt after each sale</div>
+                            <div class="sub">Open the print dialog automatically after saving a sale.</div>
+                        </div>
+                        <label class="switch"><input type="checkbox" @bind="autoPrint" /><span class="slider"></span></label>
+                    </div>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.Accountant)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Fiscal year starts</label>
+                            <select class="form-select" @bind="fiscalMonth">
+                                @foreach (var m in Months)
+                                {
+                                    <option>@m</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Number format</label>
+                            <select class="form-select" @bind="numberFormat">
+                                <option>1,234.56</option>
+                                <option>1.234,56</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="toggle-row mt-3">
+                        <div>
+                            <div class="fw-medium">Highlight overdue collections</div>
+                            <div class="sub">Show overdue payments in red on financial reports.</div>
+                        </div>
+                        <label class="switch"><input type="checkbox" @bind="highlightOverdue" /><span class="slider"></span></label>
+                    </div>
+                }
+
+                <div class="card-actions">
+                    <button type="button" class="btn-save" @onclick='() => Toast($"{RoleTab.Label} saved.")'>Save changes</button>
+                </div>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    record Tab(string Key, string Label, string Icon, string Description = "");
+
+    string activeTab = "profile";
+    string toast = "";
+
+    // ---------- PROFILE ----------
+    string fullName = "";
+    string email = "";
+    string contact = "";
+    bool profileErrors;
+
+    // ---------- SECURITY ----------
+    string currentPw = "", newPw = "", confirmPw = "", pwError = "";
+    bool twoStep, autoSignOut = true;
+
+    // ---------- NOTIFICATIONS ----------
+    bool notifEmail = true, notifSync = true, notifWeekly;
+    string language = "English";
+    string timezone = "Asia/Manila (UTC+8)";
+
+    // ---------- ROLE SETTINGS (temporary values) ----------
+    // Super Admin
+    int trialDays = 14, syncMinutes = 15;
+    bool allowRegistration = true, maintenance;
+    // Tenant Admin
+    string bizName = "", bizContact = "", bizAddress = "", currency = "PHP (₱)";
+    // Shared
+    string fiscalMonth = "January";
+    int lowStock = 5;
+    // Branch Manager
+    decimal approvalLimit = 5000;
+    bool requireHarvestApproval = true;
+    // Inventory Officer
+    string defaultUnit = "pcs";
+    bool countReminder = true;
+    // Labor Officer
+    TimeOnly workStart = new(6, 0);
+    int overtimeHours = 8;
+    bool flagLate = true;
+    // Sales Officer
+    string defaultPayment = "Cash";
+    string receiptNote = "Thank you for your purchase!";
+    bool autoPrint = true;
+    // Accountant
+    string numberFormat = "1,234.56";
+    bool highlightOverdue = true;
+
+    static readonly string[] Months =
+        { "January","February","March","April","May","June","July","August","September","October","November","December" };
+
+    protected override void OnInitialized()
+    {
+        fullName = Auth.CurrentUserName ?? "";
+    }
+
+    // ---------- COMPUTED ----------
+    string RoleLabel => Auth.CurrentRole.ToString();
+
+    string Initials
+    {
+        get
+        {
+            var parts = (Auth.CurrentUserName ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) return "?";
+            return parts.Length == 1
+                ? parts[0][..1].ToUpper()
+                : (parts[0][..1] + parts[^1][..1]).ToUpper();
+        }
+    }
+
+    Tab RoleTab => Auth.CurrentRole switch
+    {
+        AgriNexus.Services.UserRole.SuperAdmin => new("role", "Platform settings", "bi-sliders", "Defaults that apply to every tenant on the platform."),
+        AgriNexus.Services.UserRole.TenantAdmin => new("role", "Business settings", "bi-building", "Details and defaults for your business."),
+        AgriNexus.Services.UserRole.BranchManager => new("role", "Branch preferences", "bi-shop", "Approval limits and alerts for your branch."),
+        AgriNexus.Services.UserRole.InventoryOfficer => new("role", "Inventory preferences", "bi-box-seam", "Stock alerts and default units."),
+        AgriNexus.Services.UserRole.LaborOfficer => new("role", "Labor preferences", "bi-person-badge", "Work hours and attendance rules."),
+        AgriNexus.Services.UserRole.SalesOfficer => new("role", "Sales preferences", "bi-receipt", "Payment and receipt defaults."),
+        AgriNexus.Services.UserRole.Accountant => new("role", "Finance preferences", "bi-pie-chart", "Fiscal year and report display."),
+        _ => new("role", "Preferences", "bi-sliders", "")
+    };
+
+    List<Tab> Tabs => new()
+    {
+        new("profile", "Profile", "bi-person"),
+        new("security", "Security", "bi-shield-lock"),
+        new("notifications", "Notifications", "bi-bell"),
+        new("role", RoleTab.Label, RoleTab.Icon),
+    };
+
+    // ---------- ACTIONS ----------
+    void SetTab(string key)
+    {
+        activeTab = key;
+        toast = "";
+        pwError = "";
+        profileErrors = false;
+    }
+
+    void SaveProfile()
+    {
+        profileErrors = true;
+        if (string.IsNullOrWhiteSpace(fullName)) return;
+        profileErrors = false;
+        // TODO: i-save sa AuthService / database
+        Toast("Profile updated.");
+    }
+
+    void ChangePassword()
+    {
+        pwError = "";
+        if (string.IsNullOrWhiteSpace(currentPw)) { pwError = "Enter your current password."; return; }
+        if (newPw.Length < 8) { pwError = "New password must be at least 8 characters."; return; }
+        if (newPw != confirmPw) { pwError = "New passwords do not match."; return; }
+
+        // TODO: i-validate ang current password ug i-update sa AuthService / database
+        currentPw = newPw = confirmPw = "";
+        Toast("Password updated.");
+    }
+
+    async void Toast(string message)
+    {
+        toast = message;
+        StateHasChanged();
+        await Task.Delay(2500);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

@@ -1,0 +1,161 @@
+/* CSS for AuditLogs component */
+.page-title {
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    color: #0A2B1D;
+    margin-bottom: .25rem;
+}
+
+.page-sub {
+    font-size: .95rem;
+}
+
+/* ---------- TOOLBAR ---------- */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.search-box {
+    position: relative;
+    width: 320px;
+    max-width: 100%;
+}
+
+    .search-box i {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #64748B;
+        font-size: .9rem;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: .55rem .9rem .55rem 2.4rem;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: #fff;
+        font-size: .9rem;
+        outline: none;
+    }
+
+        .search-box input:focus {
+            border-color: var(--primary-green);
+        }
+
+.filter-select {
+    padding: .55rem 2rem .55rem .9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background-color: #fff;
+    font-size: .9rem;
+    min-width: 175px;
+    outline: none;
+    cursor: pointer;
+}
+
+    .filter-select:focus {
+        border-color: var(--primary-green);
+    }
+
+/* ---------- TABLE ---------- */
+.panel {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.log-table {
+    font-size: .88rem;
+    margin-bottom: 0;
+}
+
+    .log-table thead th {
+        font-size: .7rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
+
+    .log-table td {
+        padding: .85rem 1rem;
+        border-color: var(--border-color);
+        vertical-align: middle;
+    }
+
+    .log-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .log-table .when {
+        white-space: nowrap;
+    }
+
+    .log-table .sub {
+        font-size: .75rem;
+        color: var(--text-muted);
+    }
+
+    .log-table .record {
+        white-space: nowrap;
+    }
+
+    .log-table .details {
+        color: var(--text-muted);
+        min-width: 260px;
+    }
+
+/* ---------- PILLS ---------- */
+.pill {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.pill-green {
+    background: #E6F0E9;
+    color: #1B5E34;
+    border-color: #CFE0D4;
+}
+
+.pill-blue {
+    background: #E0F2FE;
+    color: #0369A1;
+    border-color: #BAE6FD;
+}
+
+.pill-yellow {
+    background: #FEF3C7;
+    color: #B45309;
+    border-color: #FDE68A;
+}
+
+.pill-red {
+    background: #FEE2E2;
+    color: #B91C1C;
+    border-color: #FECACA;
+}
+
+.pill-gray {
+    background: #F1F5F9;
+    color: #64748B;
+    border-color: #E2E8F0;
+}

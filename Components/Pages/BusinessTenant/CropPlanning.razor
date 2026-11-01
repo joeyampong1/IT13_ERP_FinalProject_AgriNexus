@@ -1,0 +1,412 @@
+﻿@page "/crops"
+@using System.Globalization
+
+<div class="mb-4">
+    <h2 class="page-title">Crop Planning and Planting</h2>
+    <p class="text-muted mb-0 page-sub">@ActiveBranch · plan crop cycles, track growth stages and expected harvest dates.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-md-4">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar mb-3">
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search crop cycles..." @bind="searchText" @bind:event="oninput" />
+    </div>
+    <span class="text-muted small">@Filtered.Count crop @(Filtered.Count == 1 ? "cycle" : "cycles")</span>
+    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+        <i class="bi bi-plus-lg"></i> New crop cycle
+    </button>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Crop</th>
+                    <th>Plot</th>
+                    <th>Area (ha)</th>
+                    <th>Planted</th>
+                    <th>Expected harvest</th>
+                    <th>Season</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in Filtered)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">@c.Crop</div>
+                            <div class="sub">@(string.IsNullOrWhiteSpace(c.Variety) ? "—" : c.Variety)</div>
+                        </td>
+                        <td>@(string.IsNullOrWhiteSpace(c.PlotName) ? "—" : c.PlotName)</td>
+                        <td>@c.Area.ToString("0.##", Inv)</td>
+                        <td class="text-nowrap">@DateText(c.Planted)</td>
+                        <td class="text-nowrap">@DateText(c.ExpectedHarvest)</td>
+                        <td>@Cap(c.Season)</td>
+                        <td><span class="pill @StatusClass(c.Status)">@Cap(c.Status)</span></td>
+                        <td class="text-end action-cell">
+                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(c.Id)" aria-label="Actions">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            @if (openMenuId == c.Id)
+                            {
+                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                                <div class="row-menu">
+                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(c)">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    <button type="button" class="row-menu-item plain" @onclick='() => SetStatus(c, "growing")'>
+                                        Mark as growing
+                                    </button>
+                                    <button type="button" class="row-menu-item plain" @onclick='() => SetStatus(c, "harvested")'>
+                                        Mark as harvested
+                                    </button>
+                                    <div class="menu-sep"></div>
+                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(c)">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-5">No crop cycles found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="modal-heading mb-0">@(editingId == null ? "New crop cycle" : "Edit crop cycle")</h5>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Crop <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Crop) ? "is-invalid" : "")" placeholder="Rice, corn, cabbage..." @bind="form.Crop" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Crop))
+                    {
+                        <div class="err">Crop is required.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Variety</label>
+                    <input class="form-control" @bind="form.Variety" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Plot</label>
+                    <select class="form-select" value="@form.PlotRef" @onchange="OnPlotChanged">
+                        <option value="">Select...</option>
+                        @foreach (var p in plotOptions)
+                        {
+                            <option value="@p.Name" selected="@(form.PlotRef == p.Name)">@p.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Plot name (as displayed)</label>
+                    <input class="form-control" placeholder="Plot A" @bind="form.PlotName" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Area planted (ha)</label>
+                    <input type="number" min="0" step="0.1" class="form-control @(showErrors && AreaInvalid ? "is-invalid" : "")" @bind="areaInput" />
+                    @if (showErrors && AreaInvalid)
+                    {
+                        <div class="err">Area can’t be negative.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Seed quantity</label>
+                    <input class="form-control" @bind="form.SeedQty" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Planting date</label>
+                    <input type="date" class="form-control" @bind="form.Planted" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Expected harvest</label>
+                    <input type="date" class="form-control @(showErrors && DatesInvalid ? "is-invalid" : "")" @bind="form.ExpectedHarvest" />
+                    @if (showErrors && DatesInvalid)
+                    {
+                        <div class="err">Harvest date must be after the planting date.</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Season</label>
+                    <select class="form-select" @bind="form.Season">
+                        <option value="dry">dry</option>
+                        <option value="wet">wet</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="form.Status">
+                        @foreach (var s in StatusOptions)
+                        {
+                            <option value="@s">@s</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Branch</label>
+                    <select class="form-select" @bind="form.Branch">
+                        @foreach (var b in branchNames)
+                        {
+                            <option value="@b">@b</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class CycleRec
+    {
+        public int Id { get; set; }
+        public string Crop { get; set; } = "";
+        public string Variety { get; set; } = "";
+        public string PlotRef { get; set; } = "";    // plot nga gipili gikan sa Farms & Plots
+        public string PlotName { get; set; } = "";   // ngalan nga makita sa table
+        public double Area { get; set; }
+        public string SeedQty { get; set; } = "";
+        public DateTime? Planted { get; set; }
+        public DateTime? ExpectedHarvest { get; set; }
+        public string Season { get; set; } = "dry";
+        public string Status { get; set; } = "planned";   // planned | growing | ready | harvested
+        public string Branch { get; set; } = "";
+        public string Notes { get; set; } = "";
+
+        public CycleRec Clone() => (CycleRec)MemberwiseClone();
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record PlotOption(string Name, string Branch, double Area);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    static readonly string[] StatusOptions = { "planned", "growing", "ready", "harvested" };
+
+    // TODO: kuhaa gikan sa naka-login nga tenant ug sa Branches / Farms & Plots modules
+    const string ActiveBranch = "North Field Branch";
+    readonly string[] branchNames = { "North Field Branch", "South Valley Branch", "Central Packing Branch" };
+
+    readonly List<PlotOption> plotOptions = new()
+    {
+        new("North Plot A", "North Field Branch", 1.5),
+        new("North Plot B", "North Field Branch", 2),
+        new("North Plot C", "North Field Branch", 1.2),
+        new("South Plot D", "South Valley Branch", 2.5),
+        new("South Plot E", "South Valley Branch", 1.8),
+        new("Central Plot F", "Central Packing Branch", 1),
+    };
+
+    // ---------- STATE ----------
+    string searchText = "";
+    string toast = "";
+    bool showModal;
+    bool showErrors;
+    int? editingId;
+    int? openMenuId;
+    CycleRec form = new();
+    double? areaInput;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    readonly List<CycleRec> cycles = new()
+    {
+        new() { Id = 1, Crop = "Rice",     Variety = "NSIC Rc222",    PlotRef = "North Plot A", PlotName = "North Plot A", Area = 1.5, Planted = new(2026, 6, 15), ExpectedHarvest = new(2026, 10, 12), Season = "wet", Status = "growing",   Branch = "North Field Branch" },
+        new() { Id = 2, Crop = "Corn",     Variety = "Pioneer 30T80", PlotRef = "North Plot B", PlotName = "North Plot B", Area = 2,   Planted = new(2026, 7, 1),  ExpectedHarvest = new(2026, 10, 20), Season = "wet", Status = "growing",   Branch = "North Field Branch" },
+        new() { Id = 3, Crop = "Cabbage",  Variety = "Scorpio",       PlotRef = "South Plot D", PlotName = "South Plot D", Area = 2.5, Planted = new(2026, 8, 10), ExpectedHarvest = new(2026, 11, 5),  Season = "wet", Status = "growing",   Branch = "South Valley Branch" },
+        new() { Id = 4, Crop = "Ampalaya", Variety = "Galaxy",        PlotRef = "South Plot E", PlotName = "South Plot E", Area = 1.8, Planted = new(2026, 6, 20), ExpectedHarvest = new(2026, 9, 25),  Season = "wet", Status = "ready",     Branch = "South Valley Branch" },
+        new() { Id = 5, Crop = "Rice",     Variety = "NSIC Rc160",    PlotRef = "North Plot A", PlotName = "North Plot A", Area = 1.5, Planted = new(2026, 3, 1),  ExpectedHarvest = new(2026, 6, 20),  Season = "dry", Status = "harvested", Branch = "North Field Branch" },
+    };
+
+    // ---------- COMPUTED ----------
+    List<CycleRec> Filtered => string.IsNullOrWhiteSpace(searchText)
+        ? cycles
+        : cycles.Where(c =>
+            c.Crop.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            c.Variety.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            c.PlotName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            c.Status.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var growing = cycles.Count(c => c.Status == "growing");
+            var ready = cycles.Count(c => c.Status == "ready");
+            var done = cycles.Count(c => c.Status == "harvested");
+            var area = cycles.Sum(c => c.Area);
+            return new()
+            {
+                new("CROP CYCLES", cycles.Count.ToString(), "", "bi-flower1", ""),
+                new("GROWING NOW", growing.ToString(), ready + " ready to harvest", "bi-calendar-check", "stat-icon-plain"),
+                new("PLANTED AREA", area.ToString("0.##", Inv) + " ha", done + (done == 1 ? " cycle" : " cycles") + " completed", "bi-flower3", "stat-icon-plain"),
+            };
+        }
+    }
+
+    bool AreaInvalid => areaInput.HasValue && areaInput.Value < 0;
+
+    bool DatesInvalid => form.Planted.HasValue && form.ExpectedHarvest.HasValue &&
+                         form.ExpectedHarvest.Value.Date < form.Planted.Value.Date;
+
+    static string DateText(DateTime? d) => d.HasValue ? d.Value.ToString("MMM d, yyyy", Inv) : "—";
+
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    static string StatusClass(string s) => s switch
+    {
+        "growing" => "pill-green",
+        "ready" => "pill-yellow",
+        "planned" => "pill-blue",
+        _ => "pill-gray"
+    };
+
+    // ---------- ACTIONS ----------
+    void OpenNew()
+    {
+        form = new CycleRec { Season = "dry", Status = "planned", Branch = ActiveBranch };
+        areaInput = null;
+        editingId = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void OpenEdit(CycleRec c)
+    {
+        form = c.Clone();
+        areaInput = c.Area;
+        editingId = c.Id;
+        showErrors = false;
+        openMenuId = null;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    // Kung mopili og plot, i-fill ang ngalan, branch ug area
+    void OnPlotChanged(ChangeEventArgs e)
+    {
+        var name = e.Value?.ToString() ?? "";
+        form.PlotRef = name;
+
+        var p = plotOptions.FirstOrDefault(x => x.Name == name);
+        if (p == null) return;
+
+        form.PlotName = p.Name;
+        form.Branch = p.Branch;
+        if (!areaInput.HasValue || areaInput.Value <= 0) areaInput = p.Area;
+    }
+
+    void Save()
+    {
+        showErrors = true;
+        if (string.IsNullOrWhiteSpace(form.Crop) || AreaInvalid || DatesInvalid) return;
+
+        form.Crop = form.Crop.Trim();
+        form.Area = areaInput ?? 0;
+        if (string.IsNullOrWhiteSpace(form.PlotName)) form.PlotName = form.PlotRef;
+
+        if (editingId == null)
+        {
+            form.Id = cycles.Count == 0 ? 1 : cycles.Max(c => c.Id) + 1;
+            cycles.Add(form);
+        }
+        else
+        {
+            var idx = cycles.FindIndex(c => c.Id == editingId);
+            if (idx >= 0) cycles[idx] = form;
+        }
+        // TODO: i-update ang Status ug Current crop sa plot (Farms & Plots) kung naa na ang shared service
+        showModal = false;
+    }
+
+    async Task Delete(CycleRec c)
+    {
+        openMenuId = null;
+        if (c.Status == "harvested")
+        {
+            await ShowToast("This cycle is already harvested and linked to harvest records. It can’t be deleted.");
+            return;
+        }
+        cycles.Remove(c);
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3500);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+
+    void SetStatus(CycleRec c, string status)
+    {
+        openMenuId = null;
+        c.Status = status;
+        // TODO: i-update ang Status ug Current crop sa plot (Farms & Plots),
+        // ug kung "harvested", i-link sa Harvest Recording module
+    }
+}

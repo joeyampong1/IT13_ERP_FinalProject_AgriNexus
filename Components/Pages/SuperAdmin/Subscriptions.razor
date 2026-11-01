@@ -1,0 +1,253 @@
+﻿@page "/subscriptions"
+
+<div class="mb-4">
+    <h2 class="page-title">Subscription Monitoring &amp; Renewal</h2>
+    <p class="text-muted mb-0 page-sub">Track each tenant’s plan, renewal date, payment status, and recurring revenue.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- CHARTS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-8">
+        <div class="stat-card h-100">
+            <div class="panel-title">Recurring revenue by plan</div>
+            <div class="panel-sub">Monthly value</div>
+
+            <svg viewBox="0 0 640 300" class="w-100" style="max-height:320px" role="img" aria-label="Recurring revenue by plan">
+                @for (int i = 0; i <= 4; i++)
+                {
+                    var y = 20 + i * 60;
+                    var val = AxisMax / 4 * (4 - i);
+                    <g>
+                        <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                        <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@(val == 0 ? "₱0" : $"₱{val / 1000:0}K")</text>
+                    </g>
+                }
+                @for (int i = 0; i < RevenueByPlan.Count; i++)
+                {
+                    var r = RevenueByPlan[i];
+                    var slot = 568.0 / RevenueByPlan.Count;
+                    var w = slot * 0.8;
+                    var x = 62 + i * slot + (slot - w) / 2;
+                    var h = (double)(r.Amount / AxisMax) * 240;
+                    <g>
+                        <rect x="@x.ToString("0.##")" y="@((260 - h).ToString("0.##"))" width="@w.ToString("0.##")" height="@h.ToString("0.##")" rx="6" fill="#206A3B" />
+                        <text x="@((x + w / 2).ToString("0.##"))" y="282" text-anchor="middle" font-size="11" fill="#475569">@r.Plan</text>
+                    </g>
+                }
+            </svg>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="stat-card h-100">
+            <div class="panel-title">Subscription status</div>
+            <div class="panel-sub">Tenant billing health</div>
+
+            <div class="d-flex justify-content-center my-3">
+                <svg viewBox="0 0 200 200" width="210" height="210" role="img" aria-label="Subscription status">
+                    @{
+                        double offset = 0;
+                    }
+                    @foreach (var s in StatusSlices)
+                    {
+                        var len = s.Count / (double)subs.Count * Circ;
+                        <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@s.Color" stroke-width="30"
+                                stroke-dasharray="@((len - 3).ToString("0.##")) @((Circ - len + 3).ToString("0.##"))"
+                                stroke-dashoffset="@((-offset).ToString("0.##"))"
+                                transform="rotate(-90 100 100)" />
+                        offset += len;
+                    }
+                </svg>
+            </div>
+
+            <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
+                @foreach (var s in StatusSlices)
+                {
+                    <span><span class="legend-dot" style="background:@s.Color"></span>@s.Label · @s.Count</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table sub-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Business</th>
+                    <th>Plan</th>
+                    <th>Amount</th>
+                    <th>Renewal</th>
+                    <th>Payment</th>
+                    <th>Status</th>
+                    <th>Auto-<br />renew</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in subs)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">@s.Business</div>
+                            <div class="sub">@s.Code</div>
+                        </td>
+                        <td class="fw-medium">@s.Plan</td>
+                        <td class="fw-semibold text-nowrap">₱@s.Amount.ToString("N2")</td>
+                        <td>
+                            <div>@s.Renewal.ToString("MMM d, yyyy")</div>
+                            <div class="sub">@DaysText(s.Renewal)</div>
+                        </td>
+                        <td><span class="pill @PaymentClass(s.Payment)">@s.Payment</span></td>
+                        <td><span class="pill @StatusClass(s.Status)">@s.Status</span></td>
+                        <td>@(s.AutoRenew ? "On" : "Off")</td>
+                        <td class="text-end">
+                            <button type="button" class="btn-outline" @onclick="() => RecordRenewal(s)">Record renewal</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    // ---------- MODELS ----------
+    class Subscription
+    {
+        public int Id { get; set; }
+        public string Business { get; set; } = "";
+        public string Code { get; set; } = "";
+        public string Plan { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string Cycle { get; set; } = "monthly";
+        public DateTime Renewal { get; set; }
+        public string Payment { get; set; } = "Pending";   // Paid | Pending | Overdue
+        public string Status { get; set; } = "Active";     // Active | Expiring Soon | Expired
+        public bool AutoRenew { get; set; }
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record Rev(string Plan, decimal Amount);
+    record Slice(string Label, int Count, string Color);
+
+    const double Radius = 70;
+    static readonly double Circ = 2 * Math.PI * Radius;
+
+    static DateTime Today => DateTime.Today;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    readonly List<Subscription> subs = new()
+    {
+        new() { Id = 1, Business = "Verdant Agri Ventures", Code = "AGV-001", Plan = "Growth", Amount = 3999, Cycle = "monthly",
+                Renewal = new(2026, 11, 30), Payment = "Paid", Status = "Active", AutoRenew = true },
+        new() { Id = 2, Business = "Sunrise Rice Farmers Coop", Code = "SRF-003", Plan = "Cooperative Custom", Amount = 14999, Cycle = "yearly",
+                Renewal = new(2026, 11, 8), Payment = "Pending", Status = "Expiring Soon", AutoRenew = false },
+        new() { Id = 3, Business = "Harvest Hills Agri Corp", Code = "HAR-002", Plan = "Enterprise", Amount = 9999, Cycle = "monthly",
+                Renewal = new(2026, 11, 5), Payment = "Paid", Status = "Active", AutoRenew = true },
+        new() { Id = 4, Business = "Green Valley Farms", Code = "GRN-004", Plan = "Starter", Amount = 1499, Cycle = "monthly",
+                Renewal = new(2026, 10, 30), Payment = "Pending", Status = "Active", AutoRenew = false },
+        new() { Id = 5, Business = "Bicol River Organic Growers", Code = "BRO-005", Plan = "Starter", Amount = 1499, Cycle = "monthly",
+                Renewal = new(2026, 9, 30), Payment = "Overdue", Status = "Expired", AutoRenew = false },
+    };
+
+    // ---------- COMPUTED ----------
+    List<Stat> Stats
+    {
+        get
+        {
+            var active = subs.Count(s => s.Status == "Active");
+            var mrr = subs.Sum(s => s.Amount);
+            var renewing = subs.Count(s => (s.Renewal.Date - Today).Days <= 30);
+            var overdue = subs.Where(s => s.Payment == "Overdue").ToList();
+
+            return new()
+            {
+                new("ACTIVE SUBSCRIPTIONS", active.ToString(), $"{subs.Count} records", "bi-credit-card", ""),
+                new("MONTHLY RECURRING REVENUE", $"₱{mrr:N2}", "", "bi-graph-up-arrow", ""),
+                new("RENEWING WITHIN 30 DAYS", renewing.ToString(), "", "bi-calendar-check", "stat-icon-warn"),
+                new("OVERDUE PAYMENTS", overdue.Count.ToString(), $"₱{overdue.Sum(o => o.Amount):N2}", "bi-arrow-repeat", "stat-icon-danger"),
+            };
+        }
+    }
+
+    List<Rev> RevenueByPlan => subs
+        .GroupBy(s => s.Plan)
+        .Select(g => new Rev(g.Key, g.Sum(x => x.Amount)))
+        .OrderBy(r => r.Plan == "Growth" ? 0 : r.Plan == "Cooperative Custom" ? 1 : r.Plan == "Enterprise" ? 2 : 3)
+        .ToList();
+
+    // Axis max, rounded up sa 4 ka steps (e.g. 16000 -> 4K, 8K, 12K, 16K)
+    decimal AxisMax
+    {
+        get
+        {
+            var max = RevenueByPlan.Count == 0 ? 4000 : RevenueByPlan.Max(r => r.Amount);
+            return Math.Max(4000, Math.Ceiling(max / 4000) * 4000);
+        }
+    }
+
+    List<Slice> StatusSlices => new List<Slice>
+    {
+        new("Active", subs.Count(s => s.Status == "Active"), "#206A3B"),
+        new("Expiring Soon", subs.Count(s => s.Status == "Expiring Soon"), "#5FAA33"),
+        new("Expired", subs.Count(s => s.Status == "Expired"), "#92D050"),
+    }.Where(s => s.Count > 0).ToList();
+
+    static string DaysText(DateTime renewal)
+    {
+        var d = (renewal.Date - Today).Days;
+        if (d == 0) return "today";
+        return d > 0 ? $"in {d} day{(d == 1 ? "" : "s")}" : $"{-d} day{(d == -1 ? "" : "s")} overdue";
+    }
+
+    static string PaymentClass(string p) => p switch
+    {
+        "Paid" => "pill-green",
+        "Pending" => "pill-yellow",
+        "Overdue" => "pill-red",
+        _ => "pill-gray"
+    };
+
+    static string StatusClass(string s) => s switch
+    {
+        "Active" => "pill-green",
+        "Expiring Soon" => "pill-yellow",
+        "Expired" => "pill-red",
+        _ => "pill-gray"
+    };
+
+    // ---------- ACTIONS ----------
+    void RecordRenewal(Subscription s)
+    {
+        // Gikan sa karon nga renewal date (o karon kung overdue na), ipadayon sa sunod nga cycle
+        var baseDate = s.Renewal < Today ? Today : s.Renewal;
+        s.Renewal = s.Cycle == "yearly" ? baseDate.AddYears(1) : baseDate.AddMonths(1);
+        s.Payment = "Paid";
+        s.Status = "Active";
+    }
+}

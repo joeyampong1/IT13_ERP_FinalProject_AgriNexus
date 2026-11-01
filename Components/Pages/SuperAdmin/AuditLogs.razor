@@ -1,0 +1,125 @@
+﻿@page "/audit-logs"
+
+<div class="mb-4">
+    <h2 class="page-title">System-wide Audit Logs</h2>
+    <p class="text-muted mb-0 page-sub">Every recorded platform activity — who acted, on which module, and when.</p>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar mb-3">
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search actor, module or detail..." @bind="searchText" @bind:event="oninput" />
+    </div>
+
+    <select class="filter-select" @bind="actionFilter">
+        <option value="">All actions</option>
+        @foreach (var a in ActionOptions)
+        {
+            <option value="@a">@a</option>
+        }
+    </select>
+
+    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "entry" : "entries")</span>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table log-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Actor</th>
+                    <th>Action</th>
+                    <th>Module</th>
+                    <th>Record</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var l in Filtered)
+                {
+                    <tr>
+                        <td class="when">@l.When.ToString("MMM d, yyyy, h:mm tt")</td>
+                        <td>
+                            <div class="fw-semibold">@l.Actor</div>
+                            <div class="sub">@l.Role</div>
+                        </td>
+                        <td><span class="pill @ActionClass(l.Action)">@l.Action</span></td>
+                        <td>@l.Module</td>
+                        <td class="record">@l.Record</td>
+                        <td class="details">@l.Details</td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center text-muted py-5">No matching entries.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    // ---------- MODEL ----------
+    record LogEntry(DateTime When, string Actor, string Role, string Action, string Module, string Record, string Details);
+
+    // ---------- STATE ----------
+    string searchText = "";
+    string actionFilter = "";
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // Platform-level activities ra: tenants, plans, subscriptions, login, sync, system.
+    readonly List<LogEntry> logs = new()
+    {
+        new(new(2026, 10, 24, 10, 41, 0), "Andres Villanueva", "Super Admin", "Create", "Businesses / Tenants", "SRF-003",
+            "Registered new tenant Sunrise Rice Farmers Coop on the Cooperative Custom plan."),
+        new(new(2026, 10, 24, 9, 20, 0), "Andres Villanueva", "Super Admin", "Update", "Subscription Plans", "PLAN-GROWTH",
+            "Updated Growth plan: staff limit raised from 20 to 25 accounts."),
+        new(new(2026, 10, 23, 4, 15, 0), "Rica Dela Cruz", "Billing Officer", "Renew", "Subscriptions", "SUB-0002",
+            "Recorded renewal payment of ₱3,999.00 for Verdant Agri Ventures."),
+        new(new(2026, 10, 22, 23, 0, 0), "Andres Villanueva", "Super Admin", "Login", "Platform", "",
+            "Signed in from Cabarroguis, Quirino."),
+        new(new(2026, 10, 22, 14, 10, 0), "System", "Automated", "Sync", "Synchronization", "GRN-004",
+            "Flagged Green Valley Farms as offline after missed sync window."),
+        new(new(2026, 10, 22, 9, 15, 0), "Rica Dela Cruz", "Billing Officer", "Update", "Subscriptions", "SUB-0004",
+            "Marked payment for Green Valley Farms as pending."),
+        new(new(2026, 10, 21, 11, 35, 0), "Andres Villanueva", "Super Admin", "Suspend", "Businesses / Tenants", "BRO-005",
+            "Suspended Bicol River Organic Growers due to unpaid subscription."),
+        new(new(2026, 10, 20, 17, 0, 0), "Andres Villanueva", "Super Admin", "Retire", "Subscription Plans", "PLAN-LEGACY",
+            "Retired Legacy Lite plan. Existing tenants keep their current terms."),
+        new(new(2026, 10, 20, 10, 5, 0), "Mark Reyes", "Platform Support", "Update", "Businesses / Tenants", "HAR-002",
+            "Updated owner contact details for Harvest Hills Agri Corp."),
+        new(new(2026, 10, 19, 15, 30, 0), "System", "Automated", "Sync", "Synchronization", "SRF-003",
+            "Sunrise Rice Farmers Coop set to pending while sync is in progress."),
+        new(new(2026, 10, 18, 8, 45, 0), "Andres Villanueva", "Super Admin", "Create", "Subscription Plans", "PLAN-COOP",
+            "Created Cooperative Custom plan (yearly billing, 25 branches)."),
+        new(new(2026, 10, 17, 13, 20, 0), "Mark Reyes", "Platform Support", "Login", "Platform", "",
+            "Signed in from Manila, NCR."),
+        new(new(2026, 10, 15, 9, 0, 0), "Rica Dela Cruz", "Billing Officer", "Renew", "Subscriptions", "SUB-0003",
+            "Recorded renewal payment of ₱9,999.00 for Harvest Hills Agri Corp."),
+    };
+
+    // ---------- COMPUTED ----------
+    IEnumerable<string> ActionOptions => logs.Select(l => l.Action).Distinct().OrderBy(a => a);
+
+    List<LogEntry> Filtered => logs
+        .Where(l => string.IsNullOrEmpty(actionFilter) || l.Action == actionFilter)
+        .Where(l => string.IsNullOrWhiteSpace(searchText)
+            || l.Actor.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || l.Module.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || l.Details.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || l.Record.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(l => l.When)
+        .ToList();
+
+    static string ActionClass(string a) => a switch
+    {
+        "Create" => "pill-green",
+        "Renew" => "pill-blue",
+        "Suspend" or "Delete" => "pill-red",
+        "Retire" or "Sync" => "pill-yellow",
+        _ => "pill-gray"
+    };
+}

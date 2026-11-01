@@ -1,0 +1,272 @@
+﻿@page "/tenant-reports"
+@using System.Globalization
+@inject NavigationManager Nav
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Consolidated Business Reports</h2>
+        <p class="text-muted mb-0 page-sub">@BusinessName · revenue, cost, harvest output and branch comparison.</p>
+    </div>
+    <button type="button" class="btn-outline-lg" @onclick="GoFinancials">Financial reports</button>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- CHARTS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-7">
+        <div class="stat-card h-100">
+            <div class="panel-title">Revenue vs operating cost</div>
+            <div class="panel-sub">Last 6 months</div>
+
+            <svg viewBox="0 0 640 300" class="w-100" style="max-height:340px" role="img" aria-label="Revenue vs operating cost">
+                @for (int i = 0; i <= 4; i++)
+                {
+                    var y = 20 + i * 60;
+                    var val = AxisMax / 4 * (4 - i);
+                    <g>
+                        <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                        <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
+                    </g>
+                }
+                @for (int i = 0; i < trend.Count; i++)
+                {
+                    var t = trend[i];
+                    var slot = 568.0 / trend.Count;
+                    var barW = slot * 0.3;
+                    var gap = slot * 0.04;
+                    var start = 62 + i * slot + (slot - (barW * 2 + gap)) / 2;
+                    var hRev = t.Revenue / AxisMax * 240;
+                    var hExp = t.Expenses / AxisMax * 240;
+                    <g>
+                        <rect x="@F(start)" y="@F(260 - hRev)" width="@F(barW)" height="@F(hRev)" rx="3" fill="#62A834" />
+                        <rect x="@F(start + barW + gap)" y="@F(260 - hExp)" width="@F(barW)" height="@F(hExp)" rx="3" fill="#A86B4C" />
+                        <text x="@F(62 + i * slot + slot / 2)" y="282" text-anchor="middle" font-size="11" fill="#475569">@t.Month</text>
+                    </g>
+                }
+            </svg>
+
+            <div class="d-flex justify-content-center gap-3 small text-muted mt-1">
+                <span><span class="legend-dot" style="background:#62A834"></span>Revenue</span>
+                <span><span class="legend-dot" style="background:#A86B4C"></span>Expenses</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+        <div class="stat-card h-100">
+            <div class="panel-title">Harvest output by crop</div>
+            <div class="panel-sub">Approved harvest quantities</div>
+
+            <div class="d-flex justify-content-center my-3">
+                <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Harvest output by crop">
+                    @{
+                        double offset = 0;
+                    }
+                    @foreach (var c in crops)
+                    {
+                        var len = c.Kg / CropTotal * Circ;
+                        var dash = Math.Max(len - 2, 0.5);
+                        <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@c.Color" stroke-width="30"
+                                stroke-dasharray="@F(dash) @F(Circ - dash)"
+                                stroke-dashoffset="@F(-offset)"
+                                transform="rotate(-90 100 100)" />
+                        offset += len;
+                    }
+                </svg>
+            </div>
+
+            <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
+                @foreach (var c in LegendCrops)
+                {
+                    <span><span class="legend-dot" style="background:@c.Color"></span>@c.Name</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BRANCH COMPARISON -->
+<div class="panel mb-4">
+    <div class="panel-head d-flex justify-content-between align-items-start">
+        <div>
+            <div class="panel-title">Branch comparison</div>
+            <div class="panel-sub mb-0">Sales, cost, harvest and labor per branch</div>
+        </div>
+        <button type="button" class="btn-icon" @onclick="GoFarms" aria-label="Farms and plots" title="Farms &amp; Plots">
+            <i class="bi bi-flower1"></i>
+        </button>
+    </div>
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Branch</th>
+                    <th>Sales</th>
+                    <th>Expenses</th>
+                    <th>Labor cost</th>
+                    <th>Harvest (kg)</th>
+                    <th>Contribution</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in branches)
+                {
+                    var contribution = b.Sales - b.Expenses - b.Labor;
+                    <tr>
+                        <td class="fw-semibold">@b.Name</td>
+                        <td class="text-nowrap">@Peso(b.Sales)</td>
+                        <td class="text-nowrap">@Peso(b.Expenses)</td>
+                        <td class="text-nowrap">@Peso(b.Labor)</td>
+                        <td>@b.HarvestKg.ToString("N0", Inv)</td>
+                        <td class="text-nowrap fw-medium @(contribution < 0 ? "neg" : "pos")">@PesoSigned(contribution)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- COST ALLOCATION -->
+<div class="panel">
+    <div class="panel-head">
+        <div class="panel-title">Cost allocation summary</div>
+        <div class="panel-sub mb-0">How operating cost is distributed by category</div>
+    </div>
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th class="w-category">Category</th>
+                    <th class="w-amount">Amount</th>
+                    <th>Share</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in costs)
+                {
+                    <tr>
+                        <td>@c.Category</td>
+                        <td class="text-nowrap">@Peso(c.Amount)</td>
+                        <td>@Share(c.Amount)%</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    // ---------- MODELS ----------
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record TrendPoint(string Month, double Revenue, double Expenses);
+    record CropSlice(string Name, double Kg, string Color);
+    record BranchRow(string Name, decimal Sales, decimal Expenses, decimal Labor, int HarvestKg);
+    record CostRow(string Category, decimal Amount);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    const double Radius = 70;
+    static readonly double Circ = 2 * Math.PI * Radius;
+    const double AxisMax = 80000;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // TODO: kuhaa ang business name gikan sa naka-login nga tenant
+    const string BusinessName = "Verdant Agri Ventures";
+
+    // Mohaum sa totals: revenue = 123,280 ug expenses = 96,710
+    readonly List<TrendPoint> trend = new()
+    {
+        new("Jun", 8800, 3200),
+        new("Jul", 14000, 3300),
+        new("Aug", 23000, 4210),
+        new("Sep", 25000, 6500),
+        new("Oct", 52480, 79500),
+        new("Nov", 0, 0),
+    };
+
+    // Clockwise gikan sa taas
+    readonly List<CropSlice> crops = new()
+    {
+        new("Ampalaya", 560, "#206A3B"),
+        new("Rice", 1380, "#92D050"),
+        new("Cabbage", 820, "#62A834"),
+    };
+
+    readonly List<BranchRow> branches = new()
+    {
+        new("North Field Branch", 50680m, 63100m, 3875m, 1450),
+        new("South Valley Branch", 55300m, 28450m, 2510m, 1310),
+        new("Central Packing Branch", 17300m, 5160m, 420m, 0),
+    };
+
+    readonly List<CostRow> costs = new()
+    {
+        new("Labor", 21360m),
+        new("Supplies", 44300m),
+        new("Fuel", 11700m),
+        new("Utilities", 7000m),
+        new("Transport", 2800m),
+        new("Equipment", 1250m),
+        new("Maintenance", 6500m),
+        new("Other", 1800m),
+    };
+
+    // Temporary counts (i-compute gikan sa Sales, Expenses, Harvest ug Labor modules kung naa na)
+    const int SalesTransactions = 14;
+    const int ExpenseEntries = 15;
+    const int CropCycles = 5;
+    const int LaborHours = 125;
+
+    // ---------- COMPUTED ----------
+    decimal TotalSales => branches.Sum(b => b.Sales);
+    decimal TotalCost => costs.Sum(c => c.Amount);
+    decimal TotalLabor => branches.Sum(b => b.Labor);
+    int TotalHarvest => branches.Sum(b => b.HarvestKg);
+    double CropTotal => crops.Sum(c => c.Kg);
+
+    IEnumerable<CropSlice> LegendCrops => new[] { "Ampalaya", "Cabbage", "Rice" }
+        .Select(n => crops.First(c => c.Name == n));
+
+    List<Stat> Stats => new()
+    {
+        new("TOTAL SALES RECORDED", Peso(TotalSales), SalesTransactions + " transactions", "bi-graph-up-arrow", ""),
+        new("TOTAL OPERATING COST", Peso(TotalCost), ExpenseEntries + " expense entries", "bi-bar-chart", "stat-icon-plain"),
+        new("HARVEST OUTPUT", TotalHarvest.ToString("N0", Inv) + " kg", CropCycles + " crop cycles tracked", "bi-flower1", "stat-icon-plain"),
+        new("LABOR COST LOGGED", Peso(TotalLabor), LaborHours + " hours", "bi-people", "stat-icon-blue"),
+    };
+
+    // ---------- HELPERS ----------
+    static string F(double d) => d.ToString("0.##", Inv);
+
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+
+    static string PesoSigned(decimal v) => v < 0 ? "-₱" + (-v).ToString("N2", Inv) : Peso(v);
+
+    static string AxisLabel(double v) => v == 0 ? "₱0" : "₱" + (v / 1000).ToString("0", Inv) + "K";
+
+    string Share(decimal amount) => TotalCost == 0 ? "0" : Math.Round(amount * 100 / TotalCost).ToString("0", Inv);
+
+    // ---------- ACTIONS ----------
+    void GoFinancials() => Nav.NavigateTo("financials");
+    void GoFarms() => Nav.NavigateTo("farms");
+}

@@ -1,0 +1,134 @@
+/* CSS for BusinessSetting component */
+.page-title {
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    color: #0A2B1D;
+    margin-bottom: .25rem;
+}
+
+.page-sub {
+    font-size: .95rem;
+}
+
+/* ---------- STAT CARDS ---------- */
+.stat-card {
+    border-radius: 16px;
+    padding: 20px 22px;
+}
+
+    .stat-card .card-title {
+        font-size: .72rem;
+        margin-bottom: 0;
+        line-height: 1.3;
+    }
+
+    .stat-card .card-value {
+        font-size: 1.7rem;
+        letter-spacing: -0.5px;
+    }
+
+.stat-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: #E8EEEA;
+    color: #1B4D2E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.stat-icon-plain {
+    background: transparent;
+}
+
+/* ---------- PROFILE CARD ---------- */
+.card-box {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.5rem 1.5rem 1.6rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+
+.panel-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #0A2B1D;
+}
+
+.panel-sub {
+    font-size: .8rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+
+/* ---------- FORM ---------- */
+.card-box .form-label {
+    font-size: .9rem;
+    font-weight: 500;
+    margin-bottom: .35rem;
+}
+
+.card-box .form-control,
+.card-box .form-select {
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    padding: .55rem .8rem;
+    font-size: .9rem;
+}
+
+    .card-box .form-control:focus,
+    .card-box .form-select:focus {
+        border-color: var(--primary-green);
+        box-shadow: 0 0 0 .15rem rgba(56, 142, 60, .15);
+    }
+
+.req {
+    color: #DC2626;
+}
+
+.err {
+    color: #DC2626;
+    font-size: .75rem;
+    margin-top: 4px;
+}
+
+.btn-save {
+    background: #1B5E34;
+    color: #fff;
+    border: 0;
+    border-radius: 10px;
+    padding: .55rem 1.1rem;
+    font-weight: 600;
+    font-size: .9rem;
+    cursor: pointer;
+}
+
+    .btn-save:hover {
+        background: #144A29;
+    }
+
+/* ---------- TOAST ---------- */
+.toast-note {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 380px;
+    background: #fff;
+    border: 1px solid #CFE0D4;
+    border-left: 4px solid #1B5E34;
+    color: #1B4D2E;
+    border-radius: 12px;
+    padding: .75rem 1.1rem;
+    font-size: .88rem;
+    font-weight: 500;
+    box-shadow: 0 10px 25px rgba(0,0,0,.15);
+}

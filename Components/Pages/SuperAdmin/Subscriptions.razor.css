@@ -1,0 +1,166 @@
+.page-title {
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    color: #0A2B1D;
+    margin-bottom: .25rem;
+}
+
+.page-sub {
+    font-size: .95rem;
+}
+
+/* ---------- STAT CARDS ---------- */
+.stat-card {
+    border-radius: 16px;
+    padding: 20px 22px;
+}
+
+    .stat-card .card-title {
+        font-size: .72rem;
+        margin-bottom: 0;
+        line-height: 1.3;
+    }
+
+    .stat-card .card-value {
+        font-size: 1.7rem;
+        letter-spacing: -0.5px;
+    }
+
+.stat-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: #E8EEEA;
+    color: #1B4D2E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.stat-icon-warn {
+    background: #FEF3C7;
+    color: #D97706;
+}
+
+.stat-icon-danger {
+    background: #FEE2E2;
+    color: #DC2626;
+}
+
+/* ---------- CHART PANELS ---------- */
+.panel-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #0A2B1D;
+}
+
+.panel-sub {
+    font-size: .8rem;
+    color: var(--text-muted);
+    margin-bottom: .75rem;
+}
+
+.legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+/* ---------- TABLE ---------- */
+.panel {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.sub-table {
+    font-size: .88rem;
+    margin-bottom: 0;
+}
+
+    .sub-table thead th {
+        font-size: .7rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
+
+    .sub-table td {
+        padding: .85rem 1rem;
+        border-color: var(--border-color);
+    }
+
+    .sub-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .sub-table .sub {
+        font-size: .75rem;
+        color: var(--text-muted);
+    }
+
+/* ---------- PILLS ---------- */
+.pill {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.pill-green {
+    background: #E6F0E9;
+    color: #1B5E34;
+    border-color: #CFE0D4;
+}
+
+.pill-yellow {
+    background: #FEF3C7;
+    color: #B45309;
+    border-color: #FDE68A;
+}
+
+.pill-red {
+    background: #FEE2E2;
+    color: #B91C1C;
+    border-color: #FECACA;
+}
+
+.pill-gray {
+    background: #F1F5F9;
+    color: #64748B;
+}
+
+/* ---------- BUTTON ---------- */
+.btn-outline {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: .4rem .9rem;
+    font-size: .8rem;
+    font-weight: 500;
+    color: var(--text-main);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+    .btn-outline:hover {
+        background: #F1F5F9;
+        border-color: #CBD5E1;
+    }

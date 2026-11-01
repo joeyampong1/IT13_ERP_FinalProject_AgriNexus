@@ -1,0 +1,112 @@
+/* ===== SUPER ADMIN DASHBOARD SPECIFIC STYLES ===== */
+
+.dash-title {
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    color: #0A2B1D;
+    margin-bottom: .25rem;
+}
+
+.dash-sub {
+    max-width: 640px;
+    font-size: .95rem;
+}
+
+/* Dashboard specific overrides sa stat-card */
+.stat-card {
+    border-radius: 16px;
+    padding: 20px 22px;
+}
+
+    .stat-card .card-title {
+        font-size: .72rem;
+        margin-bottom: 0;
+        line-height: 1.3;
+    }
+
+    .stat-card .card-value {
+        font-size: 1.7rem;
+        letter-spacing: -0.5px;
+    }
+
+.stat-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: #E8EEEA;
+    color: #1B4D2E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.stat-icon-warn {
+    background: #FEF3C7;
+    color: #D97706;
+}
+
+.panel-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #0A2B1D;
+}
+
+.panel-sub {
+    font-size: .8rem;
+    color: var(--text-muted);
+    margin-bottom: .75rem;
+}
+
+.legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+.dash-table {
+    font-size: .85rem;
+}
+
+    .dash-table thead th {
+        font-size: .7rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        border-bottom: 1px solid var(--border-color);
+        padding: .75rem .5rem;
+        white-space: nowrap;
+    }
+
+    .dash-table td {
+        padding: .85rem .5rem;
+        border-color: var(--border-color);
+    }
+
+.pill {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+}
+
+.pill-warn {
+    background: #FEF3C7;
+    color: #B45309;
+}
+
+.pill-danger {
+    background: #FEE2E2;
+    color: #B91C1C;
+}
+
+.pill-muted {
+    background: #F1F5F9;
+    color: #64748B;
+}

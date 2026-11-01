@@ -1,0 +1,108 @@
+﻿@inherits LayoutComponentBase
+@inject AgriNexus.Services.AuthService Auth
+@inject NavigationManager NavManager
+
+<div class="page">
+    <!-- Sidebar Container -->
+    <div class="sidebar" style="background-color: #0A1F14 !important; background-image: none !important;">
+        <NavMenu />
+    </div>
+
+    <!-- Main Content Area -->
+    <main>
+        <!-- Top Header Bar -->
+        <div class="top-row px-4">
+            <!-- Left side sa header -->
+            <div class="d-flex align-items-center gap-3 gap-md-4">
+
+                <!-- 1. Dynamic Welcome Greeting -->
+                <div class="d-flex flex-column lh-sm d-none d-sm-block">
+                    <span class="text-muted" style="font-size: 0.75rem; font-weight: 500;">Welcome back,</span>
+                    <span class="fw-bold text-dark" style="font-size: 1rem; letter-spacing: -0.3px;">
+                        @Auth.CurrentUserName
+                    </span>
+                </div>
+
+                <div class="vr d-none d-sm-block text-secondary opacity-25"></div>
+
+                <!-- 2. Current Role Badge (Imbes nga Prototype View) -->
+                <span class="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-3 fw-bold border border-success border-opacity-25 d-flex align-items-center gap-2">
+                    <i class="bi bi-shield-check"></i> @Auth.CurrentRole.ToString()
+                </span>
+
+                <div class="vr d-none d-md-block text-secondary opacity-25"></div>
+
+                <!-- 3. Optional: Current Date (Pang-professional touch) -->
+                <span class="text-muted small fw-medium d-none d-md-flex align-items-center gap-2">
+                    <i class="bi bi-calendar3"></i> @DateTime.Now.ToString("MMM dd, yyyy")
+                </span>
+
+            </div>
+
+            <!-- Right side sa header (User Dropdown) -->
+            <div class="user-menu">
+                <!-- Dropdown Button -->
+                <button class="user-menu-btn shadow-sm" @onclick="ToggleDropdown">
+                    <i class="bi bi-person-circle text-success fs-5"></i>
+                    <span class="fw-semibold text-dark">@Auth.CurrentUserName</span>
+                    <!-- Kini nga icon mo-rotate pataas kung open ang dropdown -->
+                    <i class="bi bi-chevron-down small text-muted ms-auto @(showDropdown ? "rot" : "")"></i>
+                </button>
+
+                <!-- Dropdown Menu -->
+                @if (showDropdown)
+                {
+                    <!-- Backdrop para mo-close kung i-click ang gawas -->
+                    <div class="user-menu-backdrop" @onclick="CloseDropdown"></div>
+
+                    <div class="user-menu-list">
+                        <button class="user-menu-item" @onclick="GoToSettings">
+                            <i class="bi bi-gear text-success"></i>
+                            <span>Settings</span>
+                        </button>
+
+                        <div class="user-menu-sep"></div>
+
+                        <button class="user-menu-item text-danger" @onclick="HandleLogout">
+                            <i class="bi bi-box-arrow-right"></i>
+                            <span>Logout</span>
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Content Body -->
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    // State para ma-open/close ang dropdown
+    private bool showDropdown = false;
+
+    private void ToggleDropdown()
+    {
+        showDropdown = !showDropdown;
+    }
+
+    private void CloseDropdown()
+    {
+        showDropdown = false;
+    }
+
+    private void HandleLogout()
+    {
+        showDropdown = false; 
+        Auth.Logout();        
+        NavManager.NavigateTo("/login"); 
+    }
+
+    private void GoToSettings()
+    {
+        CloseDropdown(); 
+        NavManager.NavigateTo("/settings"); 
+    }
+}

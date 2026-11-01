@@ -1,0 +1,123 @@
+﻿@page "/login"
+@layout LandingLayout
+@inject NavigationManager NavigationManager
+@inject AgriNexus.Services.AuthService Auth
+
+<div class="container-fluid p-0 min-vh-100">
+    <div class="row g-0 min-vh-100">
+
+        <!-- LEFT SIDE: Visual Branding -->
+        <div class="col-lg-6 d-none d-lg-flex flex-column justify-content-between p-5 position-relative login-visual-panel">
+            <div class="login-blob-1"></div>
+            <div class="login-blob-2"></div>
+
+            <div class="position-relative" style="z-index: 2;">
+                <a href="/" class="d-inline-flex align-items-center gap-2 text-decoration-none text-white hover-opacity mb-5">
+                    <i class="bi bi-arrow-left fs-5"></i> Back to Home
+                </a>
+                <div class="d-flex align-items-center gap-3">
+                    <img src="images/AgriNexus_finalogo.png" alt="AgriNexus" style="height: 50px; background: white; border-radius: 12px; padding: 5px;" />
+                    <h3 class="text-white fw-bold mb-0">AgriNexus</h3>
+                </div>
+            </div>
+
+            <div class="position-relative" style="z-index: 2; max-width: 80%;">
+                <h2 class="text-white fw-bold mb-3" style="line-height: 1.3;">"Empowering agricultural businesses with data-driven decisions."</h2>
+                <p class="text-white text-opacity-75 fs-5">Manage your farms, track inventory, and sync seamlessly—whether you're online or offline.</p>
+            </div>
+
+            <div class="position-relative text-white text-opacity-50 small" style="z-index: 2;">
+                © 2026 AgriNexus ERP. All rights reserved.
+            </div>
+        </div>
+
+        <!-- RIGHT SIDE: Login Form -->
+        <div class="col-12 col-lg-6 d-flex align-items-center justify-content-center bg-white p-4 p-md-5">
+            <div class="w-100 py-4" style="max-width: 420px;">
+
+                <a href="/" class="d-lg-none text-decoration-none text-muted mb-4 d-inline-block fw-bold">
+                    <i class="bi bi-arrow-left me-2"></i> Back to Home
+                </a>
+
+                <div class="mb-5">
+                    <h2 class="fw-bolder mb-2" style="color: #0A2B1D; letter-spacing: -0.5px;">Welcome Back</h2>
+                    <p class="text-muted">Sign in to manage your farm operations.</p>
+                </div>
+
+                <form>
+                    <div class="mb-4">
+                        <label class="form-label fw-bold small text-muted">Email Address</label>
+                        <div class="input-group modern-input">
+                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                            <input type="email" class="form-control" placeholder="Try: owner@agrinexus.com" @bind="email" /> <!-- Gidugangan og @bind ug giilisan ang placeholder -->
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold small text-muted mb-0">Password</label>
+                            <a href="/forgot-password" class="text-success text-decoration-none small fw-bold hover-green">Forgot password?</a>
+                        </div>
+                        <div class="input-group modern-input">
+                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+
+                            <!-- Gi-dynamic ang type base sa showPassword variable -->
+                            <input type="@(showPassword ? "text" : "password")" class="form-control" placeholder="••••••••" />
+
+                            <!-- Button para mo-toggle sa password visibility -->
+                            <span class="input-group-text" style="cursor: pointer; border-left: none;" @onclick="TogglePassword">
+                                <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-5">
+                        <input class="form-check-input" type="checkbox" id="rememberMe" />
+                        <label class="form-check-label text-muted small" for="rememberMe">
+                            Keep me signed in on this device
+                        </label>
+                    </div>
+
+                    <button type="button" @onclick="GoToDashboard" class="btn btn-primary btn-lg w-100 py-3 fw-bold rounded-3 shadow-sm btn-hover-effect mb-4">
+                        Sign In to Dashboard
+                    </button>
+
+                    <div class="text-center">
+                        <p class="text-muted small mb-0">
+                            Don't have an account?
+                            <a href="/register" class="text-success text-decoration-none fw-bold hover-green">Register your business</a>
+                        </p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string email = "";
+
+    private bool showPassword = false;
+
+    private void TogglePassword()
+    {
+        showPassword = !showPassword;
+    }
+
+    private void GoToDashboard()
+    {
+        // 1. I-set ang role base sa email
+        Auth.Login(email);
+
+        // 2. I-check kung unsa ang role, dayon i-redirect sa sakto nga page
+        if (Auth.CurrentRole == AgriNexus.Services.UserRole.TenantAdmin)
+        {
+            NavigationManager.NavigateTo("/business-dashboard");
+        }
+        else
+        {
+            // Default para sa Super Admin ug uban pa (puhon)
+            NavigationManager.NavigateTo("/dashboard");
+        }
+    }
+}

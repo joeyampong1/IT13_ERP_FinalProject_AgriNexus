@@ -1,0 +1,314 @@
+﻿@page "/subscription-plans"
+
+<div class="mb-4">
+    <h2 class="page-title">Subscription Plan Management</h2>
+    <p class="text-muted mb-0 page-sub">Define what each tenant gets: branch and staff limits, storage, and bundled features.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-md-4">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar mb-3">
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search plans..." @bind="searchText" @bind:event="oninput" />
+    </div>
+    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "plan" : "plans")</span>
+    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+        <i class="bi bi-plus-lg"></i> New plan
+    </button>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table plan-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Plan</th>
+                    <th>Price</th>
+                    <th>Branches</th>
+                    <th>Staff</th>
+                    <th>Storage</th>
+                    <th>Features</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Filtered)
+                {
+                    <tr>
+                        <td class="fw-semibold">
+                            @p.Name
+                            @if (p.Recommended)
+                            {
+                                <i class="bi bi-stars rec-icon" title="Recommended"></i>
+                            }
+                        </td>
+                        <td class="fw-semibold">₱@p.Price.ToString("N2")<span class="per">/@(p.Cycle == "yearly" ? "yr" : "mo")</span></td>
+                        <td>@p.Branches</td>
+                        <td>@p.Staff</td>
+                        <td>@p.StorageGb GB</td>
+                        <td class="text-muted">@p.FeatureList.Count included</td>
+                        <td><span class="pill @(p.Status == "active" ? "pill-green" : "pill-gray")">@Cap(p.Status)</span></td>
+                        <td class="text-end action-cell">
+                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(p.Id)" aria-label="Actions">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            @if (openMenuId == p.Id)
+                            {
+                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                                <div class="row-menu">
+                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(p)">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(p)">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-5">No plans found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="modal-heading mb-0">@(editingId == null ? "New plan" : "Edit plan")</h5>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Plan name <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
+                    {
+                        <div class="err">Plan name is required.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Monthly price (₱)</label>
+                    <input type="number" min="0" step="0.01" class="form-control" @bind="form.Price" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Billing cycle</label>
+                    <select class="form-select" @bind="form.Cycle">
+                        <option value="monthly">monthly</option>
+                        <option value="yearly">yearly</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Branch limit</label>
+                    <input type="number" min="1" class="form-control" @bind="form.Branches" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Staff account limit</label>
+                    <input type="number" min="1" class="form-control" @bind="form.Staff" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Storage (GB)</label>
+                    <input type="number" min="1" class="form-control" @bind="form.StorageGb" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="form.Status">
+                        <option value="active">active</option>
+                        <option value="retired">retired</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Highlight as recommended</label>
+                    <div class="form-check form-switch switch-row">
+                        <input class="form-check-input" type="checkbox" role="switch" id="recSwitch" @bind="form.Recommended" />
+                        <label class="form-check-label" for="recSwitch">@(form.Recommended ? "Enabled" : "Disabled")</label>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Description</label>
+                    <textarea class="form-control" rows="3" @bind="form.Description"></textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Included features (one per line)</label>
+                    <textarea class="form-control" rows="5" @bind="featuresText"></textarea>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class Plan
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public decimal Price { get; set; }
+        public string Cycle { get; set; } = "monthly";
+        public int Branches { get; set; } = 1;
+        public int Staff { get; set; } = 5;
+        public int StorageGb { get; set; } = 5;
+        public string Status { get; set; } = "active";
+        public bool Recommended { get; set; }
+        public string Description { get; set; } = "";
+        public List<string> FeatureList { get; set; } = new();
+
+        public Plan Clone()
+        {
+            var c = (Plan)MemberwiseClone();
+            c.FeatureList = new List<string>(FeatureList);
+            return c;
+        }
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon);
+
+    // ---------- STATE ----------
+    string searchText = "";
+    bool showModal;
+    bool showErrors;
+    int? editingId;
+    int? openMenuId;
+    Plan form = new();
+    string featuresText = "";
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    readonly List<Plan> plans = new()
+    {
+        new() { Id = 1, Name = "Starter", Price = 1499, Cycle = "monthly", Branches = 1, Staff = 5, StorageGb = 5, Status = "active",
+                Description = "For small farms getting started.",
+                FeatureList = new() { "Inventory management", "Basic sales", "Worker records", "Harvest recording", "Email support" } },
+        new() { Id = 2, Name = "Growth", Price = 3999, Cycle = "monthly", Branches = 3, Staff = 25, StorageGb = 50, Status = "active", Recommended = true,
+                Description = "For growing agribusinesses with multiple branches.",
+                FeatureList = new() { "Everything in Starter", "Multi-branch support", "Production costing", "Financial reports", "Attendance & logs", "Priority support" } },
+        new() { Id = 3, Name = "Enterprise", Price = 9999, Cycle = "monthly", Branches = 15, Staff = 150, StorageGb = 250, Status = "active",
+                Description = "For large operations that need full control.",
+                FeatureList = new() { "Everything in Growth", "Audit trail", "Role & permission control", "Consolidated reports", "Data export", "Dedicated support" } },
+        new() { Id = 4, Name = "Cooperative Custom", Price = 14999, Cycle = "yearly", Branches = 25, Staff = 300, StorageGb = 500, Status = "active",
+                Description = "Custom plan for cooperatives and federations.",
+                FeatureList = new() { "Member management", "Consolidated reports", "Custom onboarding", "Offline synchronization", "Dedicated support" } },
+        new() { Id = 5, Name = "Legacy Lite", Price = 899, Cycle = "monthly", Branches = 1, Staff = 3, StorageGb = 2, Status = "retired",
+                Description = "Retired plan kept for existing tenants.",
+                FeatureList = new() { "Inventory management", "Basic sales", "Worker records" } },
+    };
+
+    // ---------- COMPUTED ----------
+    List<Plan> Filtered => string.IsNullOrWhiteSpace(searchText)
+        ? plans
+        : plans.Where(p =>
+            p.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            p.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var avg = plans.Count == 0 ? 0 : plans.Average(p => p.Price);
+            var max = plans.Count == 0 ? 0 : plans.Max(p => p.Price);
+            return new()
+            {
+                new("PLANS DEFINED", plans.Count.ToString(), "", "bi-credit-card"),
+                new("ACTIVE PLANS", plans.Count(p => p.Status == "active").ToString(), "", "bi-layers"),
+                new("AVERAGE PRICE", $"₱{avg:N2}", $"Highest: ₱{max:N2}", "bi-stars"),
+            };
+        }
+    }
+
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    // ---------- ACTIONS ----------
+    void OpenNew()
+    {
+        form = new Plan();
+        featuresText = "";
+        editingId = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void OpenEdit(Plan p)
+    {
+        form = p.Clone();
+        featuresText = string.Join("\n", p.FeatureList);
+        editingId = p.Id;
+        showErrors = false;
+        openMenuId = null;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    void Save()
+    {
+        showErrors = true;
+        if (string.IsNullOrWhiteSpace(form.Name)) return;
+
+        form.FeatureList = featuresText
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(f => f.Trim())
+            .Where(f => f.Length > 0)
+            .ToList();
+
+        if (editingId == null)
+        {
+            form.Id = plans.Count == 0 ? 1 : plans.Max(p => p.Id) + 1;
+            plans.Add(form);
+        }
+        else
+        {
+            var idx = plans.FindIndex(p => p.Id == editingId);
+            if (idx >= 0) plans[idx] = form;
+        }
+        showModal = false;
+    }
+
+    void Delete(Plan p)
+    {
+        plans.Remove(p);
+        openMenuId = null;
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+}

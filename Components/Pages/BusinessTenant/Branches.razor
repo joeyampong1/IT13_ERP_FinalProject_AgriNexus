@@ -1,0 +1,326 @@
+﻿@page "/branches"
+@using System.Globalization
+
+<div class="mb-4">
+    <h2 class="page-title">Branch Management</h2>
+    <p class="text-muted mb-0 page-sub">@BusinessName · each branch operates its own plots, staff, inventory and cash drawer.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-md-4">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar mb-3">
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search branches..." @bind="searchText" @bind:event="oninput" />
+    </div>
+    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "branch" : "branches")</span>
+    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+        <i class="bi bi-plus-lg"></i> New branch
+    </button>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Branch</th>
+                    <th>Branch manager</th>
+                    <th>Contact</th>
+                    <th>Plots</th>
+                    <th>Staff</th>
+                    <th>Opened</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in Filtered)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">@b.Name</div>
+                            <div class="sub">@b.Code</div>
+                        </td>
+                        <td>@(string.IsNullOrWhiteSpace(b.Manager) ? "—" : b.Manager)</td>
+                        <td class="text-nowrap">@(string.IsNullOrWhiteSpace(b.Contact) ? "—" : b.Contact)</td>
+                        <td>@b.Plots</td>
+                        <td>@b.Staff</td>
+                        <td class="text-nowrap">@b.Opened.ToString("MMM d, yyyy", Inv)</td>
+                        <td><span class="pill @(b.Status == "active" ? "pill-green" : "pill-gray")">@Cap(b.Status)</span></td>
+                        <td class="text-end action-cell">
+                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(b.Id)" aria-label="Actions">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            @if (openMenuId == b.Id)
+                            {
+                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                                <div class="row-menu">
+                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(b)">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(b)">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-5">No branches found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="modal-heading mb-0">@(editingId == null ? "New branch" : "Edit branch")</h5>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Branch name <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
+                    {
+                        <div class="err">Branch name is required.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Branch code <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Code) ? "is-invalid" : "")" placeholder="@NextCode" @bind="form.Code" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Code))
+                    {
+                        <div class="err">Branch code is required.</div>
+                    }
+                    @if (showErrors && CodeTaken)
+                    {
+                        <div class="err">This code is already used.</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Branch manager</label>
+                    <input class="form-control" @bind="form.Manager" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Contact number</label>
+                    <input class="form-control" @bind="form.Contact" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Date opened</label>
+                    <input type="date" class="form-control" @bind="form.Opened" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="form.Status">
+                        <option value="active">active</option>
+                        <option value="inactive">inactive</option>
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Address</label>
+                    <input class="form-control" @bind="form.Address" />
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class BranchRec
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Code { get; set; } = "";
+        public string Manager { get; set; } = "";
+        public string Contact { get; set; } = "";
+        public int Plots { get; set; }
+        public double Hectares { get; set; }
+        public int Staff { get; set; }
+        public DateTime Opened { get; set; } = DateTime.Today;
+        public string Status { get; set; } = "active";
+        public string Address { get; set; } = "";
+
+        public BranchRec Clone() => (BranchRec)MemberwiseClone();
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    // TODO: kuhaa ang business name gikan sa naka-login nga tenant
+    const string BusinessName = "Verdant Agri Ventures";
+
+    // ---------- STATE ----------
+    string searchText = "";
+    string toast = "";
+    bool showModal;
+    bool showErrors;
+    int? editingId;
+    int? openMenuId;
+    BranchRec form = new();
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // Plots/Staff/Hectares i-compute na gikan sa Farms & Plots ug Staff modules kung naa na
+    readonly List<BranchRec> branches = new()
+    {
+        new() { Id = 1, Name = "North Field Branch", Code = "BR-NORTH", Manager = "Ramon Delos Santos", Contact = "0917 220 1145",
+                Plots = 3, Hectares = 5, Staff = 4, Opened = new(2024, 3, 1), Status = "active" },
+        new() { Id = 2, Name = "South Valley Branch", Code = "BR-SOUTH", Manager = "Liza Fernandez", Contact = "0918 771 3320",
+                Plots = 2, Hectares = 3, Staff = 4, Opened = new(2024, 9, 15), Status = "active" },
+        new() { Id = 3, Name = "Central Packing Branch", Code = "BR-CENTRAL", Manager = "Noel Bautista", Contact = "0920 553 8891",
+                Plots = 1, Hectares = 2, Staff = 1, Opened = new(2025, 5, 20), Status = "active" },
+    };
+
+    // Staff nga wala pa naka-assign sa branch (owner/admin staff)
+    const int UnassignedStaff = 2;
+
+    // ---------- COMPUTED ----------
+    List<BranchRec> Filtered => string.IsNullOrWhiteSpace(searchText)
+        ? branches
+        : branches.Where(b =>
+            b.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            b.Code.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            b.Manager.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var active = branches.Count(b => b.Status == "active");
+            var plots = branches.Sum(b => b.Plots);
+            var ha = branches.Sum(b => b.Hectares);
+            var staff = branches.Sum(b => b.Staff) + UnassignedStaff;
+            return new()
+            {
+                new("BRANCHES", branches.Count.ToString(), active + " active", "bi-shop", ""),
+                new("PLOTS ACROSS BRANCHES", plots.ToString(), ha.ToString("0.##", Inv) + " hectares total", "bi-map", "stat-icon-plain"),
+                new("STAFF ASSIGNED", staff.ToString(), "", "bi-people", "stat-icon-blue"),
+            };
+        }
+    }
+
+    string NextCode => "BR-" + (branches.Count + 1).ToString("000");
+
+    bool CodeTaken => !string.IsNullOrWhiteSpace(form.Code) &&
+        branches.Any(b => b.Id != (editingId ?? -1) &&
+                          string.Equals(b.Code, form.Code.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    // ---------- ACTIONS ----------
+    void OpenNew()
+    {
+        form = new BranchRec { Opened = DateTime.Today, Status = "active" };
+        editingId = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void OpenEdit(BranchRec b)
+    {
+        form = b.Clone();
+        editingId = b.Id;
+        showErrors = false;
+        openMenuId = null;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    void Save()
+    {
+        showErrors = true;
+        if (string.IsNullOrWhiteSpace(form.Name) || string.IsNullOrWhiteSpace(form.Code) || CodeTaken)
+            return;
+
+        form.Code = form.Code.Trim();
+
+        if (editingId == null)
+        {
+            form.Id = branches.Count == 0 ? 1 : branches.Max(b => b.Id) + 1;
+            branches.Add(form);
+        }
+        else
+        {
+            var idx = branches.FindIndex(b => b.Id == editingId);
+            if (idx >= 0)
+            {
+                // Ayaw i-usab ang plots/staff, kay gikan kini sa ubang modules
+                form.Plots = branches[idx].Plots;
+                form.Hectares = branches[idx].Hectares;
+                form.Staff = branches[idx].Staff;
+                branches[idx] = form;
+            }
+        }
+        showModal = false;
+    }
+
+    async Task Delete(BranchRec b)
+    {
+        openMenuId = null;
+        if (b.Plots > 0 || b.Staff > 0)
+        {
+            await ShowToast(b.Name + " still has plots or staff. Reassign them first, or set the branch to inactive.");
+            return;
+        }
+        branches.Remove(b);
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3500);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

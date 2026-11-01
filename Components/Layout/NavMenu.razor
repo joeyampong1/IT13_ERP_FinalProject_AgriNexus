@@ -1,0 +1,177 @@
+﻿@inject AgriNexus.Services.AuthService Auth
+
+<!-- Brand / Logo -->
+<div class="navbar-brand">
+    <img src="images/AgriNexus_finalogo.png" alt="AgriNexus" class="brand-logo" />
+    <div class="d-flex flex-column w-100 justify-content-center">
+        <span class="brand-title">
+            <span style="color: #FFFFFF;">Agri</span><span style="color: #84CC16;">Nexus</span>
+        </span>
+        <span class="brand-subtitle">Enterprise Resource Planning</span>
+    </div>
+</div>
+
+<!-- User Profile Box (Dynamic na base sa naka-login) -->
+<div class="user-profile-box">
+    <div class="profile-label">SIGNED IN AS</div>
+    <div class="profile-name">@Auth.CurrentUserName</div>
+    <div class="profile-role">
+        <i class="bi bi-shield-lock"></i>
+        <span>@Auth.AccessLevel</span>
+    </div>
+</div>
+
+<!-- Scrollable Navigation Area -->
+<div class="nav-scrollable">
+    <nav class="flex-column">
+
+        <!-- OVERVIEW -->
+        <div class="nav-section-title">OVERVIEW</div>
+        <div class="nav-item">
+            @if (Auth.CurrentRole == AgriNexus.Services.UserRole.TenantAdmin)
+            {
+                <NavLink class="nav-link" href="/business-dashboard" Match="NavLinkMatch.All">
+                    <i class="bi bi-grid"></i> <span>Dashboard</span>
+                </NavLink>
+            }
+            else
+            {
+                <NavLink class="nav-link" href="/dashboard" Match="NavLinkMatch.All">
+                    <i class="bi bi-grid"></i> <span>Dashboard</span>
+                </NavLink>
+            }
+        </div>
+
+        <!-- SUPER ADMIN -->
+        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.SuperAdmin)
+        {
+            <div class="nav-section-title">PLATFORM</div>
+            <div class="nav-item"><NavLink class="nav-link" href="/businesses"><i class="bi bi-buildings"></i> <span>Businesses / Tenants</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/subscription-plans"><i class="bi bi-wallet2"></i> <span>Subscription Plans</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/subscriptions"><i class="bi bi-arrow-repeat"></i> <span>Subscriptions</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/audit-logs"><i class="bi bi-journal-text"></i> <span>Audit Logs</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/sync-backup"><i class="bi bi-cloud-arrow-up"></i> <span>Sync & Backup</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/reports"><i class="bi bi-bar-chart-line"></i> <span>Reports & Analytics</span></NavLink></div>
+        }
+
+        <!-- TENANT ADMIN -->
+        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.TenantAdmin)
+        {
+            <div class="nav-section-title">BUSINESS</div>
+            <div class="nav-item"><NavLink class="nav-link" href="/branches"><i class="bi bi-shop"></i> <span>Branches</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/staff"><i class="bi bi-people"></i> <span>Staff & Permissions</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/my-subscription"><i class="bi bi-credit-card"></i> <span>My Subscription</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/tenant-reports"><i class="bi bi-bar-chart"></i> <span>Consolidated Reports</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/business-settings"><i class="bi bi-gear"></i> <span>Business Settings</span></NavLink></div>
+
+            <div class="nav-section-title">FARM OPERATIONS</div>
+            <div class="nav-item"><NavLink class="nav-link" href="/farms"><i class="bi bi-map"></i> <span>Farms & Plots</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/crops"><i class="bi bi-flower1"></i> <span>Crop Planning</span></NavLink></div>
+
+            <div class="nav-section-title">INVENTORY</div>
+            <div class="nav-item"><NavLink class="nav-link" href="/inventory"><i class="bi bi-box-seam"></i> <span>Inventory</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/stock"><i class="bi bi-arrow-left-right"></i> <span>Stock Movements</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/suppliers"><i class="bi bi-truck"></i> <span>Suppliers</span></NavLink></div>
+
+            <div class="nav-section-title">LABOR & HARVEST</div>
+            <div class="nav-item"><NavLink class="nav-link" href="/workers"><i class="bi bi-person-badge"></i> <span>Workers</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/assignments"><i class="bi bi-clipboard-check"></i> <span>Work Assignments</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/attendance"><i class="bi bi-clock-history"></i> <span>Attendance & Logs</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/harvest"><i class="bi bi-basket"></i> <span>Harvest Recording</span></NavLink></div>
+
+            <div class="nav-section-title">SALES & CASHIER</div>
+            <div class="nav-item"><NavLink class="nav-link" href="/new-sale"><i class="bi bi-cart-plus"></i> <span>New Sale</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/sales"><i class="bi bi-receipt"></i> <span>Sales Transactions</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/customers"><i class="bi bi-person"></i> <span>Customers</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/payments"><i class="bi bi-cash-coin"></i> <span>Payments & Collections</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/cash-drawer"><i class="bi bi-cash-stack"></i> <span>Cash Drawer</span></NavLink></div>
+
+            <div class="nav-section-title">FINANCE</div>
+            <div class="nav-item"><NavLink class="nav-link" href="/expenses"><i class="bi bi-wallet"></i> <span>Expenses</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/costing"><i class="bi bi-layers"></i> <span>Production Costing</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/financials"><i class="bi bi-pie-chart"></i> <span>Financial Reports</span></NavLink></div>
+        }
+
+        <!-- ========================================== -->
+        <!-- PARA SA UBANG ROLES (Gikuhaan na og TenantAdmin) -->
+        <!-- ========================================== -->
+        <!-- INVENTORY (Para sa Branch, Inventory, Accountant) -->
+        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.BranchManager ||
+             Auth.CurrentRole == AgriNexus.Services.UserRole.InventoryOfficer ||
+             Auth.CurrentRole == AgriNexus.Services.UserRole.Accountant)
+        {
+            <div class="nav-section-title">INVENTORY</div>
+
+            @if (Auth.CurrentRole != AgriNexus.Services.UserRole.Accountant)
+            {
+                <div class="nav-item"><NavLink class="nav-link" href="/inventory"><i class="bi bi-box-seam"></i> <span>Inventory</span></NavLink></div>
+            }
+            <div class="nav-item"><NavLink class="nav-link" href="/stock"><i class="bi bi-arrow-left-right"></i> <span>Stock Movements</span></NavLink></div>
+            @if (Auth.CurrentRole != AgriNexus.Services.UserRole.Accountant)
+            {
+                <div class="nav-item"><NavLink class="nav-link" href="/suppliers"><i class="bi bi-truck"></i> <span>Suppliers</span></NavLink></div>
+            }
+        }
+
+        <!-- LABOR & HARVEST (Para sa Branch, Labor, Accountant) -->
+        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.BranchManager ||
+             Auth.CurrentRole == AgriNexus.Services.UserRole.LaborOfficer ||
+             Auth.CurrentRole == AgriNexus.Services.UserRole.Accountant)
+        {
+            <div class="nav-section-title">LABOR & HARVEST</div>
+            @if (Auth.CurrentRole != AgriNexus.Services.UserRole.Accountant)
+            {
+                <div class="nav-item"><NavLink class="nav-link" href="/workers"><i class="bi bi-person-badge"></i> <span>Workers</span></NavLink></div>
+                <div class="nav-item"><NavLink class="nav-link" href="/assignments"><i class="bi bi-clipboard-check"></i> <span>Work Assignments</span></NavLink></div>
+            }
+            <div class="nav-item"><NavLink class="nav-link" href="/attendance"><i class="bi bi-clock-history"></i> <span>Attendance & Logs</span></NavLink></div>
+            @if (Auth.CurrentRole != AgriNexus.Services.UserRole.Accountant)
+            {
+                <div class="nav-item"><NavLink class="nav-link" href="/harvest"><i class="bi bi-basket"></i> <span>Harvest Recording</span></NavLink></div>
+            }
+        }
+
+        <!-- SALES & CASHIER (Para sa Branch, Sales, Accountant) -->
+        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.BranchManager ||
+             Auth.CurrentRole == AgriNexus.Services.UserRole.SalesOfficer ||
+             Auth.CurrentRole == AgriNexus.Services.UserRole.Accountant)
+        {
+            <div class="nav-section-title">SALES & CASHIER</div>
+            @if (Auth.CurrentRole != AgriNexus.Services.UserRole.Accountant)
+            {
+                <div class="nav-item"><NavLink class="nav-link" href="/new-sale"><i class="bi bi-cart-plus"></i> <span>New Sale</span></NavLink></div>
+            }
+            <div class="nav-item"><NavLink class="nav-link" href="/sales"><i class="bi bi-receipt"></i> <span>Sales Transactions</span></NavLink></div>
+            @if (Auth.CurrentRole != AgriNexus.Services.UserRole.Accountant)
+            {
+                <div class="nav-item"><NavLink class="nav-link" href="/customers"><i class="bi bi-person"></i> <span>Customers</span></NavLink></div>
+            }
+            <div class="nav-item"><NavLink class="nav-link" href="/payments"><i class="bi bi-cash-coin"></i> <span>Payments & Collections</span></NavLink></div>
+            @if (Auth.CurrentRole == AgriNexus.Services.UserRole.SalesOfficer || Auth.CurrentRole == AgriNexus.Services.UserRole.BranchManager)
+            {
+                <div class="nav-item"><NavLink class="nav-link" href="/cash-drawer"><i class="bi bi-cash-stack"></i> <span>Cash Drawer</span></NavLink></div>
+            }
+        }
+
+        <!-- FINANCE (Para sa Branch, Accountant) -->
+        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.BranchManager ||
+             Auth.CurrentRole == AgriNexus.Services.UserRole.Accountant)
+        {
+            <div class="nav-section-title">FINANCE</div>
+            <div class="nav-item"><NavLink class="nav-link" href="/expenses"><i class="bi bi-wallet"></i> <span>Expenses</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/costing"><i class="bi bi-layers"></i> <span>Production Costing</span></NavLink></div>
+            <div class="nav-item"><NavLink class="nav-link" href="/financials"><i class="bi bi-pie-chart"></i> <span>Financial Reports</span></NavLink></div>
+            @if (Auth.CurrentRole == AgriNexus.Services.UserRole.Accountant)
+            {
+                <div class="nav-item"><NavLink class="nav-link" href="/audit"><i class="bi bi-shield-check"></i> <span>Financial Audit Trail</span></NavLink></div>
+            }
+        }
+
+    </nav>
+</div>
+
+<!-- Sidebar Footer -->
+<div class="sidebar-footer">
+    <p class="mb-1">Prototype build - IT13 proposal</p>
+    <p class="mb-0">Agribusiness Management System</p>
+</div>

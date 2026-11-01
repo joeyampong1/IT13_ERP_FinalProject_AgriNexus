@@ -1,0 +1,346 @@
+﻿@page "/businesses"
+
+<div class="mb-4">
+    <h2 class="page-title">Business / Tenant Management</h2>
+    <p class="text-muted mb-0 page-sub">Every registered agribusiness on the platform, its subscription plan, and synchronization state.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar mb-3">
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search tenants..." @bind="searchText" @bind:event="oninput" />
+    </div>
+    <span class="text-muted small count-label">@Filtered.Count @(Filtered.Count == 1 ? "business" : "businesses")</span>
+    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+        <i class="bi bi-plus-lg"></i> New business
+    </button>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table biz-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Business</th>
+                    <th>Owner</th>
+                    <th>Plan</th>
+                    <th>Status</th>
+                    <th>Sync</th>
+                    <th>Registered</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var t in Filtered)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">@t.Name</div>
+                            <div class="sub">@t.Code@(string.IsNullOrWhiteSpace(t.Province) ? "" : " · " + t.Province)</div>
+                        </td>
+                        <td>
+                            <div>@t.Owner</div>
+                            <div class="sub">@t.Email</div>
+                        </td>
+                        <td class="fw-medium">@(string.IsNullOrEmpty(t.Plan) ? "—" : t.Plan)</td>
+                        <td><span class="pill @StatusClass(t.Status)">@t.Status</span></td>
+                        <td><span class="pill @SyncClass(t.Sync)">@t.Sync</span></td>
+                        <td class="text-nowrap">@t.Registered.ToString("MMM d, yyyy")</td>
+                        <td class="text-end action-cell">
+                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(t.Id)" aria-label="Actions">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            @if (openMenuId == t.Id)
+                            {
+                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                                <div class="row-menu">
+                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(t)">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(t)">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="7" class="text-center text-muted py-5">No businesses found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="modal-heading mb-0">@(editingId == null ? "New business" : "Edit business")</h5>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Business name <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
+                    {
+                        <div class="err">Business name is required.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Tenant code <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Code) ? "is-invalid" : "")" placeholder="@NextCode()" @bind="form.Code" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Code))
+                    {
+                        <div class="err">Tenant code is required.</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Owner / administrator</label>
+                    <input class="form-control" @bind="form.Owner" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Owner email</label>
+                    <input type="email" class="form-control" @bind="form.Email" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Contact number</label>
+                    <input class="form-control" @bind="form.Contact" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Region / province</label>
+                    <input class="form-control" @bind="form.Province" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Subscription plan</label>
+                    <select class="form-select" @bind="form.Plan">
+                        <option value="">Select...</option>
+                        @foreach (var p in Plans.Keys)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Account status</label>
+                    <select class="form-select" @bind="form.Status">
+                        <option>Active</option>
+                        <option>Trial</option>
+                        <option>Suspended</option>
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Date registered</label>
+                    <input type="date" class="form-control" @bind="form.Registered" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Synchronization</label>
+                    <select class="form-select" @bind="form.Sync">
+                        <option>Synced</option>
+                        <option>Pending</option>
+                        <option>Offline</option>
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Address</label>
+                    <input class="form-control" @bind="form.Address" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Internal notes</label>
+                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class Tenant
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Code { get; set; } = "";
+        public string Owner { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Contact { get; set; } = "";
+        public string Province { get; set; } = "";
+        public string Plan { get; set; } = "";
+        public string Status { get; set; } = "Trial";
+        public string Sync { get; set; } = "Synced";
+        public DateTime Registered { get; set; } = DateTime.Today;
+        public string Address { get; set; } = "";
+        public string Notes { get; set; } = "";
+
+        public Tenant Clone() => (Tenant)MemberwiseClone();
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    // ---------- STATE ----------
+    string searchText = "";
+    bool showModal;
+    bool showErrors;
+    int? editingId;
+    int? openMenuId;
+    Tenant form = new();
+
+    // Temporary monthly price per plan (para sa recurring revenue)
+    static readonly Dictionary<string, decimal> Plans = new()
+    {
+        ["Starter"] = 2998m,
+        ["Growth"] = 3999m,
+        ["Enterprise"] = 9999m,
+        ["Cooperative Custom"] = 14999m,
+    };
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    readonly List<Tenant> tenants = new()
+    {
+        new() { Id = 1, Name = "Verdant Agri Ventures", Code = "AGV-001", Province = "Nueva Ecija", Owner = "Maria L. Santos",
+                Email = "maria.santos@verdantagri.ph", Plan = "Growth", Status = "Active", Sync = "Synced", Registered = new(2024, 2, 14) },
+        new() { Id = 2, Name = "Harvest Hills Agri Corp", Code = "HAR-002", Province = "Pampanga", Owner = "Jose P. Rivera",
+                Email = "jose@harvesthills.ph", Plan = "Enterprise", Status = "Active", Sync = "Synced", Registered = new(2023, 8, 2) },
+        new() { Id = 3, Name = "Sunrise Rice Farmers Coop", Code = "SRF-003", Province = "Isabela", Owner = "Andres B. Cruz",
+                Email = "andres@sunriserice.coop", Plan = "Cooperative Custom", Status = "Active", Sync = "Pending", Registered = new(2024, 6, 19) },
+        new() { Id = 4, Name = "Green Valley Farms", Code = "GRN-004", Province = "Benguet", Owner = "Teresa M. Lim",
+                Email = "teresa@greenvalley.ph", Plan = "Starter", Status = "Trial", Sync = "Offline", Registered = new(2026, 9, 30) },
+        new() { Id = 5, Name = "Bicol River Organic Growers", Code = "BRO-005", Province = "Camarines Sur", Owner = "Rafael D. Ocampo",
+                Email = "rafael@bicolriver.ph", Plan = "Starter", Status = "Suspended", Sync = "Offline", Registered = new(2025, 11, 8) },
+    };
+
+    // ---------- COMPUTED ----------
+    List<Tenant> Filtered => string.IsNullOrWhiteSpace(searchText)
+        ? tenants
+        : tenants.Where(t =>
+            t.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            t.Code.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            t.Owner.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            t.Province.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var active = tenants.Count(t => t.Status == "Active");
+            var trial = tenants.Count(t => t.Status == "Trial");
+            var revenue = tenants.Where(t => t.Status != "Suspended" && Plans.ContainsKey(t.Plan))
+                                 .Sum(t => Plans[t.Plan]);
+            var syncAttention = tenants.Count(t => t.Sync != "Synced");
+
+            return new()
+            {
+                new("REGISTERED BUSINESSES", tenants.Count.ToString(), "", "bi-buildings", ""),
+                new("ACTIVE TENANTS", active.ToString(), $"{trial} still on trial", "bi-credit-card", ""),
+                new("RECURRING REVENUE", $"₱{revenue:N2}", "Monthly subscription value", "bi-graph-up-arrow", ""),
+                new("SYNC ATTENTION", syncAttention.ToString(), "", "bi-arrow-repeat", "stat-icon-warn"),
+            };
+        }
+    }
+
+    static string StatusClass(string s) => s switch
+    {
+        "Active" => "pill-green",
+        "Trial" => "pill-blue",
+        "Suspended" => "pill-red",
+        _ => "pill-gray"
+    };
+
+    static string SyncClass(string s) => s switch
+    {
+        "Synced" => "pill-green",
+        "Pending" => "pill-yellow",
+        "Offline" => "pill-red",
+        _ => "pill-gray"
+    };
+
+    string NextCode() => $"AGV-{tenants.Count + 1:000}";
+
+    // ---------- ACTIONS ----------
+    void OpenNew()
+    {
+        form = new Tenant { Registered = DateTime.Today, Status = "Trial", Sync = "Synced" };
+        editingId = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void OpenEdit(Tenant t)
+    {
+        form = t.Clone();
+        editingId = t.Id;
+        showErrors = false;
+        openMenuId = null;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    void Save()
+    {
+        showErrors = true;
+        if (string.IsNullOrWhiteSpace(form.Name) || string.IsNullOrWhiteSpace(form.Code))
+            return;
+
+        if (editingId == null)
+        {
+            form.Id = tenants.Count == 0 ? 1 : tenants.Max(t => t.Id) + 1;
+            tenants.Add(form);
+        }
+        else
+        {
+            var idx = tenants.FindIndex(t => t.Id == editingId);
+            if (idx >= 0) tenants[idx] = form;
+        }
+        showModal = false;
+    }
+
+    void Delete(Tenant t)
+    {
+        tenants.Remove(t);
+        openMenuId = null;
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+}
