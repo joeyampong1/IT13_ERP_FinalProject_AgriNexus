@@ -1,0 +1,327 @@
+﻿@page "/suppliers"
+@using System.Globalization
+
+<div class="mb-4">
+    <h2 class="page-title">Supplier Records</h2>
+    <p class="text-muted mb-0 page-sub">@BusinessName · who supplies seeds, fertilizer, pesticides, tools and fuel.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-md-4">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar mb-3">
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search suppliers..." @bind="searchText" @bind:event="oninput" />
+    </div>
+    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "supplier" : "suppliers")</span>
+    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+        <i class="bi bi-plus-lg"></i> New supplier
+    </button>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Supplier</th>
+                    <th>Contact<br />person</th>
+                    <th>Contact</th>
+                    <th>Supplies</th>
+                    <th>Terms</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in Filtered)
+                {
+                    <tr>
+                        <td class="col-name">
+                            <div class="fw-semibold">@s.Name</div>
+                            <div class="sub">@Cap(s.Category)</div>
+                        </td>
+                        <td class="col-person">@(string.IsNullOrWhiteSpace(s.Person) ? "—" : s.Person)</td>
+                        <td class="col-contact">@(string.IsNullOrWhiteSpace(s.Contact) ? "—" : s.Contact)</td>
+                        <td class="col-supplies">@(string.IsNullOrWhiteSpace(s.Supplies) ? "—" : s.Supplies)</td>
+                        <td class="col-terms">@(string.IsNullOrWhiteSpace(s.Terms) ? "—" : s.Terms)</td>
+                        <td><span class="pill @(s.Status == "active" ? "pill-green" : "pill-gray")">@Cap(s.Status)</span></td>
+                        <td class="text-end action-cell">
+                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(s.Id)" aria-label="Actions">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            @if (openMenuId == s.Id)
+                            {
+                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                                <div class="row-menu">
+                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(s)">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    <div class="menu-sep"></div>
+                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(s)">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="7" class="text-center text-muted py-5">No suppliers found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="modal-heading mb-0">@(editingId == null ? "New supplier" : "Edit supplier")</h5>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Supplier name <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && (string.IsNullOrWhiteSpace(form.Name) || NameTaken) ? "is-invalid" : "")" @bind="form.Name" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
+                    {
+                        <div class="err">Supplier name is required.</div>
+                    }
+                    @if (showErrors && NameTaken)
+                    {
+                        <div class="err">This supplier already exists.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Category</label>
+                    <select class="form-select" @bind="form.Category">
+                        @foreach (var c in CategoryOptions)
+                        {
+                            <option value="@c">@c</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Contact person</label>
+                    <input class="form-control" @bind="form.Person" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Contact number</label>
+                    <input class="form-control" @bind="form.Contact" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Email address</label>
+                    <input type="email" class="form-control @(showErrors && !EmailValid ? "is-invalid" : "")" @bind="form.Email" />
+                    @if (showErrors && !EmailValid)
+                    {
+                        <div class="err">Enter a valid email address.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Payment terms</label>
+                    <input class="form-control" placeholder="30 days / COD" @bind="form.Terms" />
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Items supplied</label>
+                    <input class="form-control" placeholder="Urea, complete fertilizer, hybrid seeds" @bind="form.Supplies" />
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Address</label>
+                    <input class="form-control" @bind="form.Address" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="form.Status">
+                        <option value="active">active</option>
+                        <option value="inactive">inactive</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class SupplierRec
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Category { get; set; } = "general";
+        public string Person { get; set; } = "";
+        public string Contact { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Terms { get; set; } = "";
+        public string Supplies { get; set; } = "";
+        public string Address { get; set; } = "";
+        public string Status { get; set; } = "active";
+
+        public SupplierRec Clone() => (SupplierRec)MemberwiseClone();
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    static readonly string[] CategoryOptions = { "general", "seeds", "fertilizer", "pesticide", "tools", "fuel", "packaging" };
+
+    // TODO: kuhaa gikan sa naka-login nga tenant
+    const string BusinessName = "Verdant Agri Ventures";
+
+    // ---------- STATE ----------
+    string searchText = "";
+    string toast = "";
+    bool showModal;
+    bool showErrors;
+    int? editingId;
+    int? openMenuId;
+    SupplierRec form = new();
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // Ang mga ngalan mohaum sa Supplier column sa Inventory page
+    readonly List<SupplierRec> suppliers = new()
+    {
+        new() { Id = 1, Name = "Central Luzon Agri Supply",     Category = "fertilizer", Person = "Rodolfo Tiongson", Contact = "0917 443 2210", Email = "sales@clagrisupply.ph",     Terms = "30 days",         Supplies = "Urea, complete fertilizer, organic compost",       Address = "Cabanatuan City, Nueva Ecija", Status = "active" },
+        new() { Id = 2, Name = "Pioneer Seeds Depot",           Category = "seeds",      Person = "Marilou Sison",    Contact = "0918 220 7788", Email = "orders@pioneerseeds.ph",     Terms = "COD",             Supplies = "Hybrid corn seeds, certified rice seeds, vegetable seeds", Address = "San Jose City, Nueva Ecija", Status = "active" },
+        new() { Id = 3, Name = "GreenShield Crop Protection",   Category = "pesticide",  Person = "Edwin Lim",        Contact = "0920 554 9911", Email = "edwin@greenshield.ph",       Terms = "15 days",         Supplies = "Insecticides, herbicides, fungicides",             Address = "Angeles City, Pampanga",       Status = "active" },
+        new() { Id = 4, Name = "FarmTech Machinery & Tools",    Category = "tools",      Person = "Ariel Dizon",      Contact = "0917 889 1145", Email = "ariel@farmtech.ph",          Terms = "50% downpayment", Supplies = "Knapsack sprayers, hand tools, irrigation fittings", Address = "Tarlac City, Tarlac",          Status = "active" },
+        new() { Id = 5, Name = "Valley Fuel Station",           Category = "fuel",       Person = "Gregorio Tan",     Contact = "0919 332 6670", Email = "gregorio@valleyfuel.ph",     Terms = "COD",             Supplies = "Diesel, gasoline",                                 Address = "Cabanatuan City, Nueva Ecija", Status = "inactive" },
+    };
+
+    // ---------- COMPUTED ----------
+    List<SupplierRec> Filtered => string.IsNullOrWhiteSpace(searchText)
+        ? suppliers
+        : suppliers.Where(s =>
+            s.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            s.Person.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            s.Category.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            s.Supplies.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var active = suppliers.Count(s => s.Status == "active");
+            var seedFert = suppliers.Count(s => s.Category == "seeds" || s.Category == "fertilizer");
+            var withContact = suppliers.Count(s => !string.IsNullOrWhiteSpace(s.Contact) || !string.IsNullOrWhiteSpace(s.Email));
+            return new()
+            {
+                new("SUPPLIERS", suppliers.Count.ToString(), active + " active", "bi-truck", ""),
+                new("SEED & FERTILIZER SUPPLIERS", seedFert.ToString(), "", "bi-layers", "stat-icon-plain"),
+                new("WITH CONTACT DETAILS", withContact.ToString(), "", "bi-telephone", "stat-icon-blue"),
+            };
+        }
+    }
+
+    bool NameTaken => !string.IsNullOrWhiteSpace(form.Name) &&
+        suppliers.Any(s => s.Id != (editingId ?? -1) &&
+                           string.Equals(s.Name, form.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    bool EmailValid => string.IsNullOrWhiteSpace(form.Email) ||
+        System.Text.RegularExpressions.Regex.IsMatch(form.Email.Trim(), @"^[^@\s]+@[^@\s]+\.[^@\s]+$");
+
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    // ---------- ACTIONS ----------
+    void OpenNew()
+    {
+        form = new SupplierRec { Category = "general", Status = "active" };
+        editingId = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void OpenEdit(SupplierRec s)
+    {
+        form = s.Clone();
+        editingId = s.Id;
+        showErrors = false;
+        openMenuId = null;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    void Save()
+    {
+        showErrors = true;
+        if (string.IsNullOrWhiteSpace(form.Name) || NameTaken || !EmailValid) return;
+
+        form.Name = form.Name.Trim();
+        form.Email = (form.Email ?? "").Trim();
+
+        if (editingId == null)
+        {
+            form.Id = suppliers.Count == 0 ? 1 : suppliers.Max(s => s.Id) + 1;
+            suppliers.Add(form);
+        }
+        else
+        {
+            var idx = suppliers.FindIndex(s => s.Id == editingId);
+            if (idx >= 0) suppliers[idx] = form;
+        }
+        showModal = false;
+    }
+
+    async Task Delete(SupplierRec s)
+    {
+        openMenuId = null;
+        // TODO: kung naa nay inventory items o stock movements nga naka-link sa supplier,
+        // i-set sa inactive imbes i-delete aron dili madaot ang history
+        suppliers.Remove(s);
+        await ShowToast(s.Name + " was removed.");
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3000);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

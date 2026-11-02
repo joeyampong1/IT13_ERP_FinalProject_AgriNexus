@@ -1,0 +1,383 @@
+/* CSS for HarvestRecording component */
+.page-title {
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    color: #0A2B1D;
+    margin-bottom: .25rem;
+}
+
+.page-sub {
+    font-size: .95rem;
+    max-width: 640px;
+}
+
+/* ---------- BUTTONS ---------- */
+.btn-solid {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: #1B5E34;
+    color: #fff;
+    border: 0;
+    border-radius: 10px;
+    padding: .6rem 1.2rem;
+    font-weight: 600;
+    font-size: .9rem;
+    cursor: pointer;
+}
+
+    .btn-solid:hover {
+        background: #144A29;
+    }
+
+.btn-approve,
+.btn-reject {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 10px;
+    padding: .4rem .9rem;
+    font-size: .8rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn-approve {
+    background: #1B5E34;
+    color: #fff;
+    border: 1px solid #1B5E34;
+}
+
+    .btn-approve:hover {
+        background: #144A29;
+    }
+
+.btn-reject {
+    background: #fff;
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    font-weight: 500;
+    margin-left: 6px;
+}
+
+    .btn-reject:hover {
+        background: #FEF2F2;
+        border-color: #FECACA;
+        color: #B91C1C;
+    }
+
+/* ---------- STAT CARDS ---------- */
+.stat-card {
+    border-radius: 16px;
+    padding: 20px 22px;
+}
+
+    .stat-card .card-title {
+        font-size: .72rem;
+        margin-bottom: 0;
+        line-height: 1.3;
+    }
+
+    .stat-card .card-value {
+        font-size: 1.7rem;
+        letter-spacing: -0.5px;
+    }
+
+.stat-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: #E8EEEA;
+    color: #1B4D2E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.stat-icon-plain {
+    background: transparent;
+}
+
+.stat-icon-warn {
+    background: #FEF3C7;
+    color: #B45309;
+}
+
+/* ---------- TABS ---------- */
+.tabs {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    background: #EEF2EF;
+    border-radius: 14px;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.tab-btn {
+    background: none;
+    border: 0;
+    border-radius: 10px;
+    padding: .5rem 1rem;
+    font-size: .9rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+    .tab-btn:hover {
+        color: var(--text-main);
+    }
+
+    .tab-btn.active {
+        background: #fff;
+        color: var(--text-main);
+        font-weight: 600;
+        box-shadow: 0 1px 3px rgba(0,0,0,.1);
+    }
+
+/* ---------- TOOLBAR ---------- */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.filter-select {
+    padding: .55rem 2rem .55rem .9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background-color: #fff;
+    font-size: .9rem;
+    min-width: 190px;
+    outline: none;
+    cursor: pointer;
+}
+
+    .filter-select:focus {
+        border-color: var(--primary-green);
+    }
+
+/* ---------- PANELS & TABLE ---------- */
+.panel {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+
+.panel-head {
+    padding: 1.2rem 1.5rem .9rem;
+}
+
+.panel-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #0A2B1D;
+}
+
+.panel-sub {
+    font-size: .8rem;
+    color: var(--text-muted);
+    margin-bottom: .75rem;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.data-table {
+    font-size: .9rem;
+    margin-bottom: 0;
+}
+
+    .data-table thead th {
+        font-size: .7rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    .data-table td {
+        padding: .8rem 1rem;
+        border-color: var(--border-color);
+    }
+
+    .data-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .data-table .col-date {
+        min-width: 105px;
+    }
+
+    .data-table .col-plot {
+        min-width: 110px;
+    }
+
+    .data-table .col-actions {
+        min-width: 220px;
+    }
+
+/* ---------- PILLS ---------- */
+.pill {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.pill-green {
+    background: #E6F0E9;
+    color: #1B5E34;
+    border-color: #CFE0D4;
+}
+
+.pill-yellow {
+    background: #FEF3C7;
+    color: #B45309;
+    border-color: #FDE68A;
+}
+
+.pill-red {
+    background: #FEE2E2;
+    color: #B91C1C;
+    border-color: #FECACA;
+}
+
+/* ---------- CHART ---------- */
+.legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+/* ---------- MODAL ---------- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(10, 31, 20, .55);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2.5rem 1rem;
+    overflow-y: auto;
+}
+
+.modal-card {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 670px;
+    padding: 1.5rem 1.6rem;
+    box-shadow: 0 25px 60px rgba(0,0,0,.3);
+}
+
+.modal-heading {
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #0A2B1D;
+}
+
+.modal-sub {
+    font-size: .88rem;
+    color: var(--text-muted);
+    max-width: 560px;
+}
+
+.btn-close-x {
+    background: none;
+    border: 0;
+    color: #475569;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.modal-card .form-label {
+    font-size: .9rem;
+    font-weight: 500;
+    margin-bottom: .35rem;
+}
+
+.modal-card .form-control,
+.modal-card .form-select {
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    padding: .55rem .8rem;
+    font-size: .9rem;
+}
+
+    .modal-card .form-control:focus,
+    .modal-card .form-select:focus {
+        border-color: var(--primary-green);
+        box-shadow: 0 0 0 .15rem rgba(56, 142, 60, .15);
+    }
+
+.req {
+    color: #DC2626;
+}
+
+.err {
+    color: #DC2626;
+    font-size: .75rem;
+    margin-top: 4px;
+}
+
+.btn-cancel {
+    background: none;
+    border: 0;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-main);
+}
+
+.btn-save {
+    background: #1B5E34;
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    padding: .6rem 1.4rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .btn-save:hover {
+        background: #144A29;
+    }
+
+/* ---------- TOAST ---------- */
+.toast-note {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 400px;
+    background: #fff;
+    border: 1px solid #CFE0D4;
+    border-left: 4px solid #1B5E34;
+    color: #1B4D2E;
+    border-radius: 12px;
+    padding: .75rem 1.1rem;
+    font-size: .88rem;
+    font-weight: 500;
+    box-shadow: 0 10px 25px rgba(0,0,0,.15);
+}

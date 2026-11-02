@@ -1,0 +1,473 @@
+﻿@page "/new-sale"
+@using System.Globalization
+@inject AgriNexus.Services.AuthService Auth
+
+<div class="mb-4">
+    <h2 class="page-title">New Sale</h2>
+    <p class="text-muted mb-0 page-sub">@ActiveBranch · price and record produce sales, collect payment in full or partially, and issue a receipt.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="row g-3">
+    <!-- ======================= SALE ITEMS ======================= -->
+    <div class="col-12 col-lg-8">
+        <div class="card-box h-100">
+            <div class="panel-title">Sale items and pricing</div>
+            <div class="panel-sub">Harvested produce is drawn from stock as soon as the sale is completed.</div>
+
+            <label class="form-label">Produce availability</label>
+            <div class="d-flex gap-2 mb-3 flex-wrap flex-sm-nowrap">
+                <select class="form-select" @bind="selectedProduceId">
+                    <option value="">Select produce in stock...</option>
+                    @foreach (var p in stock.Where(x => x.Kg > 0))
+                    {
+                        <option value="@p.Id">@p.Crop — Grade @p.Grade · @Qty(p.Kg) kg available</option>
+                    }
+                </select>
+                <button type="button" class="btn-add" @onclick="AddItem" disabled="@(selectedProduceId == null)">
+                    <i class="bi bi-plus-lg"></i> Add item
+                </button>
+            </div>
+
+            @if (lines.Count == 0)
+            {
+                <div class="empty-box">
+                    <div class="empty-icon"><i class="bi bi-inbox"></i></div>
+                    <div class="fw-semibold mt-3">No items added yet</div>
+                    <div class="text-muted small">Pick produce from stock to build this sale.</div>
+                </div>
+            }
+            else
+            {
+                <div class="items-wrap">
+                    <table class="table items-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Qty</th>
+                                <th>Unit price (₱)</th>
+                                <th>Subtotal</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var l in lines)
+                            {
+                                <tr>
+                                    <td class="col-item">
+                                        <div class="fw-semibold">@l.Name</div>
+                                        <div class="sub">@Qty(OnHand(l)) kg on hand</div>
+                                    </td>
+                                    <td>
+                                        <input type="number" min="0" step="any" class="form-control qty-input @(LineQtyBad(l) ? "is-invalid" : "")"
+                                               @bind="l.Qty" @bind:event="oninput" />
+                                    </td>
+                                    <td>
+                                        <input type="number" min="0" step="0.01" class="form-control price-input"
+                                               @bind="l.Price" @bind:event="oninput" />
+                                    </td>
+                                    <td class="fw-semibold text-nowrap">@Peso(LineTotal(l))</td>
+                                    <td class="text-end">
+                                        <button type="button" class="btn-remove" @onclick="() => RemoveLine(l)" aria-label="Remove item">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- ======================= CUSTOMER & PAYMENT ======================= -->
+    <div class="col-12 col-lg-4">
+        <div class="card-box h-100">
+            <div class="panel-title">Customer &amp; payment</div>
+            <div class="panel-sub">Partial payments leave the remaining balance outstanding.</div>
+
+            <div class="mb-3">
+                <label class="form-label">Customer</label>
+                <select class="form-select" @bind="selectedCustomerId">
+                    <option value="">Select customer...</option>
+                    @foreach (var c in customers)
+                    {
+                        <option value="@c.Id">@CustomerLabel(c)</option>
+                    }
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Discount (₱)</label>
+                <input type="number" min="0" step="0.01" class="form-control" @bind="discountInput" @bind:event="oninput" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Payment method</label>
+                <select class="form-select" @bind="method">
+                    @foreach (var m in MethodOptions)
+                    {
+                        <option value="@m">@m</option>
+                    }
+                </select>
+            </div>
+
+            <div class="mb-1">
+                <label class="form-label">Amount paid now (₱)</label>
+                <input type="number" min="0" step="0.01" class="form-control" @bind="paidInput" @bind:event="oninput" />
+            </div>
+            <button type="button" class="link-btn" @onclick="PayInFull">Pay in full</button>
+
+            <hr class="my-3" />
+
+            <div class="summary">
+                <div class="row-line"><span>Subtotal</span><span>@Peso(Subtotal)</span></div>
+                <div class="row-line"><span>Discount</span><span>– @Peso(Discount)</span></div>
+                <div class="row-line total"><span>Total</span><span>@Peso(Total)</span></div>
+                <div class="row-line"><span>Amount paid</span><span>@Peso(Paid)</span></div>
+                <div class="row-line"><span>Balance</span><span class="@(Balance > 0 ? "text-warn" : "")">@Peso(Balance)</span></div>
+                <div class="row-line"><span>Change</span><span>@Peso(Change)</span></div>
+            </div>
+
+            @if (showErrors && Errors.Count > 0)
+            {
+                <div class="error-box">
+                    @foreach (var e in Errors)
+                    {
+                        <div><i class="bi bi-exclamation-circle"></i> @e</div>
+                    }
+                </div>
+            }
+
+            <div class="d-flex gap-2 mt-3">
+                <button type="button" class="btn-complete" @onclick="Complete">Complete sale</button>
+                <button type="button" class="btn-clear" @onclick="Clear">Clear</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- RECEIPT -->
+@if (receipt != null)
+{
+    <div class="modal-overlay" @onclick="CloseReceipt">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="modal-heading mb-1">Receipt</h5>
+                    <div class="modal-sub">@BusinessName</div>
+                </div>
+                <button type="button" class="btn-close-x" @onclick="CloseReceipt" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="receipt-meta">
+                <div><span>Sale no.</span><strong>@receipt.No</strong></div>
+                <div><span>Date</span><strong>@receipt.Date.ToString("MMM d, yyyy", Inv)</strong></div>
+                <div><span>Customer</span><strong>@receipt.Customer</strong></div>
+                <div><span>Served by</span><strong>@(string.IsNullOrWhiteSpace(receipt.By) ? "—" : receipt.By)</strong></div>
+            </div>
+
+            <table class="table receipt-table align-middle mb-0">
+                <thead>
+                    <tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Price</th><th class="text-end">Subtotal</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in receipt.Lines)
+                    {
+                        <tr>
+                            <td>@r.Name</td>
+                            <td class="text-end text-nowrap">@Qty(r.Qty) kg</td>
+                            <td class="text-end text-nowrap">@Peso(r.Price)</td>
+                            <td class="text-end text-nowrap">@Peso(r.Qty * r.Price)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="summary mt-3">
+                <div class="row-line"><span>Subtotal</span><span>@Peso(receipt.Subtotal)</span></div>
+                <div class="row-line"><span>Discount</span><span>– @Peso(receipt.Discount)</span></div>
+                <div class="row-line total"><span>Total</span><span>@Peso(receipt.Total)</span></div>
+                <div class="row-line"><span>Paid (@receipt.Method)</span><span>@Peso(receipt.Paid)</span></div>
+                <div class="row-line"><span>Balance</span><span class="@(receipt.Balance > 0 ? "text-warn" : "")">@Peso(receipt.Balance)</span></div>
+                <div class="row-line"><span>Change</span><span>@Peso(receipt.Change)</span></div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <span class="pill @(receipt.Balance <= 0 ? "pill-green" : receipt.Paid > 0 ? "pill-yellow" : "pill-red")">
+                    @(receipt.Balance <= 0 ? "Paid" : receipt.Paid > 0 ? "Partial" : "Unpaid")
+                </span>
+                <button type="button" class="btn-save" @onclick="CloseReceipt">Done</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class ProduceLine
+    {
+        public int Id { get; set; }
+        public string Crop { get; set; } = "";
+        public string Grade { get; set; } = "A";
+        public decimal Kg { get; set; }
+        public decimal Price { get; set; }
+    }
+
+    class CustomerRec
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public decimal Balance { get; set; }
+    }
+
+    class SaleLine
+    {
+        public int ProduceId { get; set; }
+        public string Name { get; set; } = "";
+        public decimal? Qty { get; set; }
+        public decimal? Price { get; set; }
+    }
+
+    class ReceiptLine
+    {
+        public string Name { get; set; } = "";
+        public decimal Qty { get; set; }
+        public decimal Price { get; set; }
+    }
+
+    class SaleRec
+    {
+        public string No { get; set; } = "";
+        public DateTime Date { get; set; }
+        public string Customer { get; set; } = "";
+        public string By { get; set; } = "";
+        public string Method { get; set; } = "cash";
+        public List<ReceiptLine> Lines { get; set; } = new();
+        public decimal Subtotal { get; set; }
+        public decimal Discount { get; set; }
+        public decimal Total { get; set; }
+        public decimal Paid { get; set; }
+        public decimal Balance { get; set; }
+        public decimal Change { get; set; }
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    static readonly string[] MethodOptions = { "cash", "gcash", "bank", "check", "credit" };
+    const string WalkIn = "Walk-in customers";
+
+    // TODO: kuhaa gikan sa naka-login nga tenant / branch
+    const string BusinessName = "Verdant Agri Ventures";
+    const string ActiveBranch = "North Field Branch";
+
+    // ---------- STATE ----------
+    int? selectedProduceId;
+    int? selectedCustomerId;
+    decimal? discountInput;
+    decimal? paidInput;
+    string method = "cash";
+    bool showErrors;
+    string toast = "";
+    int saleSeq = 15;               // sunod nga sale number: SO-0015
+    SaleRec? receipt;
+
+    readonly List<SaleLine> lines = new();
+    readonly List<SaleRec> sales = new();   // mga sale nga na-complete sa session (wala pa ma-save sa database)
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // Approved harvest stock (gikan sa Inventory "Produce stock")
+    readonly List<ProduceLine> stock = new()
+    {
+        new() { Id = 1, Crop = "Cabbage",  Grade = "A", Kg = 1170, Price = 38 },
+        new() { Id = 2, Crop = "Ampalaya", Grade = "A", Kg = 420,  Price = 45 },
+        new() { Id = 3, Crop = "Cabbage",  Grade = "B", Kg = 180,  Price = 30 },
+        new() { Id = 4, Crop = "Rice",     Grade = "A", Kg = 1200, Price = 22 },
+    };
+
+    readonly List<CustomerRec> customers = new()
+    {
+        new() { Id = 1, Name = "Bayanihan Trading",           Balance = 7900 },
+        new() { Id = 2, Name = "Municipal Market Vendors",    Balance = 7560 },
+        new() { Id = 3, Name = "Rural Bank Cooperative Store", Balance = 7000 },
+        new() { Id = 4, Name = "Verdant Fresh Retail",        Balance = 0 },
+        new() { Id = 5, Name = "Barangay Nutrition Program",  Balance = 0 },
+        new() { Id = 6, Name = WalkIn,                        Balance = 0 },
+    };
+
+    // ---------- COMPUTED ----------
+    decimal Subtotal => lines.Sum(LineTotal);
+    decimal Discount => Math.Max(0, discountInput ?? 0);
+    decimal Total => Math.Max(0, Subtotal - Discount);
+    decimal Paid => Math.Max(0, paidInput ?? 0);
+    decimal Balance => Math.Max(0, Total - Paid);
+    decimal Change => Math.Max(0, Paid - Total);
+
+    string NextNo => "SO-" + saleSeq.ToString("0000");
+
+    CustomerRec? SelectedCustomer => selectedCustomerId == null ? null : customers.FirstOrDefault(c => c.Id == selectedCustomerId);
+
+    List<Stat> Stats => new()
+    {
+        new("PRODUCE LINES AVAILABLE", stock.Count(p => p.Kg > 0).ToString(), "Approved harvest stock", "bi-cart", ""),
+        new("CUSTOMERS ON FILE", customers.Count.ToString(), "", "bi-check-circle", "stat-icon-blue"),
+        new("NEXT SALE NUMBER", NextNo, "", "bi-cart", "stat-icon-plain"),
+        new("SALE TOTAL", Peso(Total), Balance > 0 && Total > 0 ? Peso(Balance) + " balance" : "Fully paid", "bi-cart", ""),
+    };
+
+    List<string> Errors
+    {
+        get
+        {
+            var list = new List<string>();
+            if (lines.Count == 0) { list.Add("Add at least one item."); return list; }
+
+            foreach (var l in lines)
+            {
+                if ((l.Qty ?? 0) <= 0) list.Add(l.Name + ": enter a quantity.");
+                else if (LineQtyBad(l)) list.Add(l.Name + ": only " + Qty(OnHand(l)) + " kg available.");
+                if ((l.Price ?? 0) < 0) list.Add(l.Name + ": price can’t be negative.");
+            }
+            if (Discount > Subtotal) list.Add("Discount can’t be more than the subtotal.");
+            if (Balance > 0 && (SelectedCustomer == null || SelectedCustomer.Name == WalkIn))
+                list.Add("Select a customer to leave a balance, or pay in full.");
+            return list;
+        }
+    }
+
+    // ---------- HELPERS ----------
+    static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+
+    static decimal LineTotal(SaleLine l) => (l.Qty ?? 0) * (l.Price ?? 0);
+
+    ProduceLine? Find(int id) => stock.FirstOrDefault(p => p.Id == id);
+
+    decimal OnHand(SaleLine l) => Find(l.ProduceId)?.Kg ?? 0;
+
+    bool LineQtyBad(SaleLine l) => (l.Qty ?? 0) > OnHand(l);
+
+    static string CustomerLabel(CustomerRec c) =>
+        c.Balance > 0 ? c.Name + " · " + Peso(c.Balance) + " balance" : c.Name;
+
+    // ---------- ACTIONS ----------
+    void AddItem()
+    {
+        if (selectedProduceId == null) return;
+        var p = Find(selectedProduceId.Value);
+        if (p == null) return;
+
+        var existing = lines.FirstOrDefault(l => l.ProduceId == p.Id);
+        if (existing != null)
+        {
+            existing.Qty = (existing.Qty ?? 0) + 1;
+        }
+        else
+        {
+            lines.Add(new SaleLine
+            {
+                ProduceId = p.Id,
+                Name = p.Crop + " — Grade " + p.Grade,
+                Qty = 1,
+                Price = p.Price
+            });
+        }
+        selectedProduceId = null;
+    }
+
+    void RemoveLine(SaleLine l) => lines.Remove(l);
+
+    void PayInFull() => paidInput = Total;
+
+    void Clear()
+    {
+        lines.Clear();
+        selectedProduceId = null;
+        selectedCustomerId = null;
+        discountInput = null;
+        paidInput = null;
+        method = "cash";
+        showErrors = false;
+    }
+
+    async Task Complete()
+    {
+        showErrors = true;
+        if (Errors.Count > 0) return;
+
+        var sale = new SaleRec
+        {
+            No = NextNo,
+            Date = DateTime.Today,
+            Customer = SelectedCustomer?.Name ?? WalkIn,
+            By = Auth.CurrentUserName ?? "",
+            Method = method,
+            Lines = lines.Select(l => new ReceiptLine { Name = l.Name, Qty = l.Qty ?? 0, Price = l.Price ?? 0 }).ToList(),
+            Subtotal = Subtotal,
+            Discount = Discount,
+            Total = Total,
+            Paid = Paid,
+            Balance = Balance,
+            Change = Change
+        };
+
+        // Kuhaa ang quantity gikan sa stock
+        foreach (var l in lines)
+        {
+            var p = Find(l.ProduceId);
+            if (p != null) p.Kg -= l.Qty ?? 0;
+        }
+
+        // Idugang ang balance sa customer
+        if (sale.Balance > 0 && SelectedCustomer != null)
+            SelectedCustomer.Balance += sale.Balance;
+
+        // TODO: i-save ang sale sa database, i-update ang Inventory (produce stock),
+        // i-log ang bayad sa Payments & Collections / Cash Drawer, ug i-log sa Audit Logs
+        sales.Add(sale);
+        saleSeq++;
+        receipt = sale;
+
+        Clear();
+        await ShowToast(sale.No + " completed.");
+    }
+
+    void CloseReceipt() => receipt = null;
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3000);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

@@ -1,0 +1,325 @@
+/* CSS for StockMovement component */
+.page-title {
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    color: #0A2B1D;
+    margin-bottom: .25rem;
+}
+
+.page-sub {
+    font-size: .95rem;
+    max-width: 560px;
+}
+
+/* ---------- HEADER BUTTONS ---------- */
+.btn-solid,
+.btn-outline-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 10px;
+    padding: .55rem 1.1rem;
+    font-size: .9rem;
+    cursor: pointer;
+}
+
+.btn-solid {
+    background: #1B5E34;
+    color: #fff;
+    border: 0;
+    font-weight: 600;
+}
+
+    .btn-solid:hover {
+        background: #144A29;
+    }
+
+.btn-outline-lg {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+    .btn-outline-lg:hover {
+        background: #F1F5F9;
+        border-color: #CBD5E1;
+    }
+
+/* ---------- STAT CARDS ---------- */
+.stat-card {
+    border-radius: 16px;
+    padding: 20px 22px;
+}
+
+    .stat-card .card-title {
+        font-size: .72rem;
+        margin-bottom: 0;
+        line-height: 1.3;
+    }
+
+    .stat-card .card-value {
+        font-size: 1.7rem;
+        letter-spacing: -0.5px;
+    }
+
+.stat-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: #E8EEEA;
+    color: #1B4D2E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.stat-icon-plain {
+    background: transparent;
+}
+
+.stat-icon-warn {
+    background: #FEF3C7;
+    color: #D97706;
+}
+
+/* ---------- TOOLBAR ---------- */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.filter-select {
+    padding: .55rem 2rem .55rem .9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background-color: #fff;
+    font-size: .9rem;
+    min-width: 190px;
+    outline: none;
+    cursor: pointer;
+}
+
+    .filter-select:focus {
+        border-color: var(--primary-green);
+    }
+
+/* ---------- TABLE ---------- */
+.panel {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.data-table {
+    font-size: .9rem;
+    margin-bottom: 0;
+}
+
+    .data-table thead th {
+        font-size: .7rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
+
+    .data-table td {
+        padding: .8rem 1rem;
+        border-color: var(--border-color);
+    }
+
+    .data-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .data-table .col-date {
+        min-width: 100px;
+    }
+
+    .data-table .col-item {
+        min-width: 190px;
+    }
+
+    .data-table .col-ref {
+        min-width: 90px;
+    }
+
+    .data-table .col-reason {
+        min-width: 150px;
+    }
+
+    .data-table .col-by {
+        min-width: 120px;
+    }
+
+.qty-in {
+    color: #1B5E34;
+}
+
+.qty-out {
+    color: #92400E;
+}
+
+/* ---------- PILLS ---------- */
+.pill {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.pill-green {
+    background: #E6F0E9;
+    color: #1B5E34;
+    border-color: #CFE0D4;
+}
+
+.pill-yellow {
+    background: #FEF3C7;
+    color: #B45309;
+    border-color: #FDE68A;
+}
+
+.pill-outline {
+    background: #fff;
+    color: #475569;
+    border-color: #E2E8F0;
+}
+
+/* ---------- MODAL ---------- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(10, 31, 20, .55);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 5rem 1rem 2.5rem;
+    overflow-y: auto;
+}
+
+.modal-card {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 670px;
+    padding: 1.5rem 1.6rem;
+    box-shadow: 0 25px 60px rgba(0,0,0,.3);
+}
+
+.modal-heading {
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #0A2B1D;
+}
+
+.modal-sub {
+    font-size: .88rem;
+    color: var(--text-muted);
+}
+
+.btn-close-x {
+    background: none;
+    border: 0;
+    color: #475569;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.modal-card .form-label {
+    font-size: .9rem;
+    font-weight: 500;
+    margin-bottom: .35rem;
+}
+
+.modal-card .form-control,
+.modal-card .form-select {
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    padding: .55rem .8rem;
+    font-size: .9rem;
+}
+
+    .modal-card .form-control:focus,
+    .modal-card .form-select:focus {
+        border-color: var(--primary-green);
+        box-shadow: 0 0 0 .15rem rgba(56, 142, 60, .15);
+    }
+
+.hint {
+    margin-top: 6px;
+    font-size: .8rem;
+    color: var(--text-muted);
+}
+
+.req {
+    color: #DC2626;
+}
+
+.err {
+    color: #DC2626;
+    font-size: .75rem;
+    margin-top: 4px;
+}
+
+.btn-cancel {
+    background: none;
+    border: 0;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-main);
+}
+
+.btn-save {
+    background: #1B5E34;
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    padding: .6rem 1.4rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .btn-save:hover {
+        background: #144A29;
+    }
+
+/* ---------- TOAST ---------- */
+.toast-note {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 400px;
+    background: #fff;
+    border: 1px solid #CFE0D4;
+    border-left: 4px solid #1B5E34;
+    color: #1B4D2E;
+    border-radius: 12px;
+    padding: .75rem 1.1rem;
+    font-size: .88rem;
+    font-weight: 500;
+    box-shadow: 0 10px 25px rgba(0,0,0,.15);
+}

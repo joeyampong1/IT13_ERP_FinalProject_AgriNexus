@@ -1,0 +1,544 @@
+﻿@page "/harvest"
+@using System.Globalization
+@inject AgriNexus.Services.AuthService Auth
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Harvest Recording</h2>
+        <p class="text-muted mb-0 page-sub">@ActiveBranch · record harvested lots, grade quality, and post approved quantities into produce stock.</p>
+    </div>
+    <button type="button" class="btn-solid" @onclick="OpenNew">
+        <i class="bi bi-basket"></i> Record harvest
+    </button>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    <div class="text-muted small mt-1">@s.Note</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TABS -->
+<div class="tabs mb-4">
+    <button type="button" class="tab-btn @(activeTab == "record" ? "active" : "")" @onclick='() => SetTab("record")'>Recording &amp; approval</button>
+    <button type="button" class="tab-btn @(activeTab == "lots" ? "active" : "")" @onclick='() => SetTab("lots")'>Harvest lots</button>
+    <button type="button" class="tab-btn @(activeTab == "reports" ? "active" : "")" @onclick='() => SetTab("reports")'>Harvest history &amp; reports</button>
+</div>
+
+<!-- ======================= RECORDING & APPROVAL ======================= -->
+@if (activeTab == "record")
+{
+    <div class="toolbar mb-3">
+        <select class="filter-select" @bind="statusFilter">
+            <option value="">All statuses</option>
+            <option value="pending">Pending approval</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+        </select>
+        <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "record" : "records")</span>
+    </div>
+
+    <div class="panel">
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Lot</th>
+                        <th>Date</th>
+                        <th>Crop</th>
+                        <th>Plot</th>
+                        <th>Quantity</th>
+                        <th>Grade</th>
+                        <th>Unit<br />value</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var h in Filtered)
+                    {
+                        <tr>
+                            <td class="fw-bold text-nowrap">@h.Lot</td>
+                            <td class="col-date">@h.Date.ToString("MMM d, yyyy", Inv)</td>
+                            <td>@h.Crop</td>
+                            <td class="col-plot">@(string.IsNullOrWhiteSpace(h.Plot) ? "—" : h.Plot)</td>
+                            <td class="text-nowrap">@Qty(h.Qty) @h.Unit</td>
+                            <td>@h.Grade</td>
+                            <td class="text-nowrap">@Peso(h.UnitValue)</td>
+                            <td><span class="pill @StatusClass(h.Status)">@Label(h.Status)</span></td>
+                            <td class="text-end text-nowrap col-actions">
+                                @if (h.Status == "pending")
+                                {
+                                    <button type="button" class="btn-approve" @onclick="() => Approve(h)">
+                                        <i class="bi bi-check-circle"></i> Approve
+                                    </button>
+                                    <button type="button" class="btn-reject" @onclick="() => Reject(h)">
+                                        <i class="bi bi-x-circle"></i> Reject
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (Filtered.Count == 0)
+                    {
+                        <tr><td colspan="9" class="text-center text-muted py-5">No harvest records found.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<!-- ======================= HARVEST LOTS ======================= -->
+@if (activeTab == "lots")
+{
+    <div class="panel">
+        <div class="panel-head">
+            <div class="panel-title">Harvest lot management</div>
+            <div class="panel-sub mb-0">Quantities grouped per lot number for traceability</div>
+        </div>
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Lot number</th>
+                        <th>Crop</th>
+                        <th>Plot</th>
+                        <th>Harvest date</th>
+                        <th>Total quantity</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in Lots)
+                    {
+                        <tr>
+                            <td class="fw-bold text-nowrap">@l.Lot</td>
+                            <td>@l.Crop</td>
+                            <td>@(string.IsNullOrWhiteSpace(l.Plot) ? "—" : l.Plot)</td>
+                            <td class="text-nowrap">@l.Date.ToString("MMM d, yyyy", Inv)</td>
+                            <td class="text-nowrap">@Qty(l.Qty) @l.Unit</td>
+                            <td><span class="pill @StatusClass(l.Status)">@Label(l.Status)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<!-- ======================= HISTORY & REPORTS ======================= -->
+@if (activeTab == "reports")
+{
+    <div class="row g-3">
+        <div class="col-12 col-lg-8">
+            <div class="stat-card h-100">
+                <div class="panel-title">Harvest output by crop</div>
+                <div class="panel-sub">Approved quantities</div>
+
+                <svg viewBox="0 0 640 300" class="w-100" style="max-height:340px" role="img" aria-label="Harvest output by crop">
+                    @for (int i = 0; i <= 4; i++)
+                    {
+                        var y = 20 + i * 60;
+                        var val = AxisMax / 4 * (4 - i);
+                        <g>
+                            <line x1="50" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                            <text x="40" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@val.ToString("0", Inv)</text>
+                        </g>
+                    }
+                    @for (int i = 0; i < CropOutput.Count; i++)
+                    {
+                        var c = CropOutput[i];
+                        var slot = 580.0 / CropOutput.Count;
+                        var w = slot * 0.8;
+                        var x = 50 + i * slot + (slot - w) / 2;
+                        var h = (double)c.Qty / AxisMax * 240;
+                        <g>
+                            <rect x="@F(x)" y="@F(260 - h)" width="@F(w)" height="@F(h)" rx="5" fill="#86C440" />
+                            <text x="@F(x + w / 2)" y="282" text-anchor="middle" font-size="11" fill="#475569">@c.Crop</text>
+                        </g>
+                    }
+                </svg>
+
+                @if (CropOutput.Count == 0)
+                {
+                    <div class="text-center text-muted small">No approved harvests yet.</div>
+                }
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+            <div class="stat-card h-100">
+                <div class="panel-title">Quality grade mix</div>
+                <div class="panel-sub">Share of approved harvest</div>
+
+                <div class="d-flex justify-content-center my-3">
+                    <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Quality grade mix">
+                        @{
+                            double offset = 0;
+                        }
+                        @foreach (var g in GradeMix)
+                        {
+                            var len = (double)(g.Qty / GradeTotal) * Circ;
+                            var dash = GradeMix.Count == 1 ? len : Math.Max(len - 2, 0.5);
+                            <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@GradeColor(g.Grade)" stroke-width="30"
+                                    stroke-dasharray="@F(dash) @F(Circ - dash)"
+                                    stroke-dashoffset="@F(-offset)"
+                                    transform="rotate(-90 100 100)" />
+                            offset += len;
+                        }
+                    </svg>
+                </div>
+
+                <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
+                    @foreach (var g in GradeMix)
+                    {
+                        <span><span class="legend-dot" style="background:@GradeColor(g.Grade)"></span>Grade @g.Grade · @Pct(g.Qty)%</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="modal-heading mb-1">Record harvest</h5>
+                    <div class="modal-sub">Harvests are recorded as pending until approved; approval posts the quantity into produce stock.</div>
+                </div>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <label class="form-label">Crop <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Crop) ? "is-invalid" : "")" list="cropList" @bind="form.Crop" />
+                    <datalist id="cropList">
+                        @foreach (var c in CropSuggestions)
+                        {
+                            <option value="@c"></option>
+                        }
+                    </datalist>
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Crop))
+                    {
+                        <div class="err">Crop is required.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Plot</label>
+                    <select class="form-select" @bind="form.Plot">
+                        <option value="">Select...</option>
+                        @foreach (var p in plotOptions)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Harvest date</label>
+                    <input type="date" class="form-control" @bind="form.Date" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Quantity harvested <span class="req">*</span></label>
+                    <input type="number" min="0" step="any" class="form-control @(showErrors && QtyInvalid ? "is-invalid" : "")" @bind="qtyInput" />
+                    @if (showErrors && QtyInvalid)
+                    {
+                        <div class="err">Enter a quantity greater than zero.</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Unit</label>
+                    <select class="form-select" @bind="form.Unit">
+                        @foreach (var u in UnitOptions)
+                        {
+                            <option value="@u">@u</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Quality grade</label>
+                    <select class="form-select" @bind="form.Grade">
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Value per unit (₱)</label>
+                    <input type="number" min="0" step="0.01" class="form-control @(showErrors && valueInput < 0 ? "is-invalid" : "")" @bind="valueInput" />
+                    @if (showErrors && valueInput < 0)
+                    {
+                        <div class="err">Value can’t be negative.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Lot number</label>
+                    <input class="form-control @(showErrors && LotTaken ? "is-invalid" : "")" @bind="form.Lot" />
+                    @if (showErrors && LotTaken)
+                    {
+                        <div class="err">This lot number is already used.</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Recorded by</label>
+                    <input class="form-control" @bind="form.RecordedBy" />
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Record harvest</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class HarvestRec
+    {
+        public int Id { get; set; }
+        public string Lot { get; set; } = "";
+        public DateTime Date { get; set; } = DateTime.Today;
+        public string Crop { get; set; } = "";
+        public string Plot { get; set; } = "";
+        public decimal Qty { get; set; }
+        public string Unit { get; set; } = "kg";
+        public string Grade { get; set; } = "A";
+        public decimal UnitValue { get; set; }
+        public string Status { get; set; } = "pending";   // pending | approved | rejected
+        public string RecordedBy { get; set; } = "";
+        public string Notes { get; set; } = "";
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record LotRow(string Lot, string Crop, string Plot, DateTime Date, decimal Qty, string Unit, string Status);
+    record CropQty(string Crop, decimal Qty);
+    record GradeQty(string Grade, decimal Qty);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    const double Radius = 70;
+    static readonly double Circ = 2 * Math.PI * Radius;
+    static readonly string[] UnitOptions = { "kg", "sack", "piece", "bundle" };
+
+    // TODO: kuhaa gikan sa naka-login nga tenant ug sa Farms & Plots module
+    const string ActiveBranch = "North Field Branch";
+    readonly string[] plotOptions =
+    {
+        "North Plot A", "North Plot B", "North Plot C", "South Plot D", "South Plot E", "Central Plot F",
+    };
+
+    // ---------- STATE ----------
+    string activeTab = "record";
+    string statusFilter = "";
+    string toast = "";
+    bool showModal;
+    bool showErrors;
+    HarvestRec form = new();
+    decimal? qtyInput;
+    decimal? valueInput;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    readonly List<HarvestRec> harvests = new()
+    {
+        new() { Id = 1, Lot = "LOT-006", Date = new(2026, 10, 22), Crop = "Ampalaya", Plot = "South Plot E", Qty = 140,  Grade = "B", UnitValue = 32, Status = "pending"  },
+        new() { Id = 2, Lot = "LOT-005", Date = new(2026, 10, 20), Crop = "Cabbage",  Plot = "South Plot D", Qty = 320,  Grade = "A", UnitValue = 38, Status = "pending"  },
+        new() { Id = 3, Lot = "LOT-007", Date = new(2026, 10, 19), Crop = "Corn",     Plot = "North Plot B", Qty = 90,   Grade = "C", UnitValue = 18, Status = "rejected" },
+        new() { Id = 4, Lot = "LOT-004", Date = new(2026, 10, 12), Crop = "Cabbage",  Plot = "South Plot D", Qty = 180,  Grade = "B", UnitValue = 30, Status = "approved" },
+        new() { Id = 5, Lot = "LOT-002", Date = new(2026, 10, 5),  Crop = "Cabbage",  Plot = "South Plot D", Qty = 610,  Grade = "A", UnitValue = 38, Status = "approved" },
+        new() { Id = 6, Lot = "LOT-001", Date = new(2026, 9, 28),  Crop = "Ampalaya", Plot = "South Plot E", Qty = 520,  Grade = "A", UnitValue = 45, Status = "approved" },
+        new() { Id = 7, Lot = "LOT-003", Date = new(2026, 6, 22),  Crop = "Rice",     Plot = "North Plot A", Qty = 1450, Grade = "A", UnitValue = 22, Status = "approved" },
+    };
+
+    // ---------- COMPUTED ----------
+    // Ang totals kay kg ra ang giapil, aron dili madugtong ang lahi-lahi nga units
+    static decimal Kg(HarvestRec h) => h.Unit == "kg" ? h.Qty : 0;
+
+    IEnumerable<HarvestRec> Approved => harvests.Where(h => h.Status == "approved");
+
+    List<HarvestRec> Filtered => harvests
+        .Where(h => string.IsNullOrEmpty(statusFilter) || h.Status == statusFilter)
+        .OrderByDescending(h => h.Date).ThenByDescending(h => h.Id)
+        .ToList();
+
+    List<Stat> Stats => new()
+    {
+        new("HARVEST RECORDS", harvests.Count.ToString(), harvests.Select(h => h.Lot).Distinct().Count() + " lots created", "bi-flower2", ""),
+        new("APPROVED QUANTITY", Qty(Approved.Sum(Kg)) + " kg", "Posted to produce stock", "bi-check-circle", ""),
+        new("AWAITING APPROVAL", harvests.Count(h => h.Status == "pending").ToString(), "Not yet in inventory", "bi-flower2", "stat-icon-warn"),
+        new("ESTIMATED VALUE", Peso(Approved.Sum(h => h.Qty * h.UnitValue)), "Quantity × unit value", "bi-flower2", "stat-icon-plain"),
+    };
+
+    List<LotRow> Lots => harvests
+        .GroupBy(h => h.Lot)
+        .Select(g => new LotRow(
+            g.Key,
+            g.First().Crop,
+            g.First().Plot,
+            g.Max(x => x.Date),
+            g.Sum(x => x.Qty),
+            g.First().Unit,
+            g.Any(x => x.Status == "pending") ? "pending"
+                : g.All(x => x.Status == "rejected") ? "rejected" : "approved"))
+        .OrderByDescending(l => l.Date).ThenByDescending(l => l.Lot)
+        .ToList();
+
+    List<CropQty> CropOutput => Approved
+        .OrderByDescending(h => h.Date).ThenByDescending(h => h.Id)
+        .GroupBy(h => h.Crop)
+        .Select(g => new CropQty(g.Key, g.Sum(Kg)))
+        .Where(c => c.Qty > 0)
+        .ToList();
+
+    double AxisMax
+    {
+        get
+        {
+            var max = CropOutput.Count == 0 ? 0 : (double)CropOutput.Max(c => c.Qty);
+            return Math.Max(400, Math.Ceiling(max / 400) * 400);
+        }
+    }
+
+    List<GradeQty> GradeMix => Approved
+        .GroupBy(h => h.Grade)
+        .Select(g => new GradeQty(g.Key, g.Sum(Kg)))
+        .Where(g => g.Qty > 0)
+        .OrderBy(g => g.Grade)
+        .ToList();
+
+    decimal GradeTotal => Math.Max(1, GradeMix.Sum(g => g.Qty));
+
+    IEnumerable<string> CropSuggestions => harvests.Select(h => h.Crop).Distinct()
+        .Concat(new[] { "Rice", "Corn", "Cabbage", "Ampalaya" }).Distinct();
+
+    bool QtyInvalid => !qtyInput.HasValue || qtyInput.Value <= 0;
+
+    bool LotTaken => !string.IsNullOrWhiteSpace(form.Lot) &&
+        harvests.Any(h => string.Equals(h.Lot, form.Lot.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    string NextLot
+    {
+        get
+        {
+            var max = 0;
+            foreach (var h in harvests)
+            {
+                var p = h.Lot.Split('-');
+                if (p.Length == 2 && p[0] == "LOT" && int.TryParse(p[1], out var n)) max = Math.Max(max, n);
+            }
+            return "LOT-" + (max + 1).ToString("000");
+        }
+    }
+
+    // ---------- HELPERS ----------
+    static string F(double d) => d.ToString("0.##", Inv);
+    static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    int Pct(decimal qty) => (int)Math.Round(qty * 100 / GradeTotal);
+
+    static string Label(string s) => s switch { "pending" => "Pending", "approved" => "Approved", "rejected" => "Rejected", _ => s };
+
+    static string StatusClass(string s) => s switch
+    {
+        "approved" => "pill-green",
+        "rejected" => "pill-red",
+        _ => "pill-yellow"
+    };
+
+    static string GradeColor(string g) => g switch
+    {
+        "A" => "#206A3B",
+        "B" => "#62A834",
+        _ => "#A8D86B"
+    };
+
+    // ---------- ACTIONS ----------
+    void SetTab(string key) => activeTab = key;
+
+    void OpenNew()
+    {
+        form = new HarvestRec { Date = DateTime.Today, Unit = "kg", Grade = "A", Lot = NextLot };
+        qtyInput = null;
+        valueInput = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    async Task Save()
+    {
+        showErrors = true;
+        if (string.IsNullOrWhiteSpace(form.Crop) || QtyInvalid || (valueInput.HasValue && valueInput < 0)) return;
+        if (string.IsNullOrWhiteSpace(form.Lot)) form.Lot = NextLot;
+        if (LotTaken) return;
+
+        form.Id = harvests.Count == 0 ? 1 : harvests.Max(h => h.Id) + 1;
+        form.Crop = form.Crop.Trim();
+        form.Lot = form.Lot.Trim().ToUpperInvariant();
+        form.Qty = qtyInput!.Value;
+        form.UnitValue = valueInput ?? 0;
+        form.RecordedBy = string.IsNullOrWhiteSpace(form.RecordedBy) ? (Auth.CurrentUserName ?? "") : form.RecordedBy.Trim();
+        form.Status = "pending";
+
+        harvests.Add(form);
+        var lot = form.Lot;
+        showModal = false;
+        await ShowToast(lot + " recorded as pending approval.");
+    }
+
+    async Task Approve(HarvestRec h)
+    {
+        h.Status = "approved";
+        // TODO: i-post ang quantity sa Produce stock (Inventory) ug i-log sa Audit Logs
+        await ShowToast(h.Lot + " approved and posted to produce stock.");
+    }
+
+    async Task Reject(HarvestRec h)
+    {
+        h.Status = "rejected";
+        // TODO: i-log sa Audit Logs
+        await ShowToast(h.Lot + " was rejected. Nothing was added to inventory.");
+    }
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3000);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

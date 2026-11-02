@@ -1,0 +1,396 @@
+﻿@page "/attendance"
+@using System.Globalization
+
+<div class="mb-4">
+    <h2 class="page-title">Labor Attendance and Work Logs</h2>
+    <p class="text-muted mb-0 page-sub">Daily attendance, hours worked and computed labor cost per worker, task and plot.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-md-4">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar mb-3">
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search work logs..." @bind="searchText" @bind:event="oninput" />
+    </div>
+    <span class="text-muted small">@Filtered.Count work @(Filtered.Count == 1 ? "log" : "logs")</span>
+    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+        <i class="bi bi-plus-lg"></i> New work log
+    </button>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Worker</th>
+                    <th>Task</th>
+                    <th>Plot</th>
+                    <th>Hours</th>
+                    <th>Labor cost</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var l in Filtered)
+                {
+                    <tr>
+                        <td class="text-nowrap">@l.Date.ToString("MMM d, yyyy", Inv)</td>
+                        <td class="col-worker fw-semibold">@(string.IsNullOrWhiteSpace(l.WorkerName) ? "—" : l.WorkerName)</td>
+                        <td class="col-task">@(string.IsNullOrWhiteSpace(l.Task) ? "—" : l.Task)</td>
+                        <td class="col-plot">@(string.IsNullOrWhiteSpace(l.Plot) ? "—" : l.Plot)</td>
+                        <td>@Hrs(l.Hours)</td>
+                        <td class="text-nowrap">@Peso(Cost(l))</td>
+                        <td><span class="pill @(l.Status == "approved" ? "pill-green" : "pill-slate")">@Cap(l.Status)</span></td>
+                        <td class="text-end action-cell">
+                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(l.Id)" aria-label="Actions">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            @if (openMenuId == l.Id)
+                            {
+                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                                <div class="row-menu">
+                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(l)">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    @if (l.Status != "approved")
+                                    {
+                                        <button type="button" class="row-menu-item" @onclick="() => Approve(l)">
+                                            <i class="bi bi-check-circle"></i> Approve log
+                                        </button>
+                                    }
+                                    <div class="menu-sep"></div>
+                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(l)">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-5">No work logs found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="modal-heading mb-0">@(editingId == null ? "New work log" : "Edit work log")</h5>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label">Worker</label>
+                    <select class="form-select" value="@form.WorkerRef" @onchange="OnWorkerChanged">
+                        <option value="">Select...</option>
+                        @foreach (var w in rates.Keys)
+                        {
+                            <option value="@w" selected="@(form.WorkerRef == w)">@w</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Worker name (as displayed)</label>
+                    <input class="form-control" @bind="form.WorkerName" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Work date</label>
+                    <input type="date" class="form-control" @bind="form.Date" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Hours worked</label>
+                    <input type="number" min="0" max="24" step="0.5" class="form-control @(showErrors && HoursInvalid ? "is-invalid" : "")" @bind="hoursInput" />
+                    @if (showErrors && HoursInvalid)
+                    {
+                        <div class="err">Enter hours between 0.5 and 24.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Task performed</label>
+                    <input class="form-control" @bind="form.Task" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Plot</label>
+                    <select class="form-select" @bind="form.Plot">
+                        <option value="">Select...</option>
+                        @foreach (var p in plotOptions)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="form.Status">
+                        <option value="recorded">recorded</option>
+                        <option value="approved">approved</option>
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                </div>
+            </div>
+
+            @if (EstimatedCost.HasValue)
+            {
+                <div class="hint mt-3"><i class="bi bi-calculator"></i> Computed labor cost: <strong>@Peso(EstimatedCost.Value)</strong> (daily rate ÷ 8 hours × hours worked)</div>
+            }
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class LogRec
+    {
+        public int Id { get; set; }
+        public DateTime Date { get; set; } = DateTime.Today;
+        public string WorkerRef { get; set; } = "";
+        public string WorkerName { get; set; } = "";
+        public string Task { get; set; } = "";
+        public string Plot { get; set; } = "";
+        public decimal Hours { get; set; } = 8;
+        public string Status { get; set; } = "recorded";   // recorded | approved
+        public string Notes { get; set; } = "";
+
+        public LogRec Clone() => (LogRec)MemberwiseClone();
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    // TODO: kuhaa ang daily rates gikan sa Workers module ug ang plots gikan sa Farms & Plots
+    readonly Dictionary<string, decimal> rates = new()
+    {
+        ["Ernesto Bacani"] = 500,
+        ["Ronnie Aquino"] = 420,
+        ["Jomar Salvador"] = 400,
+        ["Lito Marasigan"] = 420,
+        ["Avelino Dungca"] = 480,
+        ["Marilou Pangan"] = 400,
+        ["Rolando Espino"] = 400,
+        ["Danilo Roque"] = 420,
+    };
+
+    readonly string[] plotOptions =
+    {
+        "North Plot A", "North Plot B", "North Plot C", "South Plot D", "South Plot E", "Central Plot F",
+    };
+
+    // ---------- STATE ----------
+    string searchText = "";
+    string toast = "";
+    bool showModal;
+    bool showErrors;
+    int? editingId;
+    int? openMenuId;
+    LogRec form = new();
+    decimal? hoursInput = 8;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // 16 ka logs, 5 niini kay "recorded" pa (naghulat og approval)
+    readonly List<LogRec> logs = new()
+    {
+        new() { Id = 1,  Date = new(2026, 10, 24), WorkerRef = "Ernesto Bacani",  WorkerName = "Ernesto Bacani",  Task = "Irrigation scheduling",       Plot = "North Plot A",   Hours = 8, Status = "recorded" },
+        new() { Id = 2,  Date = new(2026, 10, 24), WorkerRef = "Jomar Salvador",  WorkerName = "Jomar Salvador",  Task = "Harvest preparation",         Plot = "North Plot A",   Hours = 8, Status = "recorded" },
+        new() { Id = 3,  Date = new(2026, 10, 23), WorkerRef = "Lito Marasigan",  WorkerName = "Lito Marasigan",  Task = "Land preparation",            Plot = "North Plot C",   Hours = 8, Status = "recorded" },
+        new() { Id = 4,  Date = new(2026, 10, 22), WorkerRef = "Ronnie Aquino",   WorkerName = "Ronnie Aquino",   Task = "Spraying — pest control",     Plot = "North Plot B",   Hours = 6, Status = "approved" },
+        new() { Id = 5,  Date = new(2026, 10, 21), WorkerRef = "Ernesto Bacani",  WorkerName = "Ernesto Bacani",  Task = "Fertilizer application",      Plot = "North Plot A",   Hours = 8, Status = "approved" },
+        new() { Id = 6,  Date = new(2026, 10, 19), WorkerRef = "Lito Marasigan",  WorkerName = "Lito Marasigan",  Task = "Fertilizer application",      Plot = "North Plot B",   Hours = 8, Status = "approved" },
+        new() { Id = 7,  Date = new(2026, 10, 24), WorkerRef = "Marilou Pangan",  WorkerName = "Marilou Pangan",  Task = "Ampalaya picking and packing", Plot = "South Plot E",  Hours = 8, Status = "recorded" },
+        new() { Id = 8,  Date = new(2026, 10, 23), WorkerRef = "Rolando Espino",  WorkerName = "Rolando Espino",  Task = "Weeding and cultivation",     Plot = "South Plot D",   Hours = 8, Status = "recorded" },
+        new() { Id = 9,  Date = new(2026, 10, 20), WorkerRef = "Avelino Dungca",  WorkerName = "Avelino Dungca",  Task = "Fertilizer application",      Plot = "South Plot D",   Hours = 8, Status = "approved" },
+        new() { Id = 10, Date = new(2026, 10, 20), WorkerRef = "Danilo Roque",    WorkerName = "Danilo Roque",    Task = "Storage cleanup",             Plot = "Central Plot F", Hours = 8, Status = "approved" },
+        new() { Id = 11, Date = new(2026, 10, 18), WorkerRef = "Rolando Espino",  WorkerName = "Rolando Espino",  Task = "Weeding and cultivation",     Plot = "South Plot D",   Hours = 8, Status = "approved" },
+        new() { Id = 12, Date = new(2026, 10, 17), WorkerRef = "Marilou Pangan",  WorkerName = "Marilou Pangan",  Task = "Ampalaya picking",            Plot = "South Plot E",   Hours = 7, Status = "approved" },
+        new() { Id = 13, Date = new(2026, 10, 16), WorkerRef = "Jomar Salvador",  WorkerName = "Jomar Salvador",  Task = "Rice harvesting",             Plot = "North Plot A",   Hours = 8, Status = "approved" },
+        new() { Id = 14, Date = new(2026, 10, 15), WorkerRef = "Ernesto Bacani",  WorkerName = "Ernesto Bacani",  Task = "Canal check",                 Plot = "North Plot B",   Hours = 8, Status = "approved" },
+        new() { Id = 15, Date = new(2026, 10, 14), WorkerRef = "Ronnie Aquino",   WorkerName = "Ronnie Aquino",   Task = "Spraying",                    Plot = "North Plot B",   Hours = 8, Status = "approved" },
+        new() { Id = 16, Date = new(2026, 10, 13), WorkerRef = "Lito Marasigan",  WorkerName = "Lito Marasigan",  Task = "Transplanting",               Plot = "North Plot C",   Hours = 8, Status = "approved" },
+    };
+
+    // ---------- COMPUTED ----------
+    List<LogRec> Filtered => (string.IsNullOrWhiteSpace(searchText)
+        ? logs
+        : logs.Where(l =>
+            l.WorkerName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            l.Task.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            l.Plot.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            l.Status.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList())
+        .OrderByDescending(l => l.Date).ThenByDescending(l => l.Id).ToList();
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var today = DateTime.Today;
+            var month = logs.Where(l => l.Date.Year == today.Year && l.Date.Month == today.Month).ToList();
+            var waiting = logs.Count(l => l.Status == "recorded");
+            return new()
+            {
+                new("LOGS THIS MONTH", month.Count.ToString(), logs.Count + " logs in history", "bi-clock-history", ""),
+                new("HOURS THIS MONTH", Hrs(month.Sum(l => l.Hours)), "", "bi-clock", "stat-icon-blue"),
+                new("LABOR COST THIS MONTH", Peso(month.Sum(Cost)), waiting + " logs awaiting approval", "bi-cash-coin", "stat-icon-plain"),
+            };
+        }
+    }
+
+    bool HoursInvalid => !hoursInput.HasValue || hoursInput.Value <= 0 || hoursInput.Value > 24;
+
+    decimal? EstimatedCost
+    {
+        get
+        {
+            var name = string.IsNullOrWhiteSpace(form.WorkerRef) ? form.WorkerName : form.WorkerRef;
+            if (!rates.TryGetValue(name ?? "", out var rate) || !hoursInput.HasValue || hoursInput.Value <= 0) return null;
+            return Math.Round(rate / 8 * hoursInput.Value, 2);
+        }
+    }
+
+    // ---------- HELPERS ----------
+    // Labor cost = daily rate ÷ 8 oras × oras nga nagtrabaho
+    decimal Cost(LogRec l)
+    {
+        var name = string.IsNullOrWhiteSpace(l.WorkerRef) ? l.WorkerName : l.WorkerRef;
+        return rates.TryGetValue(name ?? "", out var rate) ? Math.Round(rate / 8 * l.Hours, 2) : 0;
+    }
+
+    static string Hrs(decimal v) => v.ToString("0.##", Inv);
+
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    // ---------- ACTIONS ----------
+    void OpenNew()
+    {
+        form = new LogRec { Date = DateTime.Today, Status = "recorded" };
+        hoursInput = 8;
+        editingId = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void OpenEdit(LogRec l)
+    {
+        form = l.Clone();
+        hoursInput = l.Hours;
+        editingId = l.Id;
+        showErrors = false;
+        openMenuId = null;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    // Kung mopili og worker, i-fill ang "Worker name (as displayed)"
+    void OnWorkerChanged(ChangeEventArgs e)
+    {
+        var name = e.Value?.ToString() ?? "";
+        form.WorkerRef = name;
+        if (name.Length > 0) form.WorkerName = name;
+    }
+
+    void Save()
+    {
+        showErrors = true;
+        if (HoursInvalid) return;
+
+        form.Hours = hoursInput!.Value;
+        if (string.IsNullOrWhiteSpace(form.WorkerName)) form.WorkerName = form.WorkerRef;
+
+        if (editingId == null)
+        {
+            form.Id = logs.Count == 0 ? 1 : logs.Max(l => l.Id) + 1;
+            logs.Add(form);
+        }
+        else
+        {
+            var idx = logs.FindIndex(l => l.Id == editingId);
+            if (idx >= 0) logs[idx] = form;
+        }
+        showModal = false;
+    }
+
+    async Task Approve(LogRec l)
+    {
+        openMenuId = null;
+        l.Status = "approved";
+        // TODO: i-log sa Audit Logs ug i-apil sa Labor Cost Records / Production Costing
+        await ShowToast("Work log for " + l.WorkerName + " approved.");
+    }
+
+    async Task Delete(LogRec l)
+    {
+        openMenuId = null;
+        if (l.Status == "approved")
+        {
+            await ShowToast("Approved logs are part of the labor cost records and can’t be deleted.");
+            return;
+        }
+        logs.Remove(l);
+        await ShowToast("Work log removed.");
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3000);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

@@ -1,0 +1,330 @@
+﻿@page "/assignments"
+@using System.Globalization
+
+<div class="mb-4">
+    <h2 class="page-title">Work Assignments</h2>
+    <p class="text-muted mb-0 page-sub">Daily task assignments per worker and plot, from land preparation through harvest.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-md-4">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar mb-3">
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search assignments..." @bind="searchText" @bind:event="oninput" />
+    </div>
+    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "assignment" : "assignments")</span>
+    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+        <i class="bi bi-plus-lg"></i> New assignment
+    </button>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Worker</th>
+                    <th>Task</th>
+                    <th>Plot</th>
+                    <th>Assigned</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var a in Filtered)
+                {
+                    <tr>
+                        <td class="col-worker fw-semibold">@(string.IsNullOrWhiteSpace(a.WorkerName) ? "—" : a.WorkerName)</td>
+                        <td class="col-task">@a.Task</td>
+                        <td class="col-plot">@(string.IsNullOrWhiteSpace(a.Plot) ? "—" : a.Plot)</td>
+                        <td class="text-nowrap">@a.Assigned.ToString("MMM d, yyyy", Inv)</td>
+                        <td><span class="pill @StatusClass(a.Status)">@Cap(a.Status)</span></td>
+                        <td class="text-end action-cell">
+                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(a.Id)" aria-label="Actions">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            @if (openMenuId == a.Id)
+                            {
+                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                                <div class="row-menu">
+                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(a)">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    <button type="button" class="row-menu-item plain" @onclick='() => SetStatus(a, "ongoing")'>
+                                        Start (ongoing)
+                                    </button>
+                                    <button type="button" class="row-menu-item" @onclick='() => SetStatus(a, "completed")'>
+                                        <i class="bi bi-check-circle"></i> Mark completed
+                                    </button>
+                                    <div class="menu-sep"></div>
+                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(a)">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center text-muted py-5">No assignments found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="modal-heading mb-0">@(editingId == null ? "New assignment" : "Edit assignment")</h5>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label">Worker</label>
+                    <select class="form-select" value="@form.WorkerRef" @onchange="OnWorkerChanged">
+                        <option value="">Select...</option>
+                        @foreach (var w in workerOptions)
+                        {
+                            <option value="@w" selected="@(form.WorkerRef == w)">@w</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Worker name (as displayed)</label>
+                    <input class="form-control" placeholder="Auto-filled from selection" @bind="form.WorkerName" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Task <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Task) ? "is-invalid" : "")"
+                           placeholder="Land preparation, transplanting, spraying..." @bind="form.Task" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Task))
+                    {
+                        <div class="err">Task is required.</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Plot</label>
+                    <select class="form-select" @bind="form.Plot">
+                        <option value="">Select...</option>
+                        @foreach (var p in plotOptions)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Assigned date</label>
+                    <input type="date" class="form-control" @bind="form.Assigned" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="form.Status">
+                        @foreach (var s in StatusOptions)
+                        {
+                            <option value="@s">@s</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class AssignRec
+    {
+        public int Id { get; set; }
+        public string WorkerRef { get; set; } = "";    // worker nga gipili gikan sa Workers
+        public string WorkerName { get; set; } = "";   // ngalan nga makita sa table
+        public string Task { get; set; } = "";
+        public string Plot { get; set; } = "";
+        public DateTime Assigned { get; set; } = DateTime.Today;
+        public string Status { get; set; } = "pending";   // pending | ongoing | completed
+        public string Notes { get; set; } = "";
+
+        public AssignRec Clone() => (AssignRec)MemberwiseClone();
+    }
+
+    record Stat(string Title, string Value, string Icon, string IconClass);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    static readonly string[] StatusOptions = { "pending", "ongoing", "completed" };
+
+    // TODO: kuhaa ang active workers gikan sa Workers module ug ang plots gikan sa Farms & Plots
+    readonly string[] workerOptions =
+    {
+        "Ernesto Bacani", "Ronnie Aquino", "Jomar Salvador", "Lito Marasigan", "Avelino Dungca",
+        "Marilou Pangan", "Rolando Espino", "Danilo Roque",
+    };
+
+    readonly string[] plotOptions =
+    {
+        "North Plot A", "North Plot B", "North Plot C", "South Plot D", "South Plot E", "Central Plot F",
+    };
+
+    // ---------- STATE ----------
+    string searchText = "";
+    string toast = "";
+    bool showModal;
+    bool showErrors;
+    int? editingId;
+    int? openMenuId;
+    AssignRec form = new();
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    readonly List<AssignRec> assignments = new()
+    {
+        new() { Id = 1, WorkerRef = "Jomar Salvador",  WorkerName = "Jomar Salvador",  Task = "Harvest preparation — sacks and twine",     Plot = "North Plot A",   Assigned = new(2026, 10, 23), Status = "ongoing" },
+        new() { Id = 2, WorkerRef = "Lito Marasigan",  WorkerName = "Lito Marasigan",  Task = "Land preparation for next vegetable cycle", Plot = "North Plot C",   Assigned = new(2026, 10, 22), Status = "ongoing" },
+        new() { Id = 3, WorkerRef = "Marilou Pangan",  WorkerName = "Marilou Pangan",  Task = "Ampalaya picking and packing",              Plot = "South Plot E",   Assigned = new(2026, 10, 24), Status = "ongoing" },
+        new() { Id = 4, WorkerRef = "Avelino Dungca",  WorkerName = "Avelino Dungca",  Task = "Fertilizer application — side dressing",    Plot = "South Plot D",   Assigned = new(2026, 10, 21), Status = "completed" },
+        new() { Id = 5, WorkerRef = "Rolando Espino",  WorkerName = "Rolando Espino",  Task = "Weeding and cultivation",                   Plot = "South Plot D",   Assigned = new(2026, 10, 20), Status = "completed" },
+        new() { Id = 6, WorkerRef = "Danilo Roque",    WorkerName = "Danilo Roque",    Task = "Storage cleanup and stock arrangement",     Plot = "Central Plot F", Assigned = new(2026, 10, 19), Status = "completed" },
+        new() { Id = 7, WorkerRef = "Ernesto Bacani",  WorkerName = "Ernesto Bacani",  Task = "Irrigation scheduling and canal check",     Plot = "North Plot A",   Assigned = new(2026, 10, 24), Status = "ongoing" },
+        new() { Id = 8, WorkerRef = "Ronnie Aquino",   WorkerName = "Ronnie Aquino",   Task = "Pest monitoring and spraying",              Plot = "North Plot B",   Assigned = new(2026, 10, 24), Status = "pending" },
+    };
+
+    // ---------- COMPUTED ----------
+    List<AssignRec> Filtered => string.IsNullOrWhiteSpace(searchText)
+        ? assignments
+        : assignments.Where(a =>
+            a.WorkerName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            a.Task.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            a.Plot.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            a.Status.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    List<Stat> Stats => new()
+    {
+        new("ASSIGNMENTS", assignments.Count.ToString(), "bi-clipboard-check", ""),
+        new("ONGOING", assignments.Count(a => a.Status == "ongoing").ToString(), "bi-clock-history", "stat-icon-warn"),
+        new("COMPLETED", assignments.Count(a => a.Status == "completed").ToString(), "bi-check-circle", ""),
+    };
+
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    static string StatusClass(string s) => s switch
+    {
+        "completed" => "pill-green",
+        _ => "pill-yellow"    // pending ug ongoing, parehas nga dalag sa prototype
+    };
+
+    // ---------- ACTIONS ----------
+    void OpenNew()
+    {
+        form = new AssignRec { Assigned = DateTime.Today, Status = "pending" };
+        editingId = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void OpenEdit(AssignRec a)
+    {
+        form = a.Clone();
+        editingId = a.Id;
+        showErrors = false;
+        openMenuId = null;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    // Kung mopili og worker, i-fill ang "Worker name (as displayed)"
+    void OnWorkerChanged(ChangeEventArgs e)
+    {
+        var name = e.Value?.ToString() ?? "";
+        form.WorkerRef = name;
+        if (name.Length > 0) form.WorkerName = name;
+    }
+
+    void Save()
+    {
+        showErrors = true;
+        if (string.IsNullOrWhiteSpace(form.Task)) return;
+
+        form.Task = form.Task.Trim();
+        if (string.IsNullOrWhiteSpace(form.WorkerName)) form.WorkerName = form.WorkerRef;
+
+        if (editingId == null)
+        {
+            form.Id = assignments.Count == 0 ? 1 : assignments.Max(a => a.Id) + 1;
+            assignments.Add(form);
+        }
+        else
+        {
+            var idx = assignments.FindIndex(a => a.Id == editingId);
+            if (idx >= 0) assignments[idx] = form;
+        }
+        showModal = false;
+    }
+
+    void SetStatus(AssignRec a, string status)
+    {
+        openMenuId = null;
+        a.Status = status;
+        // TODO: kung "completed", i-log sa Attendance & Logs ug sa Labor Cost Records
+    }
+
+    async Task Delete(AssignRec a)
+    {
+        openMenuId = null;
+        assignments.Remove(a);
+        await ShowToast("Assignment for " + (string.IsNullOrWhiteSpace(a.WorkerName) ? "worker" : a.WorkerName) + " was removed.");
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3000);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

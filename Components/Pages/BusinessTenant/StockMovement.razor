@@ -1,0 +1,429 @@
+﻿@page "/stock"
+@using System.Globalization
+@inject AgriNexus.Services.AuthService Auth
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Stock Movements</h2>
+        <p class="text-muted mb-0 page-sub">@(items.Count + ProduceLots) items monitored · receiving, issuance, adjustments and full movement history.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn-solid" @onclick='() => OpenModal("receive")'>
+            <i class="bi bi-download"></i> Receive stock
+        </button>
+        <button type="button" class="btn-outline-lg" @onclick='() => OpenModal("issue")'>
+            <i class="bi bi-upload"></i> Issue stock
+        </button>
+        <button type="button" class="btn-outline-lg" @onclick='() => OpenModal("adjust")'>
+            <i class="bi bi-sliders"></i> Adjust stock
+        </button>
+    </div>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    <div class="text-muted small mt-1">@s.Note</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- FILTER -->
+<div class="toolbar mb-3">
+    <select class="filter-select" @bind="typeFilter">
+        <option value="">All movement types</option>
+        <option value="received">Receive stock</option>
+        <option value="issued">Issue stock</option>
+        <option value="adjusted">Adjust stock</option>
+    </select>
+    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "movement" : "movements")</span>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Item</th>
+                    <th>Type</th>
+                    <th>Quantity</th>
+                    <th>Unit cost</th>
+                    <th>Reference</th>
+                    <th>Reason</th>
+                    <th>By</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var m in Filtered)
+                {
+                    <tr>
+                        <td class="col-date">@m.Date.ToString("MMM d, yyyy", Inv)</td>
+                        <td class="col-item fw-semibold">@m.ItemName</td>
+                        <td><span class="pill @TypeClass(m.Type)">@Cap(m.Type)</span></td>
+                        <td class="text-nowrap fw-medium @QtyClass(m.Type)">@QtyText(m)</td>
+                        <td class="text-nowrap">@Peso(m.UnitCost)</td>
+                        <td class="col-ref">@(string.IsNullOrWhiteSpace(m.Reference) ? "—" : m.Reference)</td>
+                        <td class="col-reason">@(string.IsNullOrWhiteSpace(m.Reason) ? "—" : m.Reason)</td>
+                        <td class="col-by">@(string.IsNullOrWhiteSpace(m.By) ? "—" : m.By)</td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-5">No movements found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL (Receive / Issue / Adjust) -->
+@if (modal != null)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="modal-heading mb-1">@ModalTitle</h5>
+                    <div class="modal-sub">@ModalSub</div>
+                </div>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3 mt-1">
+                <div class="col-12">
+                    <label class="form-label">Item <span class="req">*</span></label>
+                    <select class="form-select @(showErrors && form.ItemId == null ? "is-invalid" : "")" @bind="form.ItemId">
+                        <option value="">Select...</option>
+                        @foreach (var i in items)
+                        {
+                            <option value="@i.Id">@i.Name</option>
+                        }
+                    </select>
+                    @if (showErrors && form.ItemId == null)
+                    {
+                        <div class="err">Please select an item.</div>
+                    }
+                    @if (SelectedItem != null)
+                    {
+                        <div class="hint">On hand: <strong>@Qty(SelectedItem.OnHand) @SelectedItem.Unit</strong></div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">@(modal == "adjust" ? "New counted balance" : "Quantity") <span class="req">*</span></label>
+                    <input type="number" min="0" step="any" class="form-control @(showErrors && QtyError != null ? "is-invalid" : "")" @bind="form.Qty" />
+                    @if (showErrors && QtyError != null)
+                    {
+                        <div class="err">@QtyError</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Date</label>
+                    <input type="date" class="form-control" @bind="form.Date" />
+                </div>
+
+                @if (modal == "receive")
+                {
+                    <div class="col-md-6">
+                        <label class="form-label">Unit cost (₱)</label>
+                        <input type="number" min="0" step="0.01" class="form-control @(showErrors && form.Cost < 0 ? "is-invalid" : "")" @bind="form.Cost" />
+                        @if (showErrors && form.Cost < 0)
+                        {
+                            <div class="err">Cost can’t be negative.</div>
+                        }
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Delivery / DR number</label>
+                        <input class="form-control" @bind="form.Reference" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Performed by</label>
+                        <input class="form-control" @bind="form.By" />
+                    </div>
+                }
+                else
+                {
+                    <div class="col-md-6">
+                        <label class="form-label">Reference</label>
+                        <input class="form-control" placeholder="@NextRef(modal)" @bind="form.Reference" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Performed by</label>
+                        <input class="form-control" @bind="form.By" />
+                    </div>
+                }
+
+                <div class="col-md-6">
+                    <label class="form-label">Reason / remarks</label>
+                    <select class="form-select" @bind="form.Reason">
+                        <option value="">Select...</option>
+                        @foreach (var r in ReasonOptions)
+                        {
+                            <option value="@r">@r</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">@ModalTitle</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class StockItem
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Unit { get; set; } = "";
+        public decimal OnHand { get; set; }
+        public decimal UnitCost { get; set; }
+    }
+
+    class Movement
+    {
+        public int Id { get; set; }
+        public DateTime Date { get; set; }
+        public string ItemName { get; set; } = "";
+        public string Unit { get; set; } = "";
+        public string Type { get; set; } = "received";   // received | issued | adjusted
+        public decimal Qty { get; set; }
+        public decimal UnitCost { get; set; }
+        public string Reference { get; set; } = "";
+        public string Reason { get; set; } = "";
+        public string By { get; set; } = "";
+    }
+
+    class MoveForm
+    {
+        public int? ItemId { get; set; }
+        public decimal? Qty { get; set; }
+        public DateTime Date { get; set; } = DateTime.Today;
+        public decimal? Cost { get; set; }
+        public string Reference { get; set; } = "";
+        public string By { get; set; } = "";
+        public string Reason { get; set; } = "";
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    // Temporary: gidaghanon sa produce lots nga naa sa Inventory (i-compute gikan sa shared service later)
+    const int ProduceLots = 4;
+
+    static readonly string[] ReceiveReasons = { "Purchase delivery", "Supplier replacement", "Donation", "Return from field", "Other" };
+    static readonly string[] IssueReasons = { "Fertilizer application", "Planting", "Pest control", "Harvest packing", "Tractor operation", "Tool distribution", "Other" };
+    static readonly string[] AdjustReasons = { "Physical count", "Damaged / spoiled", "Lost", "Data correction", "Other" };
+
+    // ---------- STATE ----------
+    string typeFilter = "";
+    string? modal;          // receive | issue | adjust
+    bool showErrors;
+    string toast = "";
+    MoveForm form = new();
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    readonly List<StockItem> items = new()
+    {
+        new() { Id = 1,  Name = "Certified rice seeds (NSIC Rc222)", Unit = "kg",     OnHand = 180, UnitCost = 55 },
+        new() { Id = 2,  Name = "Hybrid corn seeds (Pioneer 30T80)", Unit = "kg",     OnHand = 30,  UnitCost = 320 },
+        new() { Id = 3,  Name = "Urea (46-0-0)",                     Unit = "sack",   OnHand = 6,   UnitCost = 1450 },
+        new() { Id = 4,  Name = "Complete fertilizer (14-14-14)",    Unit = "sack",   OnHand = 26,  UnitCost = 1680 },
+        new() { Id = 5,  Name = "Organic compost",                   Unit = "sack",   OnHand = 42,  UnitCost = 480 },
+        new() { Id = 6,  Name = "Insecticide (lambda-cyhalothrin)",  Unit = "bottle", OnHand = 2,   UnitCost = 780 },
+        new() { Id = 7,  Name = "Herbicide (glyphosate)",            Unit = "liter",  OnHand = 9,   UnitCost = 620 },
+        new() { Id = 8,  Name = "Knapsack sprayer 16L",             Unit = "piece",  OnHand = 4,   UnitCost = 2350 },
+        new() { Id = 9,  Name = "Hand trowel",                       Unit = "piece",  OnHand = 22,  UnitCost = 180 },
+        new() { Id = 10, Name = "Work gloves",                       Unit = "pair",   OnHand = 7,   UnitCost = 110 },
+        new() { Id = 11, Name = "Diesel fuel",                       Unit = "liter",  OnHand = 380, UnitCost = 62 },
+        new() { Id = 12, Name = "Empty sacks (50 kg)",               Unit = "piece",  OnHand = 352, UnitCost = 12 },
+    };
+
+    // 12 ka movements: 4 received (320), 6 issued (333), 2 adjusted
+    readonly List<Movement> movements = new()
+    {
+        new() { Id = 1,  Date = new(2026, 10, 22), ItemName = "Empty sacks (50 kg)",              Unit = "piece",  Type = "received", Qty = 200, UnitCost = 12,   Reference = "DR-21098", Reason = "Purchase delivery",      By = "Cristina Yabut" },
+        new() { Id = 2,  Date = new(2026, 10, 21), ItemName = "Empty sacks (50 kg)",              Unit = "piece",  Type = "issued",   Qty = 180, UnitCost = 12,   Reference = "IS-2210",  Reason = "Harvest packing",       By = "Marilou Pangan" },
+        new() { Id = 3,  Date = new(2026, 10, 20), ItemName = "Insecticide (lambda-cyhalothrin)", Unit = "bottle", Type = "adjusted", Qty = 2,   UnitCost = 780,  Reference = "ADJ-0044", Reason = "Physical count",        By = "Allan Mercado" },
+        new() { Id = 4,  Date = new(2026, 10, 19), ItemName = "Urea (46-0-0)",                    Unit = "sack",   Type = "issued",   Qty = 6,   UnitCost = 1450, Reference = "IS-1042",  Reason = "Fertilizer application", By = "Ernesto Bacani" },
+        new() { Id = 5,  Date = new(2026, 10, 18), ItemName = "Urea (46-0-0)",                    Unit = "sack",   Type = "received", Qty = 20,  UnitCost = 1450, Reference = "DR-22041", Reason = "Purchase delivery",      By = "Allan Mercado" },
+        new() { Id = 6,  Date = new(2026, 10, 16), ItemName = "Diesel fuel",                      Unit = "liter",  Type = "issued",   Qty = 80,  UnitCost = 62,   Reference = "IS-1031",  Reason = "Tractor operation",     By = "Ernesto Bacani" },
+        new() { Id = 7,  Date = new(2026, 10, 14), ItemName = "Certified rice seeds (NSIC Rc222)", Unit = "kg",    Type = "received", Qty = 60,  UnitCost = 55,   Reference = "DR-21877", Reason = "Purchase delivery",      By = "Cristina Yabut" },
+        new() { Id = 8,  Date = new(2026, 10, 12), ItemName = "Certified rice seeds (NSIC Rc222)", Unit = "kg",    Type = "issued",   Qty = 40,  UnitCost = 55,   Reference = "IS-1018",  Reason = "Planting",              By = "Dante Villamor" },
+        new() { Id = 9,  Date = new(2026, 10, 10), ItemName = "Work gloves",                      Unit = "pair",   Type = "adjusted", Qty = 7,   UnitCost = 110,  Reference = "ADJ-0043", Reason = "Physical count",        By = "Allan Mercado" },
+        new() { Id = 10, Date = new(2026, 10, 8),  ItemName = "Organic compost",                  Unit = "sack",   Type = "received", Qty = 40,  UnitCost = 480,  Reference = "DR-21790", Reason = "Purchase delivery",      By = "Cristina Yabut" },
+        new() { Id = 11, Date = new(2026, 10, 7),  ItemName = "Organic compost",                  Unit = "sack",   Type = "issued",   Qty = 7,   UnitCost = 480,  Reference = "IS-1009",  Reason = "Fertilizer application", By = "Ernesto Bacani" },
+        new() { Id = 12, Date = new(2026, 10, 5),  ItemName = "Hand trowel",                      Unit = "piece",  Type = "issued",   Qty = 20,  UnitCost = 180,  Reference = "IS-1002",  Reason = "Tool distribution",     By = "Dante Villamor" },
+    };
+
+    // ---------- COMPUTED ----------
+    List<Movement> Filtered => movements
+        .Where(m => string.IsNullOrEmpty(typeFilter) || m.Type == typeFilter)
+        .OrderByDescending(m => m.Date).ThenByDescending(m => m.Id)
+        .ToList();
+
+    List<Stat> Stats => new()
+    {
+        new("MOVEMENTS RECORDED", movements.Count.ToString(), "Full history retained", "bi-clock-history", ""),
+        new("STOCK RECEIVED", Qty(movements.Where(m => m.Type == "received").Sum(m => m.Qty)), "Total quantity in", "bi-download", ""),
+        new("STOCK ISSUED", Qty(movements.Where(m => m.Type == "issued").Sum(m => m.Qty)), "Total quantity out", "bi-upload", "stat-icon-plain"),
+        new("ADJUSTMENTS", movements.Count(m => m.Type == "adjusted").ToString(), "Count corrections logged", "bi-sliders", "stat-icon-warn"),
+    };
+
+    StockItem? SelectedItem => form.ItemId == null ? null : items.FirstOrDefault(i => i.Id == form.ItemId);
+
+    string ModalTitle => modal switch { "receive" => "Receive stock", "issue" => "Issue stock", _ => "Adjust stock" };
+
+    string ModalSub => modal switch
+    {
+        "receive" => "Record supplies delivered by a supplier.",
+        "issue" => "Release supplies to a plot or work assignment.",
+        _ => "Correct the balance after a count or loss."
+    };
+
+    string[] ReasonOptions => modal switch { "receive" => ReceiveReasons, "issue" => IssueReasons, _ => AdjustReasons };
+
+    string? QtyError
+    {
+        get
+        {
+            if (form.Qty == null) return modal == "adjust" ? "Enter the counted balance." : "Enter a quantity.";
+            if (form.Qty < 0) return "Value can’t be negative.";
+            if (modal != "adjust" && form.Qty == 0) return "Quantity must be greater than zero.";
+            if (modal == "issue" && SelectedItem != null && form.Qty > SelectedItem.OnHand)
+                return "Only " + Qty(SelectedItem.OnHand) + " " + SelectedItem.Unit + " on hand.";
+            return null;
+        }
+    }
+
+    // ---------- HELPERS ----------
+    static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
+
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    static string TypeClass(string t) => t switch
+    {
+        "received" => "pill-green",
+        "adjusted" => "pill-yellow",
+        _ => "pill-outline"
+    };
+
+    static string QtyClass(string t) => t switch
+    {
+        "received" => "qty-in",
+        "issued" => "qty-out",
+        _ => ""
+    };
+
+    static string QtyText(Movement m) => m.Type switch
+    {
+        "received" => "+ " + Qty(m.Qty) + " " + m.Unit,
+        "issued" => "− " + Qty(m.Qty) + " " + m.Unit,
+        _ => "= " + Qty(m.Qty) + " " + m.Unit
+    };
+
+    string NextRef(string? type)
+    {
+        var prefix = type == "adjust" ? "ADJ" : "IS";
+        var width = type == "adjust" ? "0000" : "0000";
+        var max = 0;
+        foreach (var m in movements)
+        {
+            var p = m.Reference.Split('-');
+            if (p.Length == 2 && p[0] == prefix && int.TryParse(p[1], out var n)) max = Math.Max(max, n);
+        }
+        return prefix + "-" + (max + 1).ToString(width);
+    }
+
+    // ---------- ACTIONS ----------
+    void OpenModal(string type)
+    {
+        modal = type;
+        form = new MoveForm { Date = DateTime.Today };
+        showErrors = false;
+    }
+
+    void CloseModal() => modal = null;
+
+    async Task Save()
+    {
+        showErrors = true;
+        var item = SelectedItem;
+        if (item == null || QtyError != null) return;
+        if (modal == "receive" && form.Cost < 0) return;
+
+        var qty = form.Qty!.Value;
+        var by = string.IsNullOrWhiteSpace(form.By) ? (Auth.CurrentUserName ?? "") : form.By.Trim();
+        var type = modal == "receive" ? "received" : modal == "issue" ? "issued" : "adjusted";
+
+        decimal unitCost = item.UnitCost;
+        if (modal == "receive" && form.Cost.HasValue)
+        {
+            unitCost = form.Cost.Value;
+            item.UnitCost = unitCost;
+        }
+
+        var reference = form.Reference?.Trim() ?? "";
+        if (modal != "receive" && reference.Length == 0) reference = NextRef(modal);
+
+        switch (modal)
+        {
+            case "receive": item.OnHand += qty; break;
+            case "issue": item.OnHand -= qty; break;
+            default: item.OnHand = qty; break;
+        }
+
+        movements.Add(new Movement
+        {
+            Id = movements.Count == 0 ? 1 : movements.Max(m => m.Id) + 1,
+            Date = form.Date,
+            ItemName = item.Name,
+            Unit = item.Unit,
+            Type = type,
+            Qty = qty,
+            UnitCost = unitCost,
+            Reference = reference,
+            Reason = form.Reason,
+            By = by
+        });
+
+        // TODO: i-update ang Inventory (on hand) ug i-log sa Audit Logs kung naa na ang shared service / database
+        var title = ModalTitle;
+        modal = null;
+        await ShowToast(title + " recorded for " + item.Name + ".");
+    }
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3000);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

@@ -1,0 +1,342 @@
+﻿@page "/workers"
+@using System.Globalization
+
+<div class="mb-4">
+    <h2 class="page-title">Worker Records</h2>
+    <p class="text-muted mb-0 page-sub">@ActiveBranch · farm workers, their skills, rates and employment status.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-md-4">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar mb-3">
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search workers..." @bind="searchText" @bind:event="oninput" />
+    </div>
+    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "worker" : "workers")</span>
+    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+        <i class="bi bi-plus-lg"></i> New worker
+    </button>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Worker</th>
+                    <th>Daily rate</th>
+                    <th>Contact</th>
+                    <th>Hired</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var w in Filtered)
+                {
+                    <tr>
+                        <td class="col-name">
+                            <div class="fw-semibold">@w.Name</div>
+                            <div class="sub">@Cap(w.Employment) · @Cap(w.Skill)</div>
+                        </td>
+                        <td class="text-nowrap">@Peso(w.DailyRate)</td>
+                        <td class="text-nowrap">@(string.IsNullOrWhiteSpace(w.Contact) ? "—" : w.Contact)</td>
+                        <td class="text-nowrap">@(w.Hired.HasValue ? w.Hired.Value.ToString("MMM d, yyyy", Inv) : "—")</td>
+                        <td><span class="pill @(w.Status == "active" ? "pill-green" : "pill-red")">@Cap(w.Status)</span></td>
+                        <td class="text-end action-cell">
+                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(w.Id)" aria-label="Actions">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            @if (openMenuId == w.Id)
+                            {
+                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                                <div class="row-menu">
+                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(w)">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    <button type="button" class="row-menu-item plain" @onclick="() => ToggleStatus(w)">
+                                        @(w.Status == "active" ? "Mark inactive" : "Mark active")
+                                    </button>
+                                    <div class="menu-sep"></div>
+                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(w)">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center text-muted py-5">No workers found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="modal-heading mb-0">@(editingId == null ? "New worker" : "Edit worker")</h5>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Full name <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
+                    {
+                        <div class="err">Full name is required.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Employment type</label>
+                    <select class="form-select" @bind="form.Employment">
+                        @foreach (var e in EmploymentOptions)
+                        {
+                            <option value="@e">@e</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Primary skill</label>
+                    <select class="form-select" @bind="form.Skill">
+                        @foreach (var s in SkillOptions)
+                        {
+                            <option value="@s">@s</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Daily rate (₱)</label>
+                    <input type="number" min="0" step="0.01" class="form-control @(showErrors && RateInvalid ? "is-invalid" : "")" @bind="rateInput" />
+                    @if (showErrors && RateInvalid)
+                    {
+                        <div class="err">Rate can’t be negative.</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Contact number</label>
+                    <input class="form-control" @bind="form.Contact" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Date hired</label>
+                    <input type="date" class="form-control" @bind="form.Hired" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="form.Status">
+                        <option value="active">active</option>
+                        <option value="inactive">inactive</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Branch</label>
+                    <select class="form-select" @bind="form.Branch">
+                        @foreach (var b in branchNames)
+                        {
+                            <option value="@b">@b</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class WorkerRec
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Employment { get; set; } = "daily";   // daily | permanent | seasonal
+        public string Skill { get; set; } = "general";
+        public decimal DailyRate { get; set; }
+        public string Contact { get; set; } = "";
+        public DateTime? Hired { get; set; }
+        public string Status { get; set; } = "active";      // active | inactive
+        public string Branch { get; set; } = "";
+
+        public WorkerRec Clone() => (WorkerRec)MemberwiseClone();
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    static readonly string[] EmploymentOptions = { "daily", "permanent", "seasonal" };
+    static readonly string[] SkillOptions = { "general", "irrigation", "spraying", "harvesting", "planting", "packing", "driving" };
+
+    // TODO: kuhaa gikan sa naka-login nga tenant ug sa Branches module
+    const string ActiveBranch = "North Field Branch";
+    readonly string[] branchNames = { "North Field Branch", "South Valley Branch", "Central Packing Branch" };
+
+    // ---------- STATE ----------
+    string searchText = "";
+    string toast = "";
+    bool showModal;
+    bool showErrors;
+    int? editingId;
+    int? openMenuId;
+    WorkerRec form = new();
+    decimal? rateInput;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    readonly List<WorkerRec> workers = new()
+    {
+        new() { Id = 1, Name = "Ernesto Bacani",   Employment = "permanent", Skill = "irrigation", DailyRate = 500, Contact = "0917 334 1189", Hired = new(2024, 3, 5),   Status = "active",   Branch = "North Field Branch" },
+        new() { Id = 2, Name = "Ronnie Aquino",    Employment = "daily",     Skill = "spraying",   DailyRate = 420, Contact = "0918 552 7712", Hired = new(2024, 4, 18),  Status = "active",   Branch = "North Field Branch" },
+        new() { Id = 3, Name = "Jomar Salvador",   Employment = "seasonal",  Skill = "harvesting", DailyRate = 400, Contact = "0920 118 4471", Hired = new(2025, 6, 1),   Status = "active",   Branch = "North Field Branch" },
+        new() { Id = 4, Name = "Lito Marasigan",   Employment = "daily",     Skill = "planting",   DailyRate = 420, Contact = "0917 998 3312", Hired = new(2025, 1, 12),  Status = "active",   Branch = "North Field Branch" },
+        new() { Id = 5, Name = "Avelino Dungca",   Employment = "permanent", Skill = "general",    DailyRate = 480, Contact = "0918 220 5590", Hired = new(2024, 9, 20),  Status = "active",   Branch = "North Field Branch" },
+        new() { Id = 6, Name = "Marilou Pangan",   Employment = "daily",     Skill = "harvesting", DailyRate = 400, Contact = "0921 778 2298", Hired = new(2025, 2, 25),  Status = "active",   Branch = "South Valley Branch" },
+        new() { Id = 7, Name = "Rolando Espino",   Employment = "seasonal",  Skill = "planting",   DailyRate = 400, Contact = "0917 445 6610", Hired = new(2025, 7, 14),  Status = "active",   Branch = "South Valley Branch" },
+        new() { Id = 8, Name = "Felix Bernardo",   Employment = "daily",     Skill = "spraying",   DailyRate = 430, Contact = "0919 662 1145", Hired = new(2024, 11, 8),  Status = "inactive", Branch = "South Valley Branch" },
+        new() { Id = 9, Name = "Danilo Roque",     Employment = "daily",     Skill = "general",    DailyRate = 420, Contact = "0920 331 8877", Hired = new(2025, 5, 22),  Status = "active",   Branch = "Central Packing Branch" },
+    };
+
+    // ---------- COMPUTED ----------
+    List<WorkerRec> Filtered => string.IsNullOrWhiteSpace(searchText)
+        ? workers
+        : workers.Where(w =>
+            w.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            w.Skill.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            w.Employment.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            w.Contact.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var active = workers.Count(w => w.Status == "active");
+            var commitment = workers.Where(w => w.Status == "active").Sum(w => w.DailyRate);
+            var permanent = workers.Count(w => w.Employment == "permanent");
+            var seasonal = workers.Count(w => w.Employment == "seasonal");
+            return new()
+            {
+                new("WORKERS ON RECORD", workers.Count.ToString(), active + " active", "bi-person-badge", ""),
+                new("DAILY WAGE COMMITMENT", Peso(commitment), "If all active workers are deployed", "bi-wallet2", "stat-icon-plain"),
+                new("PERMANENT STAFF", permanent.ToString(), seasonal + " seasonal", "bi-people", "stat-icon-plain"),
+            };
+        }
+    }
+
+    bool RateInvalid => rateInput.HasValue && rateInput.Value < 0;
+
+    // ---------- HELPERS ----------
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    // ---------- ACTIONS ----------
+    void OpenNew()
+    {
+        form = new WorkerRec { Employment = "daily", Skill = "general", Status = "active", Branch = ActiveBranch };
+        rateInput = null;
+        editingId = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void OpenEdit(WorkerRec w)
+    {
+        form = w.Clone();
+        rateInput = w.DailyRate;
+        editingId = w.Id;
+        showErrors = false;
+        openMenuId = null;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    void Save()
+    {
+        showErrors = true;
+        if (string.IsNullOrWhiteSpace(form.Name) || RateInvalid) return;
+
+        form.Name = form.Name.Trim();
+        form.DailyRate = rateInput ?? 0;
+
+        if (editingId == null)
+        {
+            form.Id = workers.Count == 0 ? 1 : workers.Max(w => w.Id) + 1;
+            workers.Add(form);
+        }
+        else
+        {
+            var idx = workers.FindIndex(w => w.Id == editingId);
+            if (idx >= 0) workers[idx] = form;
+        }
+        showModal = false;
+    }
+
+    void ToggleStatus(WorkerRec w)
+    {
+        openMenuId = null;
+        w.Status = w.Status == "active" ? "inactive" : "active";
+    }
+
+    async Task Delete(WorkerRec w)
+    {
+        openMenuId = null;
+        // TODO: kung naay work assignments, attendance o labor cost records ang worker,
+        // i-set sa inactive imbes i-delete aron dili madaot ang history
+        workers.Remove(w);
+        await ShowToast(w.Name + " was removed.");
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3000);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

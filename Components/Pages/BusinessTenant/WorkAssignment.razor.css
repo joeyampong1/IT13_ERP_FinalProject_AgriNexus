@@ -1,0 +1,364 @@
+/* CSS for WorkAssignment component */
+.page-title {
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    color: #0A2B1D;
+    margin-bottom: .25rem;
+}
+
+.page-sub {
+    font-size: .95rem;
+}
+
+/* ---------- STAT CARDS ---------- */
+.stat-card {
+    border-radius: 16px;
+    padding: 20px 22px;
+}
+
+    .stat-card .card-title {
+        font-size: .72rem;
+        margin-bottom: 0;
+        line-height: 1.3;
+    }
+
+    .stat-card .card-value {
+        font-size: 1.7rem;
+        letter-spacing: -0.5px;
+    }
+
+.stat-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: #E8EEEA;
+    color: #1B4D2E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.stat-icon-warn {
+    background: #FEF3C7;
+    color: #D97706;
+}
+
+/* ---------- TOOLBAR ---------- */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.search-box {
+    position: relative;
+    width: 288px;
+    max-width: 100%;
+}
+
+    .search-box i {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #64748B;
+        font-size: .9rem;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: .55rem .9rem .55rem 2.4rem;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: #fff;
+        font-size: .9rem;
+        outline: none;
+    }
+
+        .search-box input:focus {
+            border-color: var(--primary-green);
+        }
+
+.btn-new {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: #1B5E34;
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    padding: .6rem 1.4rem;
+    font-weight: 600;
+    font-size: .9rem;
+    cursor: pointer;
+}
+
+    .btn-new:hover {
+        background: #144A29;
+    }
+
+/* ---------- TABLE ---------- */
+.panel {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+
+.table-wrap {
+    overflow: visible;
+}
+
+@media (max-width: 991.98px) {
+    .table-wrap {
+        overflow-x: auto;
+        min-height: 320px;
+    }
+}
+
+.data-table {
+    font-size: .9rem;
+    margin-bottom: 0;
+}
+
+    .data-table thead th {
+        font-size: .7rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
+
+    .data-table td {
+        padding: .85rem 1rem;
+        border-color: var(--border-color);
+    }
+
+    .data-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .data-table .col-worker {
+        min-width: 150px;
+    }
+
+    .data-table .col-task {
+        min-width: 260px;
+    }
+
+    .data-table .col-plot {
+        min-width: 120px;
+    }
+
+/* ---------- PILLS ---------- */
+.pill {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.pill-green {
+    background: #E6F0E9;
+    color: #1B5E34;
+    border-color: #CFE0D4;
+}
+
+.pill-yellow {
+    background: #FEF3C7;
+    color: #B45309;
+    border-color: #FDE68A;
+}
+
+/* ---------- ROW ACTION MENU ---------- */
+.action-cell {
+    position: relative;
+    width: 60px;
+}
+
+.btn-dots {
+    background: none;
+    border: 0;
+    padding: 4px 8px;
+    border-radius: 8px;
+    color: #1E293B;
+    cursor: pointer;
+}
+
+    .btn-dots:hover {
+        background: #F1F5F9;
+    }
+
+.menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+}
+
+.row-menu {
+    position: absolute;
+    right: 1rem;
+    top: calc(100% - 6px);
+    z-index: 31;
+    min-width: 180px;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 10px 25px rgba(0,0,0,.12);
+    text-align: left;
+}
+
+.row-menu-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: none;
+    border: 0;
+    padding: .5rem .7rem;
+    border-radius: 8px;
+    font-size: .88rem;
+    cursor: pointer;
+    color: var(--text-main);
+    white-space: nowrap;
+}
+
+    .row-menu-item i {
+        width: 16px;
+        text-align: center;
+        line-height: 1;
+    }
+
+    .row-menu-item:hover {
+        background: #F1F5F9;
+    }
+
+    /* Start (ongoing): walay icon, sama sa prototype */
+    .row-menu-item.plain {
+        padding-left: .7rem;
+    }
+
+.menu-sep {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 0;
+}
+
+/* ---------- MODAL ---------- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(10, 31, 20, .55);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 3.5rem 1rem 2.5rem;
+    overflow-y: auto;
+}
+
+.modal-card {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 670px;
+    padding: 1.5rem 1.6rem;
+    box-shadow: 0 25px 60px rgba(0,0,0,.3);
+}
+
+.modal-heading {
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #0A2B1D;
+}
+
+.btn-close-x {
+    background: none;
+    border: 0;
+    color: #475569;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.modal-card .form-label {
+    font-size: .9rem;
+    font-weight: 500;
+    margin-bottom: .35rem;
+}
+
+.modal-card .form-control,
+.modal-card .form-select {
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    padding: .55rem .8rem;
+    font-size: .9rem;
+}
+
+    .modal-card .form-control:focus,
+    .modal-card .form-select:focus {
+        border-color: var(--primary-green);
+        box-shadow: 0 0 0 .15rem rgba(56, 142, 60, .15);
+    }
+
+.req {
+    color: #DC2626;
+}
+
+.err {
+    color: #DC2626;
+    font-size: .75rem;
+    margin-top: 4px;
+}
+
+.btn-cancel {
+    background: none;
+    border: 0;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-main);
+}
+
+.btn-save {
+    background: #1B5E34;
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    padding: .6rem 1.4rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .btn-save:hover {
+        background: #144A29;
+    }
+
+/* ---------- TOAST ---------- */
+.toast-note {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 400px;
+    background: #fff;
+    border: 1px solid #CFE0D4;
+    border-left: 4px solid #1B5E34;
+    color: #1B4D2E;
+    border-radius: 12px;
+    padding: .75rem 1.1rem;
+    font-size: .88rem;
+    font-weight: 500;
+    box-shadow: 0 10px 25px rgba(0,0,0,.15);
+}
