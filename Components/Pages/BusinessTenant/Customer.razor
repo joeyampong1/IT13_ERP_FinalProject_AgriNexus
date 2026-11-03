@@ -1,0 +1,378 @@
+﻿@page "/customers"
+@using System.Globalization
+
+<div class="mb-4">
+    <h2 class="page-title">Customer Management</h2>
+    <p class="text-muted mb-0 page-sub">@BusinessName · buyers, credit limits and outstanding balances.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-md-4">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar mb-3">
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search customers..." @bind="searchText" @bind:event="oninput" />
+    </div>
+    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "customer" : "customers")</span>
+    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+        <i class="bi bi-plus-lg"></i> New customer
+    </button>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Customer</th>
+                    <th>Contact person</th>
+                    <th>Contact</th>
+                    <th>Credit limit</th>
+                    <th>Outstanding</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in Filtered)
+                {
+                    <tr>
+                        <td class="col-name">
+                            <div class="fw-semibold">@c.Name</div>
+                            <div class="sub">@TypeLabel(c.Type)</div>
+                        </td>
+                        <td class="col-person">@(string.IsNullOrWhiteSpace(c.Person) ? "—" : c.Person)</td>
+                        <td class="text-nowrap">@(string.IsNullOrWhiteSpace(c.Contact) ? "" : c.Contact)</td>
+                        <td class="text-nowrap">@Peso(c.CreditLimit)</td>
+                        <td class="text-nowrap @(c.Outstanding > 0 ? "neg fw-medium" : "")">@Peso(c.Outstanding)</td>
+                        <td><span class="pill @(c.Status == "active" ? "pill-green" : "pill-gray")">@Cap(c.Status)</span></td>
+                        <td class="text-end action-cell">
+                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(c.Id)" aria-label="Actions">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            @if (openMenuId == c.Id)
+                            {
+                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                                <div class="row-menu">
+                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(c)">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    <div class="menu-sep"></div>
+                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(c)">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="7" class="text-center text-muted py-5">No customers found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h5 class="modal-heading mb-0">@(editingId == null ? "New customer" : "Edit customer")</h5>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Customer name <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && (string.IsNullOrWhiteSpace(form.Name) || NameTaken) ? "is-invalid" : "")" @bind="form.Name" />
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
+                    {
+                        <div class="err">Customer name is required.</div>
+                    }
+                    @if (showErrors && NameTaken)
+                    {
+                        <div class="err">This customer already exists.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Customer type</label>
+                    <select class="form-select" @bind="form.Type">
+                        @foreach (var t in TypeOptions)
+                        {
+                            <option value="@t">@t</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Contact person</label>
+                    <input class="form-control" @bind="form.Person" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Contact number</label>
+                    <input class="form-control" @bind="form.Contact" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Email address</label>
+                    <input type="email" class="form-control @(showErrors && !EmailValid ? "is-invalid" : "")" @bind="form.Email" />
+                    @if (showErrors && !EmailValid)
+                    {
+                        <div class="err">Enter a valid email address.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Credit limit (₱)</label>
+                    <input type="number" min="0" step="0.01" class="form-control @(showErrors && Negative(limitInput) ? "is-invalid" : "")" @bind="limitInput" />
+                    @if (showErrors && Negative(limitInput))
+                    {
+                        <div class="err">Credit limit can’t be negative.</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Current outstanding balance (₱)</label>
+                    <input type="number" min="0" step="0.01" class="form-control @(showErrors && Negative(balanceInput) ? "is-invalid" : "")" @bind="balanceInput" />
+                    @if (showErrors && Negative(balanceInput))
+                    {
+                        <div class="err">Balance can’t be negative.</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="form.Status">
+                        <option value="active">active</option>
+                        <option value="inactive">inactive</option>
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Address</label>
+                    <input class="form-control" @bind="form.Address" />
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                </div>
+            </div>
+
+            @if (showErrors && OverLimit)
+            {
+                <div class="warn-box mt-3"><i class="bi bi-exclamation-triangle"></i> The outstanding balance is higher than the credit limit.</div>
+            }
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class CustomerRec
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Type { get; set; } = "retail";   // retail | wholesale | institutional | walk in
+        public string Person { get; set; } = "";
+        public string Contact { get; set; } = "";
+        public string Email { get; set; } = "";
+        public decimal CreditLimit { get; set; }
+        public decimal Outstanding { get; set; }
+        public string Status { get; set; } = "active";
+        public string Address { get; set; } = "";
+        public string Notes { get; set; } = "";
+
+        public CustomerRec Clone() => (CustomerRec)MemberwiseClone();
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    static readonly string[] TypeOptions = { "retail", "wholesale", "institutional", "walk in" };
+
+    // TODO: kuhaa gikan sa naka-login nga tenant
+    const string BusinessName = "Verdant Agri Ventures";
+
+    // ---------- STATE ----------
+    string searchText = "";
+    string toast = "";
+    bool showModal;
+    bool showErrors;
+    int? editingId;
+    int? openMenuId;
+    CustomerRec form = new();
+    decimal? limitInput;
+    decimal? balanceInput;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    readonly List<CustomerRec> customers = new()
+    {
+        new() { Id = 1, Name = "Bayanihan Trading",            Type = "wholesale",     Person = "Sofia Ramirez",         Contact = "0917 220 8891", CreditLimit = 50000,  Outstanding = 7900, Status = "active" },
+        new() { Id = 2, Name = "Municipal Market Vendors",     Type = "retail",        Person = "Nestor Padilla",        Contact = "0918 771 2298", CreditLimit = 30000,  Outstanding = 7560, Status = "active" },
+        new() { Id = 3, Name = "Rural Bank Cooperative Store", Type = "institutional", Person = "Evelyn Cortez",         Contact = "0920 553 1140", CreditLimit = 100000, Outstanding = 7000, Status = "active" },
+        new() { Id = 4, Name = "Verdant Fresh Retail",         Type = "retail",        Person = "Kim Torres",            Contact = "0917 889 3355", CreditLimit = 15000,  Outstanding = 0,    Status = "active" },
+        new() { Id = 5, Name = "Barangay Nutrition Program",   Type = "institutional", Person = "Brgy. Sta. Rosa Council", Contact = "0921 664 7788", CreditLimit = 40000, Outstanding = 0,    Status = "active" },
+        new() { Id = 6, Name = "Walk-in customers",            Type = "walk in",       Person = "Counter sales",         Contact = "",              CreditLimit = 0,      Outstanding = 0,    Status = "active" },
+    };
+
+    // ---------- COMPUTED ----------
+    List<CustomerRec> Filtered => string.IsNullOrWhiteSpace(searchText)
+        ? customers
+        : customers.Where(c =>
+            c.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            c.Person.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            c.Contact.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            c.Type.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var active = customers.Count(c => c.Status == "active");
+            var bulk = customers.Count(c => c.Type == "wholesale" || c.Type == "institutional");
+            return new()
+            {
+                new("CUSTOMERS", customers.Count.ToString(), active + " active", "bi-person", ""),
+                new("OUTSTANDING BALANCES", Peso(customers.Sum(c => c.Outstanding)), "", "bi-wallet2", "stat-icon-warn"),
+                new("WHOLESALE & INSTITUTIONAL", bulk.ToString(), "", "bi-basket", "stat-icon-plain"),
+            };
+        }
+    }
+
+    bool NameTaken => !string.IsNullOrWhiteSpace(form.Name) &&
+        customers.Any(c => c.Id != (editingId ?? -1) &&
+                           string.Equals(c.Name, form.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    bool EmailValid => string.IsNullOrWhiteSpace(form.Email) ||
+        System.Text.RegularExpressions.Regex.IsMatch(form.Email.Trim(), @"^[^@\s]+@[^@\s]+\.[^@\s]+$");
+
+    bool AnyNegative => Negative(limitInput) || Negative(balanceInput);
+
+    bool OverLimit => (balanceInput ?? 0) > 0 && (balanceInput ?? 0) > (limitInput ?? 0);
+
+    // ---------- HELPERS ----------
+    static bool Negative(decimal? v) => v.HasValue && v.Value < 0;
+
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    // "walk in" -> "Walk In"
+    static string TypeLabel(string t) =>
+        string.Join(" ", (t ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(Cap));
+
+    // ---------- ACTIONS ----------
+    void OpenNew()
+    {
+        form = new CustomerRec { Type = "retail", Status = "active" };
+        limitInput = null;
+        balanceInput = 0;
+        editingId = null;
+        showErrors = false;
+        showModal = true;
+    }
+
+    void OpenEdit(CustomerRec c)
+    {
+        form = c.Clone();
+        limitInput = c.CreditLimit;
+        balanceInput = c.Outstanding;
+        editingId = c.Id;
+        showErrors = false;
+        openMenuId = null;
+        showModal = true;
+    }
+
+    void CloseModal() => showModal = false;
+
+    void Save()
+    {
+        showErrors = true;
+        if (string.IsNullOrWhiteSpace(form.Name) || NameTaken || !EmailValid || AnyNegative) return;
+
+        form.Name = form.Name.Trim();
+        form.Email = (form.Email ?? "").Trim();
+        form.CreditLimit = limitInput ?? 0;
+        form.Outstanding = balanceInput ?? 0;
+
+        if (editingId == null)
+        {
+            form.Id = customers.Count == 0 ? 1 : customers.Max(c => c.Id) + 1;
+            customers.Add(form);
+        }
+        else
+        {
+            var idx = customers.FindIndex(c => c.Id == editingId);
+            if (idx >= 0) customers[idx] = form;
+        }
+        showModal = false;
+    }
+
+    async Task Delete(CustomerRec c)
+    {
+        openMenuId = null;
+
+        if (c.Type == "walk in")
+        {
+            await ShowToast("The walk-in customer is used for counter sales and can’t be deleted.");
+            return;
+        }
+        if (c.Outstanding > 0)
+        {
+            await ShowToast(c.Name + " still has an outstanding balance of " + Peso(c.Outstanding) + ". Collect it before deleting.");
+            return;
+        }
+
+        // TODO: kung naay sales transactions ang customer, i-set sa inactive imbes i-delete
+        // aron dili madaot ang sales history
+        customers.Remove(c);
+        await ShowToast(c.Name + " was removed.");
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3500);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

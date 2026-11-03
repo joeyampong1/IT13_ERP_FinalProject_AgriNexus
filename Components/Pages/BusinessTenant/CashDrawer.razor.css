@@ -1,0 +1,400 @@
+/* CSS for CashDrawer component */
+.page-title {
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    color: #0A2B1D;
+    margin-bottom: .25rem;
+}
+
+.page-sub {
+    font-size: .95rem;
+}
+
+/* ---------- BUTTONS ---------- */
+.btn-solid,
+.btn-outline-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 10px;
+    padding: .55rem 1.1rem;
+    font-size: .9rem;
+    cursor: pointer;
+}
+
+.btn-solid {
+    background: #1B5E34;
+    color: #fff;
+    border: 0;
+    font-weight: 600;
+}
+
+    .btn-solid:hover {
+        background: #144A29;
+    }
+
+.btn-outline-lg {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+    .btn-outline-lg:hover {
+        background: #F1F5F9;
+        border-color: #CBD5E1;
+    }
+
+/* ---------- STAT CARDS ---------- */
+.stat-card {
+    border-radius: 16px;
+    padding: 20px 22px;
+}
+
+    .stat-card .card-title {
+        font-size: .72rem;
+        margin-bottom: 0;
+        line-height: 1.3;
+    }
+
+    .stat-card .card-value {
+        font-size: 1.7rem;
+        letter-spacing: -0.5px;
+    }
+
+.stat-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: #E8EEEA;
+    color: #1B4D2E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.stat-icon-plain {
+    background: transparent;
+}
+
+/* ---------- CARDS & PANELS ---------- */
+.card-box,
+.panel {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+
+.card-box {
+    padding: 1.4rem 1.5rem 1.5rem;
+}
+
+.panel-head {
+    padding: 1.2rem 1.5rem .9rem;
+}
+
+.panel-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #0A2B1D;
+}
+
+.panel-sub {
+    font-size: .8rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+
+/* ---------- MINI STATS ---------- */
+.mini-stat {
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: .9rem 1.1rem;
+    background: #FBFCFB;
+    height: 100%;
+}
+
+.mini-label {
+    font-size: .72rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.mini-value {
+    margin-top: .25rem;
+    font-size: 1.45rem;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+    color: var(--text-main);
+}
+
+/* ---------- EMPTY STATE ---------- */
+.empty-state {
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem 1rem;
+}
+
+.empty-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #EEF2EF;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+/* ---------- TABLES ---------- */
+.table-wrap {
+    overflow-x: auto;
+}
+
+.data-table {
+    font-size: .88rem;
+    margin-bottom: 0;
+}
+
+    .data-table thead th {
+        font-size: .7rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: .9rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
+
+    .data-table td {
+        padding: .8rem 1rem;
+        border-color: var(--border-color);
+    }
+
+    .data-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .data-table .col-reason {
+        min-width: 140px;
+    }
+
+.qty-in {
+    color: #1B5E34;
+}
+
+.qty-out {
+    color: #92400E;
+}
+
+.neg {
+    color: #DC2626;
+    font-weight: 500;
+}
+
+.warn {
+    color: #B45309;
+    font-weight: 500;
+}
+
+/* ---------- PILLS ---------- */
+.pill {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.pill-green {
+    background: #E6F0E9;
+    color: #1B5E34;
+    border-color: #CFE0D4;
+}
+
+.pill-yellow {
+    background: #FEF3C7;
+    color: #B45309;
+    border-color: #FDE68A;
+}
+
+.pill-red {
+    background: #FEE2E2;
+    color: #B91C1C;
+    border-color: #FECACA;
+}
+
+/* ---------- MODAL ---------- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(10, 31, 20, .55);
+    display: flex;
+    padding: 2rem 1rem;
+    overflow-y: auto;
+}
+
+.modal-card {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 670px;
+    margin: auto;
+    padding: 1.5rem 1.6rem;
+    box-shadow: 0 25px 60px rgba(0,0,0,.3);
+}
+
+.modal-heading {
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #0A2B1D;
+}
+
+.modal-sub {
+    font-size: .9rem;
+    color: var(--text-muted);
+}
+
+.btn-close-x {
+    background: none;
+    border: 0;
+    color: #475569;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.modal-card .form-label {
+    font-size: .9rem;
+    font-weight: 500;
+    margin-bottom: .35rem;
+}
+
+.modal-card .form-control {
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    padding: .55rem .8rem;
+    font-size: .9rem;
+}
+
+    .modal-card .form-control:focus {
+        border-color: var(--primary-green);
+        box-shadow: 0 0 0 .15rem rgba(56, 142, 60, .15);
+    }
+
+.hint-text {
+    margin-top: 6px;
+    font-size: .78rem;
+    color: var(--text-muted);
+}
+
+.variance-box {
+    margin-top: 1rem;
+    padding: .6rem .9rem;
+    border-radius: 10px;
+    font-size: .85rem;
+}
+
+    .variance-box i {
+        margin-right: 6px;
+    }
+
+    .variance-box.short {
+        background: #FEF2F2;
+        border: 1px solid #FECACA;
+        color: #B91C1C;
+    }
+
+    .variance-box.over {
+        background: #FEF3C7;
+        border: 1px solid #FDE68A;
+        color: #92400E;
+    }
+
+.req {
+    color: #DC2626;
+}
+
+.err {
+    color: #DC2626;
+    font-size: .75rem;
+    margin-top: 4px;
+}
+
+.btn-cancel {
+    background: none;
+    border: 0;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-main);
+}
+
+.btn-save {
+    background: #1B5E34;
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    padding: .6rem 1.4rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .btn-save:hover {
+        background: #144A29;
+    }
+
+/* ---------- TOAST ---------- */
+.toast-note {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 420px;
+    background: #fff;
+    border: 1px solid #CFE0D4;
+    border-left: 4px solid #1B5E34;
+    color: #1B4D2E;
+    border-radius: 12px;
+    padding: .75rem 1.1rem;
+    font-size: .88rem;
+    font-weight: 500;
+    box-shadow: 0 10px 25px rgba(0,0,0,.15);
+}
+/* ---------- TABLE FIXES FOR SESSION HISTORY ---------- */
+.table-wrap {
+    overflow-x: hidden; /* Tangtangon ang scrollbar */
+}
+
+.data-table thead th {
+    padding: 0.8rem 0.5rem; /* Gamayng padding sa kilid */
+    font-size: 0.65rem; /* Gamayng text para sa headers */
+    white-space: normal; /* Tugotan mo-wrap ang headers */
+}
+
+.data-table td {
+    padding: 0.8rem 0.5rem;
+    font-size: 0.8rem; /* Gamayng text para sa cells */
+}
+
+.pill {
+    font-size: 0.65rem; /* Gamayng pills */
+    padding: 2px 8px;
+}

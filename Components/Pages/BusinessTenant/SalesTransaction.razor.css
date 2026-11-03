@@ -1,0 +1,548 @@
+/* CSS for SalesTransaction component */
+.page-title {
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+    color: #0A2B1D;
+    margin-bottom: .25rem;
+}
+
+.page-sub {
+    font-size: .95rem;
+}
+
+/* ---------- BUTTONS ---------- */
+.btn-solid,
+.btn-outline-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 10px;
+    padding: .55rem 1.1rem;
+    font-size: .9rem;
+    cursor: pointer;
+}
+
+.btn-solid {
+    background: #1B5E34;
+    color: #fff;
+    border: 0;
+    font-weight: 600;
+}
+
+    .btn-solid:hover {
+        background: #144A29;
+    }
+
+.btn-outline-lg {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-weight: 500;
+}
+
+    .btn-outline-lg:hover {
+        background: #F1F5F9;
+        border-color: #CBD5E1;
+    }
+
+/* ---------- STAT CARDS ---------- */
+.stat-card {
+    border-radius: 16px;
+    padding: 20px 22px;
+}
+
+    .stat-card .card-title {
+        font-size: .72rem;
+        margin-bottom: 0;
+        line-height: 1.3;
+    }
+
+    .stat-card .card-value {
+        font-size: 1.7rem;
+        letter-spacing: -0.5px;
+    }
+
+.stat-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: #E8EEEA;
+    color: #1B4D2E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.stat-icon-warn {
+    background: #FEF3C7;
+    color: #D97706;
+}
+
+/* ---------- TOOLBAR ---------- */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.search-box {
+    width: 320px;
+    max-width: 100%;
+}
+
+    .search-box input {
+        width: 100%;
+        padding: .55rem .9rem;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: #fff;
+        font-size: .9rem;
+        outline: none;
+    }
+
+        .search-box input:focus {
+            border-color: var(--primary-green);
+        }
+
+.filter-select {
+    padding: .55rem 2rem .55rem .9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background-color: #fff;
+    font-size: .9rem;
+    min-width: 190px;
+    outline: none;
+    cursor: pointer;
+}
+
+    .filter-select:focus {
+        border-color: var(--primary-green);
+    }
+
+/* ---------- TABLE ---------- */
+.panel {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.data-table {
+    font-size: .9rem;
+    margin-bottom: 0;
+}
+
+    .data-table thead th {
+        font-size: .7rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
+
+    .data-table td {
+        padding: .8rem 1rem;
+        border-color: var(--border-color);
+    }
+
+    .data-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .data-table .col-customer {
+        min-width: 200px;
+    }
+
+/* Clickable row */
+.row-click {
+    cursor: pointer;
+}
+
+    .row-click:hover > td {
+        background: #F1F7F2;
+    }
+
+.neg {
+    color: #DC2626;
+}
+
+/* ---------- PILLS ---------- */
+.pill {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.pill-green {
+    background: #E6F0E9;
+    color: #1B5E34;
+    border-color: #CFE0D4;
+}
+
+.pill-yellow {
+    background: #FEF3C7;
+    color: #B45309;
+    border-color: #FDE68A;
+}
+
+.pill-red {
+    background: #FEE2E2;
+    color: #B91C1C;
+    border-color: #FECACA;
+}
+
+/* ======================= DRAWER (slide from right) ======================= */
+.drawer-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(10, 31, 20, .55);
+    animation: fade-in .25s ease forwards;
+}
+
+    .drawer-overlay.closing {
+        animation: fade-out .24s ease forwards;
+    }
+
+.drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2001;
+    width: 560px;
+    max-width: 100%;
+    background: #fff;
+    box-shadow: -12px 0 40px rgba(0,0,0,.25);
+    overflow-y: auto;
+    animation: slide-in .28s cubic-bezier(.22, .61, .36, 1) forwards;
+}
+
+    .drawer.closing {
+        animation: slide-out .24s ease-in forwards;
+    }
+
+@keyframes slide-in {
+    from {
+        transform: translateX(100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes slide-out {
+    from {
+        transform: translateX(0);
+    }
+
+    to {
+        transform: translateX(100%);
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fade-out {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+.drawer-close {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    background: none;
+    border: 0;
+    color: #3F7A55;
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+    .drawer-close:hover {
+        color: #1B5E34;
+    }
+
+.drawer-body {
+    padding: 1.8rem 1.6rem 2rem;
+}
+
+.drawer-title {
+    font-weight: 700;
+    color: #0A2B1D;
+    margin: 0 2rem .35rem 0;
+}
+
+.drawer-sub {
+    color: var(--text-muted);
+    font-size: .92rem;
+}
+
+.btn-receipt {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: .5rem 1.1rem;
+    font-size: .9rem;
+    font-weight: 500;
+    color: var(--text-main);
+    cursor: pointer;
+}
+
+    .btn-receipt:hover {
+        background: #F1F5F9;
+    }
+
+.link-void {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: #DC2626;
+    font-size: .9rem;
+    cursor: pointer;
+}
+
+    .link-void:hover {
+        text-decoration: underline;
+    }
+
+.confirm-text {
+    font-size: .88rem;
+    color: #B91C1C;
+    font-weight: 500;
+}
+
+.btn-danger-sm {
+    background: #DC2626;
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    padding: .35rem .8rem;
+    font-size: .8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .btn-danger-sm:hover {
+        background: #B91C1C;
+    }
+
+.btn-plain-sm {
+    background: none;
+    border: 0;
+    font-size: .8rem;
+    font-weight: 500;
+    color: var(--text-main);
+    cursor: pointer;
+}
+
+.section-title {
+    font-weight: 600;
+    font-size: .98rem;
+    margin-bottom: .5rem;
+    color: var(--text-main);
+}
+
+.mini-wrap {
+    overflow-x: auto;
+}
+
+.mini-table {
+    font-size: .88rem;
+}
+
+    .mini-table thead th {
+        font-size: .68rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: .8rem .75rem;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
+
+    .mini-table td {
+        padding: .8rem .75rem;
+        border-color: var(--border-color);
+    }
+
+    .mini-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+.totals-box {
+    margin-top: 1rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+}
+
+    .totals-box hr {
+        margin: .6rem 0;
+        border-color: var(--border-color);
+        opacity: 1;
+    }
+
+    .totals-box .row-line {
+        display: flex;
+        justify-content: space-between;
+        padding: .22rem 0;
+        font-size: .92rem;
+        color: var(--text-muted);
+    }
+
+        .totals-box .row-line.bold {
+            color: var(--text-main);
+            font-weight: 700;
+        }
+
+/* ---------- RECEIPT MODAL ---------- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2100;
+    background: rgba(10, 31, 20, .55);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 3rem 1rem 2.5rem;
+    overflow-y: auto;
+}
+
+.modal-card {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 540px;
+    padding: 1.5rem 1.6rem;
+    box-shadow: 0 25px 60px rgba(0,0,0,.3);
+}
+
+.modal-heading {
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #0A2B1D;
+}
+
+.modal-sub {
+    font-size: .88rem;
+    color: var(--text-muted);
+}
+
+.btn-close-x {
+    background: none;
+    border: 0;
+    color: #475569;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.receipt-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .5rem 1.5rem;
+    margin: 1.1rem 0;
+    padding: .8rem 1rem;
+    background: #F8FAFC;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    font-size: .85rem;
+}
+
+    .receipt-meta div {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .receipt-meta span {
+        color: var(--text-muted);
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+    }
+
+.receipt-table {
+    font-size: .88rem;
+}
+
+    .receipt-table thead th {
+        font-size: .68rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .receipt-table td {
+        border-color: var(--border-color);
+    }
+
+.btn-save {
+    background: #1B5E34;
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    padding: .55rem 1.4rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .btn-save:hover {
+        background: #144A29;
+    }
+
+/* ---------- TOAST ---------- */
+.toast-note {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 400px;
+    background: #fff;
+    border: 1px solid #CFE0D4;
+    border-left: 4px solid #1B5E34;
+    color: #1B4D2E;
+    border-radius: 12px;
+    padding: .75rem 1.1rem;
+    font-size: .88rem;
+    font-weight: 500;
+    box-shadow: 0 10px 25px rgba(0,0,0,.15);
+}

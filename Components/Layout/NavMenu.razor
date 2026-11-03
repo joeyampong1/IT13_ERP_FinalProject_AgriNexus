@@ -62,9 +62,7 @@
             <div class="nav-item"><NavLink class="nav-link" href="/reports"><i class="bi bi-bar-chart-line"></i> <span>Reports & Analytics</span></NavLink></div>
         }
 
-        <!-- ========================================== -->
-        <!-- 2. TENANT ADMIN (Business Owner)           -->
-        <!-- ========================================== -->
+        <!-- TENANT ADMIN -->
         @if (Auth.CurrentRole == AgriNexus.Services.UserRole.TenantAdmin)
         {
             <div class="nav-section-title">BUSINESS</div>
@@ -99,7 +97,9 @@
             <div class="nav-section-title">FINANCE</div>
             <div class="nav-item"><NavLink class="nav-link" href="/expenses"><i class="bi bi-wallet"></i> <span>Expenses</span></NavLink></div>
             <div class="nav-item"><NavLink class="nav-link" href="/costing"><i class="bi bi-layers"></i> <span>Production Costing</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/financials"><i class="bi bi-pie-chart"></i> <span>Financial Reports</span></NavLink></div>
+
+            <div class="nav-section-title">REPORTS & ANALYTICS</div>
+            <div class="nav-item"><NavLink class="nav-link" href="/business-analytics"><i class="bi bi-graph-up"></i> <span>Reports & Analytics</span></NavLink></div>
         }
 
         <!-- ========================================== -->
@@ -190,8 +190,10 @@
             <div class="nav-section-title">FINANCE</div>
             <div class="nav-item"><NavLink class="nav-link" href="/expenses"><i class="bi bi-wallet"></i> <span>Expenses</span></NavLink></div>
             <div class="nav-item"><NavLink class="nav-link" href="/costing"><i class="bi bi-layers"></i> <span>Production Costing</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/financials"><i class="bi bi-pie-chart"></i> <span>Financial Reports</span></NavLink></div>
             <div class="nav-item"><NavLink class="nav-link" href="/audit"><i class="bi bi-shield-check"></i> <span>Financial Audit Trail</span></NavLink></div>
+
+            <div class="nav-section-title">REPORTS & ANALYTICS</div>
+            <div class="nav-item"><NavLink class="nav-link" href="/finance-analytics"><i class="bi bi-graph-up"></i> <span>Reports & Analytics</span></NavLink></div>
         }
 
     </nav>

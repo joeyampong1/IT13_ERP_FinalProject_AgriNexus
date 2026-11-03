@@ -1,0 +1,220 @@
+﻿@page "/costing"
+@using System.Globalization
+
+<div class="mb-4">
+    <h2 class="page-title">Production Costing &amp; Cost Allocation</h2>
+    <p class="text-muted mb-0 page-sub">@BusinessName · cost per crop cycle, per hectare and per kilo, including issued supplies and allocated overhead.</p>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    <div class="text-muted small mt-1">@s.Note</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- CHARTS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-8">
+        <div class="card-box h-100">
+            <div class="panel-title">Cost per crop cycle</div>
+            <div class="panel-sub">Labor, supplies and allocated expenses</div>
+
+            <svg viewBox="0 0 640 300" class="w-100" style="max-height:360px" role="img" aria-label="Cost per crop cycle">
+                @for (int i = 0; i <= 4; i++)
+                {
+                    var y = 20 + i * 60;
+                    var val = AxisMax / 4 * (4 - i);
+                    <g>
+                        <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                        <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
+                    </g>
+                }
+                @for (int i = 0; i < rows.Count; i++)
+                {
+                    var r = rows[i];
+                    var slot = 568.0 / rows.Count;
+                    var w = slot * 0.8;
+                    var x = 62 + i * slot + (slot - w) / 2;
+                    var hL = (double)r.Labor / AxisMax * 240;
+                    var hS = (double)r.Supplies / AxisMax * 240;
+                    var hO = (double)r.Other / AxisMax * 240;
+                    <g>
+                        <rect x="@F(x)" y="@F(260 - hL)" width="@F(w)" height="@F(hL)" fill="#A86B4C" />
+                        <rect x="@F(x)" y="@F(260 - hL - hS)" width="@F(w)" height="@F(hS)" fill="#206A3B" />
+                        <rect x="@F(x)" y="@F(260 - hL - hS - hO)" width="@F(w)" height="@F(hO)" rx="3" fill="#86C440" />
+                        <text x="@F(x + w / 2)" y="282" text-anchor="middle" font-size="11" fill="#475569">@r.Crop</text>
+                    </g>
+                }
+            </svg>
+
+            <div class="d-flex justify-content-center gap-3 small flex-wrap mt-1">
+                <span class="lg lg-labor"><span class="swatch" style="background:#A86B4C"></span>Labor</span>
+                <span class="lg lg-supplies"><span class="swatch" style="background:#206A3B"></span>Supplies</span>
+                <span class="lg lg-other"><span class="swatch" style="background:#86C440"></span>Other cost</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card-box h-100">
+            <div class="panel-title">Cost composition</div>
+            <div class="panel-sub">Where production cost comes from</div>
+
+            <div class="d-flex justify-content-center my-3">
+                <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Cost composition">
+                    @{
+                        double offset = 0;
+                    }
+                    @foreach (var c in Composition)
+                    {
+                        var len = TotalCost <= 0 ? 0 : (double)(c.Amount / TotalCost) * Circ;
+                        var dash = Math.Max(len - 2, 0.5);
+                        <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@c.Color" stroke-width="30"
+                                stroke-dasharray="@F(dash) @F(Circ - dash)"
+                                stroke-dashoffset="@F(-offset)"
+                                transform="rotate(-140 100 100)" />
+                        offset += len;
+                    }
+                </svg>
+            </div>
+
+            <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
+                @foreach (var c in Composition)
+                {
+                    <span><span class="legend-dot" style="background:@c.Color"></span>@c.Label</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- COSTING TABLE -->
+<div class="panel">
+    <div class="panel-head">
+        <div class="panel-title">Costing per plot and crop cycle</div>
+        <div class="panel-sub mb-0">Supplies issued from inventory and shared operating expenses are allocated by planted area.</div>
+    </div>
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Plot</th>
+                    <th>Crop</th>
+                    <th>Labor cost</th>
+                    <th>Supplies</th>
+                    <th>Other cost</th>
+                    <th>Total cost</th>
+                    <th>Harvested</th>
+                    <th>Cost / kg</th>
+                    <th>Cost / ha</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in rows)
+                {
+                    <tr>
+                        <td class="col-plot">
+                            <div class="fw-semibold">@r.Plot</div>
+                            <div class="sub">@r.Ha.ToString("0.##", Inv) ha</div>
+                        </td>
+                        <td>@r.Crop</td>
+                        <td class="text-nowrap">@Peso(r.Labor)</td>
+                        <td class="text-nowrap">@Peso(r.Supplies)</td>
+                        <td class="text-nowrap">@Peso(r.Other)</td>
+                        <td class="fw-bold text-nowrap">@Peso(r.Total)</td>
+                        <td class="text-nowrap">@Qty(r.Kg) kg</td>
+                        <td class="text-nowrap">@(r.Kg > 0 ? Peso(r.Total / r.Kg).Replace("₱", "₱") : "—")</td>
+                        <td class="text-nowrap">@Peso(r.Total / (decimal)r.Ha)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="panel-foot">Total production cost: @Peso(TotalCost)</div>
+</div>
+
+@code {
+    // ---------- MODELS ----------
+    record CostRow(string Plot, double Ha, string Crop, decimal Labor, decimal Supplies, decimal Other, decimal Kg, decimal HarvestValue)
+    {
+        public decimal Total => Labor + Supplies + Other;
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record Slice(string Label, decimal Amount, string Color);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    const double Radius = 70;
+    static readonly double Circ = 2 * Math.PI * Radius;
+
+    // TODO: kuhaa gikan sa naka-login nga tenant
+    const string BusinessName = "Verdant Agri Ventures";
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // Sa tinuod nga sistema, i-compute kini matag crop cycle:
+    //   Labor    = approved labor logs (Attendance & Logs) sa maong plot ug cycle
+    //   Supplies = stock issued (Stock Movements) nga naka-link sa plot
+    //   Other    = shared expenses (Expenses) nga gi-allocate base sa planted area
+    // Ang gagmay nga decimals (e.g. .0021) kay aron mo-match ang rounding sa totals sa prototype.
+    readonly List<CostRow> rows = new()
+    {
+        new("North Plot A", 1.5, "Rice",     2300m, 6592.90m,  13872.5821m, 1450m, 31900m),
+        new("North Plot B", 2,   "Corn",     1155m, 8790.54m,  20596.7721m, 0m,    0m),
+        new("South Plot D", 2.5, "Cabbage",  1280m, 10988.17m, 17620.9721m, 1110m, 40740m),
+        new("South Plot E", 1.8, "Ampalaya", 1230m, 7911.48m,  12687.1021m, 520m,  23400m),
+        new("North Plot A", 1.5, "Rice",     2300m, 6592.90m,  13872.5821m, 1450m, 31900m),
+    };
+
+    // ---------- COMPUTED ----------
+    decimal TotalCost => rows.Sum(r => r.Total);
+    decimal TotalKg => rows.Sum(r => r.Kg);
+    decimal HarvestValue => rows.Sum(r => r.HarvestValue);
+    decimal TotalHa => (decimal)rows.Sum(r => r.Ha);
+
+    // Axis max = i-round up sa 8K steps (e.g. 30,542 -> 32,000)
+    double AxisMax => Math.Max(8000, Math.Ceiling((double)rows.Max(r => r.Total) / 8000) * 8000);
+
+    List<Slice> Composition => new()
+    {
+        new("Allocated supplies", rows.Sum(r => r.Supplies), "#62A834"),
+        new("Direct labor", rows.Sum(r => r.Labor), "#206A3B"),
+        new("Other operating cost", rows.Sum(r => r.Other), "#92D050"),
+    };
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var perHa = TotalHa > 0 ? TotalCost / TotalHa : 0;
+            var perKg = TotalKg > 0 ? TotalCost / TotalKg : 0;
+            var margin = HarvestValue - TotalCost;
+
+            return new()
+            {
+                new("TOTAL PRODUCTION COST", Peso(TotalCost), "Across " + rows.Count + " crop cycles", "bi-coin", ""),
+                new("AVERAGE COST PER HECTARE", Peso(perHa), TotalHa.ToString("0.##", Inv) + " hectares planted", "bi-layers", "stat-icon-plain stat-icon-brown"),
+                new("AVERAGE COST PER KILO", Peso(perKg), Qty(TotalKg) + " kg harvested", "bi-calculator", "stat-icon-plain"),
+                new("ESTIMATED MARGIN", Peso(margin), "Harvest value " + Peso(HarvestValue), "bi-graph-up-arrow", ""),
+            };
+        }
+    }
+
+    // ---------- HELPERS ----------
+    static string F(double d) => d.ToString("0.##", Inv);
+    static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    static string AxisLabel(double v) => v == 0 ? "₱0" : "₱" + (v / 1000).ToString("0", Inv) + "K";
+}

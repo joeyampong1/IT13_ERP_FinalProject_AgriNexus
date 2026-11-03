@@ -1,7 +1,8 @@
 /* =========================================
-   SUPER ADMIN REPORTS SPECIFIC STYLES
+   SUPER ADMIN REPORTS - PREMIUM STYLES
    ========================================= */
 
+/* Page Headers */
 .page-title {
     font-weight: 800;
     font-size: 1.85rem;
@@ -15,8 +16,10 @@
     color: var(--text-muted);
 }
 
-/* Report Generator Form Inputs */
-.form-control, .form-select {
+/* =========================================
+   FORM INPUTS & DROPDOWNS
+   ========================================= */
+.form-control, .form-select, .filter-select {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 0.6rem 1rem;
@@ -24,6 +27,7 @@
     color: var(--text-main);
     box-shadow: none;
     transition: all 0.2s ease;
+    background-color: #ffffff;
 }
 
     .form-control:focus, .form-select:focus {
@@ -31,18 +35,38 @@
         box-shadow: 0 0 0 3px rgba(56, 142, 60, 0.15);
     }
 
+/* Custom Filter Select Arrow */
+.filter-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23388E3C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: 1rem;
+    outline: none;
+}
+
+/* Green Checkboxes */
+input[type="checkbox"] {
+    accent-color: var(--primary-green);
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+}
+
 /* Dropdown Menu */
 .dropdown-menu {
-    padding: 0.5rem;
     border-radius: 10px;
     border: 1px solid var(--border-color);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    padding: 0.5rem;
 }
 
 .dropdown-item {
     border-radius: 6px;
-    padding: 0.4rem 0.75rem;
+    padding: 0.5rem 0.75rem;
     font-size: 0.9rem;
-    cursor: pointer;
+    font-weight: 500;
     transition: background 0.2s;
 }
 
@@ -50,66 +74,119 @@
         background-color: #F1F5F9;
     }
 
-/* Custom Progress Bar */
-.progress {
-    background-color: #F1F5F9;
-    border-radius: 10px;
-    overflow: hidden;
+/* =========================================
+   CARDS & HOVER EFFECTS
+   ========================================= */
+.stat-card, .card-box {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.progress-bar {
-    border-radius: 10px;
-    transition: width 0.5s ease-in-out;
-}
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 25px rgba(0,0,0,0.06) !important;
+    }
 
-/* SVG Chart Enhancements */
+    /* Mini KPI Cards (Ang gagmay sa ilawom sa main stats) */
+    .card-box.py-2 {
+        background: #ffffff;
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+
+        .card-box.py-2:hover {
+            background: #F8FAFC;
+            border-color: #CBD5E1;
+            transform: translateY(-1px);
+        }
+
+/* =========================================
+   CHARTS & SVG
+   ========================================= */
 svg text {
     font-family: 'Inter', sans-serif;
 }
 
-.bar-animate {
-    transition: height 0.5s ease, y 0.5s ease;
+/* Hover effect sa mga bars ug points sa chart */
+svg rect, svg circle, svg polyline {
+    transition: opacity 0.2s ease;
 }
 
-/* Legend Dots */
+    svg rect:hover, svg circle:hover {
+        opacity: 0.8;
+        cursor: pointer;
+    }
+
 .legend-dot {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     margin-right: 6px;
+    vertical-align: middle;
 }
 
-/* Table Enhancements */
-.dash-table th {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    letter-spacing: 0.5px;
-    padding: 0.8rem 1rem;
-    border-bottom: 1px solid var(--border-color);
+/* =========================================
+   PROGRESS BARS (System Health)
+   ========================================= */
+.progress {
+    background-color: #F1F5F9;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
 }
 
-.dash-table td {
-    padding: 0.9rem 1rem;
-    border-bottom: 1px solid var(--border-color);
-    font-size: 0.9rem;
+.progress-bar {
+    border-radius: 10px;
+    transition: width 1s ease-in-out;
 }
 
-.dash-table tbody tr:last-child td {
-    border-bottom: none;
+/* =========================================
+   TABLES
+   ========================================= */
+.data-table {
+    margin-bottom: 0;
+    width: 100%;
 }
 
-.dash-table tbody tr:hover {
-    background-color: #F8FAFC;
-}
+    .data-table thead th {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        padding: 1rem;
+        background-color: #F8FAFC;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
 
-/* Pill Badges */
+    .data-table tbody td {
+        padding: 1rem;
+        font-size: 0.9rem;
+        color: var(--text-main);
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    .data-table tbody tr {
+        transition: background 0.2s ease;
+    }
+
+        .data-table tbody tr:hover {
+            background-color: #F8FAFC;
+        }
+
+        .data-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+/* Badges / Pills */
 .pill {
     padding: 0.25rem 0.75rem;
     border-radius: 6px;
     font-size: 0.75rem;
     font-weight: 700;
+    display: inline-block;
 }
 
 .pill-gray {
@@ -117,7 +194,9 @@ svg text {
     color: #475569;
 }
 
-/* Fade in animation for toast */
+/* =========================================
+   TOAST ANIMATION
+   ========================================= */
 .toast-note {
     animation: slideInRight 0.3s ease-out forwards;
 }
@@ -134,47 +213,19 @@ svg text {
     }
 }
 
-/* =========================================
-   MODERN SELECT DROPDOWN
-   ========================================= */
+/* Responsive Fixes */
+@media (max-width: 768px) {
+    .page-title {
+        font-size: 1.5rem;
+    }
 
-.filter-select {
-    appearance: none; /* Tangtangon ang default nga arrow sa browser */
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    background-color: #FFFFFF;
-    border: 1px solid var(--border-color);
-    border-radius: 10px; /* Standard rounded corners */
-    padding: 0.55rem 2.5rem 0.55rem 1rem; /* Space sa wala ug tuo */
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text-main);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-    /* Custom SVG Arrow */
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23388E3C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 0.85rem center;
-    background-size: 1.1rem;
+    .stat-card .card-value {
+        font-size: 1.5rem;
+    }
+
+    .card-box.py-2 {
+        flex-direction: column;
+        text-align: center;
+        gap: 4px;
+    }
 }
-
-    /* Hover State */
-    .filter-select:hover {
-        border-color: #CBD5E1;
-        background-color: #F8FAFC;
-    }
-
-    /* Focus State (Inig-click) */
-    .filter-select:focus {
-        outline: none;
-        border-color: var(--primary-green);
-        box-shadow: 0 0 0 3px rgba(56, 142, 60, 0.15); /* Green glow */
-    }
-
-    /* Disabled State */
-    .filter-select:disabled {
-        background-color: #E2E8F0;
-        cursor: not-allowed;
-        opacity: 0.7;
-    }

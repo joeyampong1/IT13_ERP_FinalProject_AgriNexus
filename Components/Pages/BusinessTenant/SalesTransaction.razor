@@ -1,0 +1,427 @@
+﻿@page "/sales"
+@using System.Globalization
+@inject NavigationManager Nav
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Sales Transactions</h2>
+        <p class="text-muted mb-0 page-sub">@ActiveBranch · sales orders, sale items and pricing, payment status and order history.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn-outline-lg" @onclick="GoCollections">Collections</button>
+        <button type="button" class="btn-solid" @onclick="GoNewSale"><i class="bi bi-cart"></i> New sale</button>
+    </div>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar mb-3">
+    <div class="search-box">
+        <input type="text" placeholder="Search sale no., customer or cashier..." @bind="searchText" @bind:event="oninput" />
+    </div>
+    <select class="filter-select" @bind="statusFilter">
+        <option value="">All payment statuses</option>
+        <option value="unpaid">Unpaid</option>
+        <option value="partial">Partial</option>
+        <option value="paid">Fully paid</option>
+    </select>
+    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "sale" : "sales") · @Peso(MonthValue) this month</span>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Sale no.</th>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Items</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th>Order</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in Filtered)
+                {
+                    var st = PayStatus(s);
+                    <tr class="row-click" @onclick="() => Open(s)">
+                        <td class="fw-bold text-nowrap">@s.No</td>
+                        <td class="text-nowrap">@s.Date.ToString("MMM d, yyyy", Inv)</td>
+                        <td class="col-customer">@s.Customer</td>
+                        <td class="text-muted text-nowrap">@s.Items.Count @(s.Items.Count == 1 ? "line" : "lines")</td>
+                        <td class="fw-medium text-nowrap">@Peso(Total(s))</td>
+                        <td class="text-nowrap">@Peso(Paid(s))</td>
+                        <td class="text-nowrap @(Balance(s) > 0 ? "neg" : "")">@Peso(Balance(s))</td>
+                        <td><span class="pill @PayClass(st)">@PayLabel(st)</span></td>
+                        <td><span class="pill @(s.Voided ? "pill-red" : "pill-green")">@(s.Voided ? "Voided" : "Completed")</span></td>
+                    </tr>
+                }
+                @if (Filtered.Count == 0)
+                {
+                    <tr><td colspan="9" class="text-center text-muted py-5">No sales found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ======================= DETAIL DRAWER (slide from right) ======================= -->
+@if (selected != null)
+{
+    var sale = selected;
+    <div class="drawer-overlay @(closing ? "closing" : "")" @onclick="CloseDrawer"></div>
+    <aside class="drawer @(closing ? "closing" : "")" role="dialog" aria-label="Sale details">
+        <button type="button" class="drawer-close" @onclick="CloseDrawer" aria-label="Close"><i class="bi bi-x-circle"></i></button>
+
+        <div class="drawer-body">
+            <h4 class="drawer-title">@sale.No</h4>
+            <div class="drawer-sub">@sale.Customer · @sale.Date.ToString("MMM d, yyyy", Inv) · cashier @sale.Cashier</div>
+
+            <div class="d-flex align-items-center gap-3 mt-3 mb-4 flex-wrap">
+                <button type="button" class="btn-receipt" @onclick="() => showReceipt = true">
+                    <i class="bi bi-receipt"></i> View receipt
+                </button>
+
+                @if (sale.Voided)
+                {
+                    <span class="pill pill-red">Voided</span>
+                }
+                else if (confirmVoid)
+                {
+                    <span class="confirm-text">Void this sale?</span>
+                    <button type="button" class="btn-danger-sm" @onclick="VoidSale">Yes, void</button>
+                    <button type="button" class="btn-plain-sm" @onclick="() => confirmVoid = false">Cancel</button>
+                }
+                else
+                {
+                    <button type="button" class="link-void" @onclick="() => confirmVoid = true">Void sale</button>
+                }
+            </div>
+
+            <div class="section-title">Sale items and pricing</div>
+            <div class="mini-wrap">
+                <table class="table mini-table align-middle mb-0">
+                    <thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead>
+                    <tbody>
+                        @foreach (var i in sale.Items)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@i.Name</td>
+                                <td class="text-nowrap">@Qty(i.Qty) kg</td>
+                                <td class="text-nowrap">@Peso(i.Price)</td>
+                                <td class="text-nowrap">@Peso(i.Qty * i.Price)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="totals-box">
+                <div class="row-line"><span>Subtotal</span><span>@Peso(Subtotal(sale))</span></div>
+                <div class="row-line"><span>Discount</span><span>– @Peso(sale.Discount)</span></div>
+                <hr />
+                <div class="row-line bold"><span>Total</span><span>@Peso(Total(sale))</span></div>
+                <div class="row-line"><span>Amount paid</span><span>@Peso(Paid(sale))</span></div>
+                <div class="row-line bold"><span>Balance</span><span class="@(Balance(sale) > 0 ? "neg" : "")">@Peso(Balance(sale))</span></div>
+            </div>
+
+            <div class="section-title mt-4">Payment history</div>
+            <div class="mini-wrap">
+                <table class="table mini-table align-middle mb-0">
+                    <thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Received by</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in sale.Payments)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@p.Date.ToString("MMM d, yyyy", Inv)</td>
+                                <td>@Cap(p.Method)</td>
+                                <td class="text-nowrap">@Peso(p.Amount)</td>
+                                <td class="text-nowrap">@p.ReceivedBy</td>
+                            </tr>
+                        }
+                        @if (sale.Payments.Count == 0)
+                        {
+                            <tr><td colspan="4" class="text-center text-muted py-3">No payments recorded yet.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </aside>
+}
+
+<!-- RECEIPT -->
+@if (selected != null && showReceipt)
+{
+    var sale = selected;
+    <div class="modal-overlay" @onclick="() => showReceipt = false">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="modal-heading mb-1">Receipt</h5>
+                    <div class="modal-sub">@BusinessName</div>
+                </div>
+                <button type="button" class="btn-close-x" @onclick="() => showReceipt = false" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="receipt-meta">
+                <div><span>Sale no.</span><strong>@sale.No</strong></div>
+                <div><span>Date</span><strong>@sale.Date.ToString("MMM d, yyyy", Inv)</strong></div>
+                <div><span>Customer</span><strong>@sale.Customer</strong></div>
+                <div><span>Cashier</span><strong>@sale.Cashier</strong></div>
+            </div>
+
+            <table class="table receipt-table align-middle mb-0">
+                <thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Price</th><th class="text-end">Subtotal</th></tr></thead>
+                <tbody>
+                    @foreach (var i in sale.Items)
+                    {
+                        <tr>
+                            <td>@i.Name</td>
+                            <td class="text-end text-nowrap">@Qty(i.Qty) kg</td>
+                            <td class="text-end text-nowrap">@Peso(i.Price)</td>
+                            <td class="text-end text-nowrap">@Peso(i.Qty * i.Price)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="totals-box mt-3">
+                <div class="row-line"><span>Subtotal</span><span>@Peso(Subtotal(sale))</span></div>
+                <div class="row-line"><span>Discount</span><span>– @Peso(sale.Discount)</span></div>
+                <hr />
+                <div class="row-line bold"><span>Total</span><span>@Peso(Total(sale))</span></div>
+                <div class="row-line"><span>Amount paid</span><span>@Peso(Paid(sale))</span></div>
+                <div class="row-line bold"><span>Balance</span><span class="@(Balance(sale) > 0 ? "neg" : "")">@Peso(Balance(sale))</span></div>
+            </div>
+
+            <div class="d-flex justify-content-end mt-4">
+                <button type="button" class="btn-save" @onclick="() => showReceipt = false">Done</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    record ItemRec(string Name, decimal Qty, decimal Price);
+    record PayRec(DateTime Date, string Method, decimal Amount, string ReceivedBy);
+
+    class SaleRec
+    {
+        public string No { get; set; } = "";
+        public DateTime Date { get; set; }
+        public string Customer { get; set; } = "";
+        public string Cashier { get; set; } = "";
+        public decimal Discount { get; set; }
+        public bool Voided { get; set; }
+        public List<ItemRec> Items { get; set; } = new();
+        public List<PayRec> Payments { get; set; } = new();
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    // TODO: kuhaa gikan sa naka-login nga tenant / branch
+    const string BusinessName = "Verdant Agri Ventures";
+    const string ActiveBranch = "North Field Branch";
+
+    // ---------- STATE ----------
+    string searchText = "";
+    string statusFilter = "";
+    string toast = "";
+    SaleRec? selected;
+    bool closing;
+    bool confirmVoid;
+    bool showReceipt;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // Ang total, paid ug balance kay computed gikan sa items ug payments
+    readonly List<SaleRec> sales = new()
+    {
+        new() { No = "SO-0014", Date = new(2026, 10, 24), Customer = "Municipal Market Vendors", Cashier = "Noel Bautista",
+                Items = new() { new("Rice — Grade A", 200, 22) },
+                Payments = new() { new(new(2026, 10, 24), "cash", 4400, "Noel Bautista") } },
+
+        new() { No = "SO-0013", Date = new(2026, 10, 23), Customer = "Walk-in customers", Cashier = "Paolo Gutierrez",
+                Items = new() { new("Corn — Grade B", 130, 20) },
+                Payments = new() { new(new(2026, 10, 23), "cash", 2600, "Paolo Gutierrez") } },
+
+        new() { No = "SO-0012", Date = new(2026, 10, 21), Customer = "Barangay Nutrition Program", Cashier = "Noel Bautista",
+                Items = new() { new("Ampalaya — Grade A", 120, 45), new("Rice — Grade A", 185, 28) },
+                Payments = new() { new(new(2026, 10, 21), "bank", 10580, "Noel Bautista") } },
+
+        new() { No = "SO-0011", Date = new(2026, 10, 18), Customer = "Bayanihan Trading", Cashier = "Jenny Ramos",
+                Items = new() { new("Cabbage — Grade A", 300, 37) },
+                Payments = new() { new(new(2026, 10, 18), "cash", 11100, "Jenny Ramos") } },
+
+        new() { No = "SO-0010", Date = new(2026, 10, 12), Customer = "Rural Bank Cooperative Store", Cashier = "Paolo Gutierrez",
+                Items = new() { new("Rice — Grade A", 330, 22), new("Cabbage — Grade B", 220, 30) },
+                Payments = new() { new(new(2026, 10, 12), "cash", 4000, "Paolo Gutierrez"), new(new(2026, 10, 19), "gcash", 2860, "Noel Bautista") } },
+
+        new() { No = "SO-0009", Date = new(2026, 10, 6), Customer = "Verdant Fresh Retail", Cashier = "Noel Bautista",
+                Items = new() { new("Cabbage — Grade A", 260, 38) },
+                Payments = new() { new(new(2026, 10, 6), "bank", 9880, "Noel Bautista") } },
+
+        new() { No = "SO-0008", Date = new(2026, 9, 27), Customer = "Municipal Market Vendors", Cashier = "Jenny Ramos",
+                Items = new() { new("Ampalaya — Grade A", 168, 45) },
+                Payments = new() },
+
+        new() { No = "SO-0007", Date = new(2026, 9, 14), Customer = "Walk-in customers", Cashier = "Jenny Ramos",
+                Items = new() { new("Rice — Grade A", 120, 22), new("Corn — Grade B", 120, 17) },
+                Payments = new() { new(new(2026, 9, 14), "cash", 4680, "Jenny Ramos") } },
+
+        new() { No = "SO-0006", Date = new(2026, 9, 8), Customer = "Bayanihan Trading", Cashier = "Paolo Gutierrez",
+                Items = new() { new("Ampalaya — Grade A", 160, 45), new("Cabbage — Grade A", 150, 38) },
+                Payments = new() { new(new(2026, 9, 8), "cash", 5000, "Paolo Gutierrez") } },
+
+        new() { No = "SO-0005", Date = new(2026, 8, 30), Customer = "Rural Bank Cooperative Store", Cashier = "Noel Bautista",
+                Items = new() { new("Rice — Grade A", 500, 23) },
+                Payments = new() { new(new(2026, 8, 30), "bank", 11500, "Noel Bautista") } },
+
+        new() { No = "SO-0004", Date = new(2026, 8, 15), Customer = "Verdant Fresh Retail", Cashier = "Jenny Ramos",
+                Items = new() { new("Cabbage — Grade B", 200, 30), new("Corn — Grade B", 200, 20) },
+                Payments = new() { new(new(2026, 8, 15), "cash", 5000, "Jenny Ramos") } },
+
+        new() { No = "SO-0003", Date = new(2026, 8, 8), Customer = "Municipal Market Vendors", Cashier = "Paolo Gutierrez",
+                Items = new() { new("Corn — Grade B", 466, 20) },
+                Payments = new() { new(new(2026, 8, 8), "cash", 9320, "Paolo Gutierrez") } },
+
+        new() { No = "SO-0002", Date = new(2026, 7, 20), Customer = "Barangay Nutrition Program", Cashier = "Jenny Ramos",
+                Items = new() { new("Ampalaya — Grade A", 100, 45), new("Rice — Grade A", 100, 22) },
+                Payments = new() { new(new(2026, 7, 20), "gcash", 3000, "Jenny Ramos") } },
+
+        new() { No = "SO-0001", Date = new(2026, 7, 5), Customer = "Walk-in customers", Cashier = "Noel Bautista",
+                Items = new() { new("Rice — Grade A", 200, 22), new("Cabbage — Grade A", 100, 38) },
+                Payments = new() { new(new(2026, 7, 5), "cash", 8200, "Noel Bautista") } },
+    };
+
+    // ---------- COMPUTED ----------
+    IEnumerable<SaleRec> Active => sales.Where(s => !s.Voided);
+
+    List<SaleRec> Filtered => sales
+        .Where(s => string.IsNullOrEmpty(statusFilter) || PayStatus(s) == statusFilter)
+        .Where(s => string.IsNullOrWhiteSpace(searchText)
+            || s.No.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || s.Customer.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || s.Cashier.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(s => s.Date).ThenByDescending(s => s.No)
+        .ToList();
+
+    decimal MonthValue
+    {
+        get
+        {
+            var t = DateTime.Today;
+            return Active.Where(s => s.Date.Year == t.Year && s.Date.Month == t.Month).Sum(Total);
+        }
+    }
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var withBalance = Active.Count(s => Balance(s) > 0);
+            var payCount = Active.Sum(s => s.Payments.Count);
+            return new()
+            {
+                new("TRANSACTIONS", sales.Count.ToString(), sales.Count(s => s.Voided) + " voided", "bi-receipt", ""),
+                new("SALES VALUE", Peso(Active.Sum(Total)), "", "bi-graph-up-arrow", ""),
+                new("COLLECTED", Peso(Active.Sum(Paid)), payCount + " payment records", "bi-cash", ""),
+                new("OUTSTANDING", Peso(Active.Sum(Balance)), withBalance + " with balance", "bi-x-circle", "stat-icon-warn"),
+            };
+        }
+    }
+
+    // ---------- HELPERS ----------
+    static decimal Subtotal(SaleRec s) => s.Items.Sum(i => i.Qty * i.Price);
+    static decimal Total(SaleRec s) => Math.Max(0, Subtotal(s) - s.Discount);
+    static decimal Paid(SaleRec s) => s.Payments.Sum(p => p.Amount);
+    static decimal Balance(SaleRec s) => Math.Max(0, Total(s) - Paid(s));
+
+    static string PayStatus(SaleRec s) => Balance(s) <= 0 ? "paid" : Paid(s) > 0 ? "partial" : "unpaid";
+
+    static string PayLabel(string st) => st switch { "paid" => "Paid", "partial" => "Partial", _ => "Unpaid" };
+
+    static string PayClass(string st) => st switch { "paid" => "pill-green", "partial" => "pill-yellow", _ => "pill-red" };
+
+    static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    // ---------- ACTIONS ----------
+    void GoNewSale() => Nav.NavigateTo("new-sale");
+    void GoCollections() => Nav.NavigateTo("payments");
+
+    void Open(SaleRec s)
+    {
+        selected = s;
+        closing = false;
+        confirmVoid = false;
+        showReceipt = false;
+    }
+
+    async Task CloseDrawer()
+    {
+        if (closing) return;
+        closing = true;
+        showReceipt = false;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(240);   // hulat sa slide-out animation
+        selected = null;
+        closing = false;
+        confirmVoid = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task VoidSale()
+    {
+        if (selected == null) return;
+        selected.Voided = true;
+        confirmVoid = false;
+        // TODO: ibalik ang quantity sa produce stock, i-reverse ang bayad sa Cash Drawer / Payments,
+        // ug i-log sa Audit Logs (Void · Sales Transactions)
+        await ShowToast(selected.No + " was voided.");
+    }
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3000);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

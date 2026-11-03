@@ -1,0 +1,632 @@
+﻿@page "/payments"
+@using System.Globalization
+@inject AgriNexus.Services.AuthService Auth
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Payments &amp; Collections</h2>
+        <p class="text-muted mb-0 page-sub">@ActiveBranch · collect full or partial payments, issue receipts, and monitor daily collections.</p>
+    </div>
+    <button type="button" class="btn-solid" @onclick="OpenNewCollection">
+        <i class="bi bi-cash"></i> New collection
+    </button>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    <div class="text-muted small mt-1">@s.Note</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- TABS -->
+<div class="tabs mb-4">
+    <button type="button" class="tab-btn @(activeTab == "history" ? "active" : "")" @onclick='() => SetTab("history")'>Payment history</button>
+    <button type="button" class="tab-btn @(activeTab == "unpaid" ? "active" : "")" @onclick='() => SetTab("unpaid")'>Partial &amp; unpaid</button>
+    <button type="button" class="tab-btn @(activeTab == "daily" ? "active" : "")" @onclick='() => SetTab("daily")'>Daily collection report</button>
+</div>
+
+<!-- ======================= PAYMENT HISTORY ======================= -->
+@if (activeTab == "history")
+{
+    <div class="toolbar mb-3">
+        <div class="search-box">
+            <input type="text" placeholder="Search payments..." @bind="searchText" @bind:event="oninput" />
+        </div>
+        <span class="text-muted small">@FilteredPayments.Count @(FilteredPayments.Count == 1 ? "payment" : "payments")</span>
+    </div>
+
+    <div class="panel">
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Sale no.</th>
+                        <th>Customer</th>
+                        <th>Method</th>
+                        <th>Reference</th>
+                        <th>Amount</th>
+                        <th>Received by</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in FilteredPayments)
+                    {
+                        <tr>
+                            <td class="text-nowrap">@p.Date.ToString("MMM d, yyyy", Inv)</td>
+                            <td class="text-nowrap">@p.SaleNo</td>
+                            <td class="col-customer">@CustomerOf(p.SaleNo)</td>
+                            <td>@Cap(p.Method)</td>
+                            <td class="text-nowrap">@p.Reference</td>
+                            <td class="fw-medium text-nowrap @(p.Voided ? "struck" : "")">@Peso(p.Amount)</td>
+                            <td class="text-nowrap">@p.ReceivedBy</td>
+                            <td>
+                                <span class="pill @(p.Voided ? "pill-red" : "pill-green")" title="@p.VoidReason">@(p.Voided ? "Voided" : "Posted")</span>
+                            </td>
+                            <td class="text-end">
+                                @if (!p.Voided)
+                                {
+                                    <button type="button" class="btn-void" @onclick="() => OpenVoid(p)">Void</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (FilteredPayments.Count == 0)
+                    {
+                        <tr><td colspan="9" class="text-center text-muted py-5">No payments found.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<!-- ======================= PARTIAL & UNPAID ======================= -->
+@if (activeTab == "unpaid")
+{
+    <div class="panel">
+        <div class="panel-head">
+            <div class="panel-title">Sales with an outstanding balance</div>
+            <div class="panel-sub mb-0">Partial payments keep the remaining balance open until fully paid.</div>
+        </div>
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Sale no.</th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Total</th>
+                        <th>Paid</th>
+                        <th>Balance</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in OpenSales)
+                    {
+                        var st = SaleStatus(s);
+                        <tr>
+                            <td class="text-nowrap">@s.No</td>
+                            <td class="text-nowrap">@s.Date.ToString("MMM d, yyyy", Inv)</td>
+                            <td class="col-customer">@s.Customer</td>
+                            <td class="text-nowrap">@Peso(s.Total)</td>
+                            <td class="text-nowrap">@Peso(Paid(s))</td>
+                            <td class="text-nowrap neg fw-medium">@Peso(Balance(s))</td>
+                            <td><span class="pill @(st == "partial" ? "pill-yellow" : "pill-red")">@(st == "partial" ? "Partial" : "Unpaid")</span></td>
+                            <td class="text-end">
+                                <button type="button" class="btn-collect" @onclick="() => OpenCollect(s)">Collect</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (OpenSales.Count == 0)
+                    {
+                        <tr><td colspan="8" class="text-center text-muted py-5">All sales are fully paid.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<!-- ======================= DAILY COLLECTION REPORT ======================= -->
+@if (activeTab == "daily")
+{
+    <div class="row g-3">
+        <div class="col-12 col-lg-8">
+            <div class="panel h-100">
+                <div class="panel-head">
+                    <div class="panel-title">Daily collection report</div>
+                    <div class="panel-sub mb-0">Cash versus digital collections per day</div>
+                </div>
+                <div class="table-wrap">
+                    <table class="table data-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Payments</th>
+                                <th>Cash</th>
+                                <th>Gcash / Bank / Check</th>
+                                <th>Total collected</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var d in Daily)
+                            {
+                                <tr>
+                                    <td class="text-nowrap">@d.Date.ToString("MMM d, yyyy", Inv)</td>
+                                    <td>@d.Count</td>
+                                    <td class="text-nowrap">@Peso(d.Cash)</td>
+                                    <td class="text-nowrap">@Peso(d.Digital)</td>
+                                    <td class="fw-medium text-nowrap">@Peso(d.Total)</td>
+                                </tr>
+                            }
+                            @if (Daily.Count == 0)
+                            {
+                                <tr><td colspan="5" class="text-center text-muted py-5">No collections recorded.</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+            <div class="card-box h-100">
+                <div class="panel-title">Collections by method</div>
+                <div class="panel-sub">Total amount received per channel</div>
+
+                <div class="d-flex justify-content-center my-3">
+                    <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Collections by method">
+                        @if (Slices.Count == 0)
+                        {
+                            <circle cx="100" cy="100" r="@Radius" fill="none" stroke="#E2E8F0" stroke-width="30" />
+                        }
+                        @{
+                            double offset = 0;
+                        }
+                        @foreach (var m in Slices)
+                        {
+                            var len = (double)(m.Amount / SliceTotal) * Circ;
+                            var dash = Slices.Count == 1 ? len : Math.Max(len - 2, 0.5);
+                            <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@MethodColor(m.Method)" stroke-width="30"
+                                    stroke-dasharray="@F(dash) @F(Circ - dash)"
+                                    stroke-dashoffset="@F(-offset)"
+                                    transform="rotate(-90 100 100)" />
+                            offset += len;
+                        }
+                    </svg>
+                </div>
+
+                <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
+                    @foreach (var m in LegendSlices)
+                    {
+                        <span><span class="legend-dot" style="background:@MethodColor(m.Method)"></span>@Cap(m.Method) · @Short(m.Amount)</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ======================= MODAL: NEW COLLECTION ======================= -->
+@if (modal == "new")
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="modal-heading mb-1">New collection</h5>
+                    <div class="modal-sub">Choose the sale you are collecting payment for.</div>
+                </div>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="mt-3">
+                <label class="form-label">Sale with outstanding balance <span class="req">*</span></label>
+                <select class="form-select @(showErrors && string.IsNullOrEmpty(newSaleNo) ? "is-invalid" : "")" @bind="newSaleNo">
+                    <option value="">Select...</option>
+                    @foreach (var s in OpenSales)
+                    {
+                        <option value="@s.No">@s.No · @s.Customer · @Peso(Balance(s)) balance</option>
+                    }
+                </select>
+                @if (showErrors && string.IsNullOrEmpty(newSaleNo))
+                {
+                    <div class="err">Please select a sale.</div>
+                }
+                @if (OpenSales.Count == 0)
+                {
+                    <div class="hint">No sales with an outstanding balance.</div>
+                }
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="ContinueNew" disabled="@(OpenSales.Count == 0)">Continue</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ======================= MODAL: COLLECT PAYMENT ======================= -->
+@if (modal == "collect" && collectSale != null)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="modal-heading mb-1">Collect payment · @collectSale.No</h5>
+                    <div class="modal-sub">Outstanding balance @Peso(Balance(collectSale)) for @collectSale.Customer. Partial payments keep the remaining balance outstanding.</div>
+                </div>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <label class="form-label">Amount received (₱) <span class="req">*</span></label>
+                    <input type="number" min="0" step="0.01" class="form-control @(showErrors && AmountError != null ? "is-invalid" : "")" @bind="amountInput" />
+                    @if (showErrors && AmountError != null)
+                    {
+                        <div class="err">@AmountError</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Payment method</label>
+                    <select class="form-select" @bind="method">
+                        @foreach (var m in MethodOptions)
+                        {
+                            <option value="@m">@m</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Payment date</label>
+                    <input type="date" class="form-control" @bind="payDate" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Reference number</label>
+                    <input class="form-control" @bind="reference" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Received by</label>
+                    <input class="form-control" @bind="receivedBy" />
+                </div>
+            </div>
+
+            @if (amountInput.HasValue && amountInput.Value > 0 && amountInput.Value < Balance(collectSale))
+            {
+                <div class="hint mt-3"><i class="bi bi-info-circle"></i> Partial payment. The remaining balance will be <strong>@Peso(Balance(collectSale) - amountInput.Value)</strong>.</div>
+            }
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="PostPayment">Post payment</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ======================= MODAL: VOID PAYMENT ======================= -->
+@if (modal == "void" && voidPay != null)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="modal-heading mb-1">Void this payment?</h5>
+                    <div class="modal-sub">Voiding keeps the record for audit but removes it from collection totals.</div>
+                </div>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="mt-3">
+                <label class="form-label">Reason for voiding</label>
+                <textarea class="form-control" rows="3" @bind="voidReason"></textarea>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="ConfirmVoid">Void payment</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class SaleRec
+    {
+        public string No { get; set; } = "";
+        public DateTime Date { get; set; }
+        public string Customer { get; set; } = "";
+        public decimal Total { get; set; }
+    }
+
+    class PayRec
+    {
+        public int Id { get; set; }
+        public string SaleNo { get; set; } = "";
+        public DateTime Date { get; set; }
+        public string Method { get; set; } = "cash";   // cash | gcash | bank | check
+        public string Reference { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string ReceivedBy { get; set; } = "";
+        public bool Voided { get; set; }
+        public string VoidReason { get; set; } = "";
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record DayRow(DateTime Date, int Count, decimal Cash, decimal Digital, decimal Total);
+    record MethodAmt(string Method, decimal Amount);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    static readonly string[] MethodOptions = { "cash", "gcash", "bank", "check" };
+    static readonly string[] SliceOrder = { "cash", "gcash", "bank", "check" };    // clockwise sa donut
+    static readonly string[] LegendOrder = { "cash", "bank", "gcash", "check" };   // order sa legend
+    const double Radius = 70;
+    static readonly double Circ = 2 * Math.PI * Radius;
+
+    // TODO: kuhaa gikan sa naka-login nga tenant / branch
+    const string ActiveBranch = "North Field Branch";
+
+    // ---------- STATE ----------
+    string activeTab = "history";
+    string searchText = "";
+    string toast = "";
+    string? modal;                 // new | collect | void
+    bool showErrors;
+
+    string newSaleNo = "";
+    SaleRec? collectSale;
+    decimal? amountInput;
+    string method = "cash";
+    DateTime payDate = DateTime.Today;
+    string reference = "";
+    string receivedBy = "";
+
+    PayRec? voidPay;
+    string voidReason = "";
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // 14 ka sales: total 123,280 · collected 92,120 · outstanding 31,160
+    readonly List<SaleRec> sales = new()
+    {
+        new() { No = "SO-0014", Date = new(2026, 10, 24), Customer = "Municipal Market Vendors",    Total = 4400 },
+        new() { No = "SO-0013", Date = new(2026, 10, 23), Customer = "Walk-in customers",           Total = 2600 },
+        new() { No = "SO-0012", Date = new(2026, 10, 21), Customer = "Barangay Nutrition Program",  Total = 10580 },
+        new() { No = "SO-0011", Date = new(2026, 10, 18), Customer = "Bayanihan Trading",           Total = 11100 },
+        new() { No = "SO-0010", Date = new(2026, 10, 12), Customer = "Rural Bank Cooperative Store", Total = 13860 },
+        new() { No = "SO-0009", Date = new(2026, 10, 6),  Customer = "Verdant Fresh Retail",        Total = 9880 },
+        new() { No = "SO-0008", Date = new(2026, 9, 27),  Customer = "Municipal Market Vendors",    Total = 7560 },
+        new() { No = "SO-0007", Date = new(2026, 9, 14),  Customer = "Walk-in customers",           Total = 4680 },
+        new() { No = "SO-0006", Date = new(2026, 9, 2),   Customer = "Bayanihan Trading",           Total = 12900 },
+        new() { No = "SO-0005", Date = new(2026, 8, 21),  Customer = "Barangay Nutrition Program",  Total = 7920 },
+        new() { No = "SO-0004", Date = new(2026, 8, 5),   Customer = "Rural Bank Cooperative Store", Total = 15000 },
+        new() { No = "SO-0003", Date = new(2026, 7, 19),  Customer = "Verdant Fresh Retail",        Total = 5700 },
+        new() { No = "SO-0002", Date = new(2026, 7, 8),   Customer = "Walk-in customers",           Total = 8840 },
+        new() { No = "SO-0001", Date = new(2026, 6, 24),  Customer = "Bayanihan Trading",           Total = 8260 },
+    };
+
+    // 14 ka payment records: cash 38,100 · bank 24,020 · gcash 30,000
+    readonly List<PayRec> payments = new()
+    {
+        new() { Id = 1,  SaleNo = "SO-0014", Date = new(2026, 10, 24), Method = "cash",  Reference = "",         Amount = 4400,  ReceivedBy = "Noel Bautista" },
+        new() { Id = 2,  SaleNo = "SO-0013", Date = new(2026, 10, 23), Method = "cash",  Reference = "",         Amount = 2600,  ReceivedBy = "Paolo Gutierrez" },
+        new() { Id = 3,  SaleNo = "SO-0012", Date = new(2026, 10, 21), Method = "cash",  Reference = "",         Amount = 10580, ReceivedBy = "Jhoanna Reyes" },
+        new() { Id = 4,  SaleNo = "SO-0011", Date = new(2026, 10, 18), Method = "bank",  Reference = "BP-9910",  Amount = 11100, ReceivedBy = "Paolo Gutierrez" },
+        new() { Id = 5,  SaleNo = "SO-0010", Date = new(2026, 10, 16), Method = "gcash", Reference = "GC-99120", Amount = 2860,  ReceivedBy = "Jhoanna Reyes" },
+        new() { Id = 6,  SaleNo = "SO-0010", Date = new(2026, 10, 12), Method = "cash",  Reference = "",         Amount = 4000,  ReceivedBy = "Noel Bautista" },
+        new() { Id = 7,  SaleNo = "SO-0009", Date = new(2026, 10, 6),  Method = "gcash", Reference = "GC-98410", Amount = 9880,  ReceivedBy = "Paolo Gutierrez" },
+        new() { Id = 8,  SaleNo = "SO-0007", Date = new(2026, 9, 14),  Method = "cash",  Reference = "",         Amount = 4680,  ReceivedBy = "Jhoanna Reyes" },
+        new() { Id = 9,  SaleNo = "SO-0006", Date = new(2026, 9, 2),   Method = "bank",  Reference = "BP-9741",  Amount = 5000,  ReceivedBy = "Noel Bautista" },
+        new() { Id = 10, SaleNo = "SO-0005", Date = new(2026, 8, 21),  Method = "bank",  Reference = "BP-9602",  Amount = 7920,  ReceivedBy = "Paolo Gutierrez" },
+        new() { Id = 11, SaleNo = "SO-0004", Date = new(2026, 8, 5),   Method = "gcash", Reference = "GC-97530", Amount = 9000,  ReceivedBy = "Jhoanna Reyes" },
+        new() { Id = 12, SaleNo = "SO-0003", Date = new(2026, 7, 19),  Method = "cash",  Reference = "",         Amount = 3000,  ReceivedBy = "Noel Bautista" },
+        new() { Id = 13, SaleNo = "SO-0002", Date = new(2026, 7, 8),   Method = "cash",  Reference = "",         Amount = 8840,  ReceivedBy = "Paolo Gutierrez" },
+        new() { Id = 14, SaleNo = "SO-0001", Date = new(2026, 6, 24),  Method = "gcash", Reference = "GC-96105", Amount = 8260,  ReceivedBy = "Jhoanna Reyes" },
+    };
+
+    // ---------- COMPUTED ----------
+    // Ang paid ug balance kay computed gikan sa payments nga wala pa na-void
+    decimal Paid(SaleRec s) => payments.Where(p => p.SaleNo == s.No && !p.Voided).Sum(p => p.Amount);
+    decimal Balance(SaleRec s) => Math.Max(0, s.Total - Paid(s));
+    string SaleStatus(SaleRec s) => Balance(s) <= 0 ? "paid" : Paid(s) > 0 ? "partial" : "unpaid";
+    string CustomerOf(string saleNo) => sales.FirstOrDefault(s => s.No == saleNo)?.Customer ?? "";
+
+    List<SaleRec> OpenSales => sales.Where(s => Balance(s) > 0).OrderByDescending(s => s.Date).ThenByDescending(s => s.No).ToList();
+
+    List<PayRec> FilteredPayments => payments
+        .Where(p => string.IsNullOrWhiteSpace(searchText)
+            || p.SaleNo.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || CustomerOf(p.SaleNo).Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || p.Method.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || p.Reference.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || p.ReceivedBy.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(p => p.Date).ThenByDescending(p => p.Id)
+        .ToList();
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var t = DateTime.Today;
+            var live = payments.Where(p => !p.Voided).ToList();
+            var today = live.Where(p => p.Date.Date == t).ToList();
+            var month = live.Where(p => p.Date.Year == t.Year && p.Date.Month == t.Month).ToList();
+            var open = OpenSales;
+
+            return new()
+            {
+                new("COLLECTED TODAY", Peso(today.Sum(p => p.Amount)), today.Count + (today.Count == 1 ? " payment" : " payments"), "bi-cash", ""),
+                new("COLLECTED THIS MONTH", Peso(month.Sum(p => p.Amount)), month.Count + (month.Count == 1 ? " payment" : " payments"), "bi-calendar-check", "stat-icon-plain"),
+                new("OUTSTANDING BALANCE", Peso(open.Sum(Balance)), open.Count + " sales with balance", "bi-wallet2", "stat-icon-warn"),
+                new("PAYMENT RECORDS", payments.Count.ToString(), payments.Count(p => p.Voided) + " voided", "bi-receipt", "stat-icon-gray"),
+            };
+        }
+    }
+
+    List<DayRow> Daily => payments
+        .Where(p => !p.Voided)
+        .GroupBy(p => p.Date.Date)
+        .OrderByDescending(g => g.Key)
+        .Select(g => new DayRow(
+            g.Key,
+            g.Count(),
+            g.Where(p => p.Method == "cash").Sum(p => p.Amount),
+            g.Where(p => p.Method != "cash").Sum(p => p.Amount),
+            g.Sum(p => p.Amount)))
+        .ToList();
+
+    decimal MethodTotal(string m) => payments.Where(p => !p.Voided && p.Method == m).Sum(p => p.Amount);
+
+    List<MethodAmt> Slices => SliceOrder.Select(m => new MethodAmt(m, MethodTotal(m))).Where(x => x.Amount > 0).ToList();
+    List<MethodAmt> LegendSlices => LegendOrder.Select(m => new MethodAmt(m, MethodTotal(m))).Where(x => x.Amount > 0).ToList();
+    decimal SliceTotal => Math.Max(1, Slices.Sum(x => x.Amount));
+
+    string? AmountError
+    {
+        get
+        {
+            if (!amountInput.HasValue || amountInput.Value <= 0) return "Enter an amount greater than zero.";
+            if (collectSale != null && amountInput.Value > Balance(collectSale))
+                return "Amount can’t be more than the balance of " + Peso(Balance(collectSale)) + ".";
+            return null;
+        }
+    }
+
+    // ---------- HELPERS ----------
+    static string F(double d) => d.ToString("0.##", Inv);
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    // 38100 -> ₱38.1K, 24020 -> ₱24K
+    static string Short(decimal v) => v >= 1000 ? "₱" + (v / 1000).ToString("0.#", Inv) + "K" : "₱" + v.ToString("0", Inv);
+
+    static string MethodColor(string m) => m switch
+    {
+        "cash" => "#206A3B",
+        "bank" => "#62A834",
+        "gcash" => "#92D050",
+        _ => "#B7DB7E"
+    };
+
+    // ---------- ACTIONS ----------
+    void SetTab(string key) => activeTab = key;
+
+    void CloseModal()
+    {
+        modal = null;
+        collectSale = null;
+        voidPay = null;
+    }
+
+    // New collection -> pili og sale -> Continue
+    void OpenNewCollection()
+    {
+        newSaleNo = "";
+        showErrors = false;
+        modal = "new";
+    }
+
+    void ContinueNew()
+    {
+        showErrors = true;
+        var sale = sales.FirstOrDefault(s => s.No == newSaleNo);
+        if (sale == null) return;
+        OpenCollect(sale);
+    }
+
+    // Collect (gikan sa Partial & unpaid, o sa Continue)
+    void OpenCollect(SaleRec s)
+    {
+        collectSale = s;
+        amountInput = Balance(s);          // default: bayran ang tibuok balance
+        method = "cash";
+        payDate = DateTime.Today;
+        reference = "";
+        receivedBy = Auth.CurrentUserName ?? "";
+        showErrors = false;
+        modal = "collect";
+    }
+
+    async Task PostPayment()
+    {
+        showErrors = true;
+        if (collectSale == null || AmountError != null) return;
+
+        var amount = amountInput!.Value;
+        var sale = collectSale;
+
+        payments.Add(new PayRec
+        {
+            Id = payments.Count == 0 ? 1 : payments.Max(p => p.Id) + 1,
+            SaleNo = sale.No,
+            Date = payDate,
+            Method = method,
+            Reference = reference?.Trim() ?? "",
+            Amount = amount,
+            ReceivedBy = string.IsNullOrWhiteSpace(receivedBy) ? (Auth.CurrentUserName ?? "") : receivedBy.Trim()
+        });
+
+        // TODO: i-save sa database, i-update ang Sales Transactions / Customer balance,
+        // i-log sa Cash Drawer (kung cash), ug i-log sa Audit Logs
+        var left = Balance(sale);
+        CloseModal();
+        await ShowToast("Payment of " + Peso(amount) + " posted for " + sale.No + (left > 0 ? ". Balance: " + Peso(left) + "." : ". Fully paid."));
+    }
+
+    // Void
+    void OpenVoid(PayRec p)
+    {
+        voidPay = p;
+        voidReason = "";
+        modal = "void";
+    }
+
+    async Task ConfirmVoid()
+    {
+        if (voidPay == null) return;
+
+        var p = voidPay;
+        p.Voided = true;
+        p.VoidReason = voidReason?.Trim() ?? "";
+
+        // TODO: i-reverse ang Cash Drawer entry, i-update ang Sales Transactions / Customer balance,
+        // ug i-log sa Audit Logs (Void · Payments & Collections) uban ang reason
+        CloseModal();
+        await ShowToast("Payment for " + p.SaleNo + " was voided. It no longer counts in collections.");
+    }
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3500);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

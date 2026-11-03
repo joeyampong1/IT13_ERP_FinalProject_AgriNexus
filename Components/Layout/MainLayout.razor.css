@@ -132,3 +132,44 @@ main {
     background: var(--border-color);
     margin: 4px 0;
 }
+/* ===== SYNC STATUS PILL ===== */
+.sync-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 1px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.sync-synced {
+    background-color: #dcfce7; /* Light Green */
+    color: #166534;
+    border-color: #bbf7d0;
+}
+
+.sync-syncing {
+    background-color: #fef9c3; /* Light Yellow */
+    color: #854d0e;
+    border-color: #fef08a;
+}
+
+.sync-offline {
+    background-color: #fee2e2; /* Light Red */
+    color: #991b1b;
+    border-color: #fecaca;
+}
+
+/* Spin animation para sa Syncing icon */
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    100% {
+        transform: rotate(360deg);
+    }
+}

@@ -1,0 +1,507 @@
+﻿@page "/cash-drawer"
+@using System.Globalization
+@inject AgriNexus.Services.AuthService Auth
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Cash Session / Cash Drawer</h2>
+        <p class="text-muted mb-0 page-sub">@ActiveBranch · open the drawer, track cash movements, and close with a counted balance.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        @if (isOpen)
+        {
+            <button type="button" class="btn-outline-lg" @onclick='() => OpenMove("in")'>
+                <i class="bi bi-arrow-down-circle"></i> Cash in
+            </button>
+            <button type="button" class="btn-outline-lg" @onclick='() => OpenMove("out")'>
+                <i class="bi bi-arrow-up-circle"></i> Cash out
+            </button>
+            <button type="button" class="btn-solid" @onclick="OpenClose">
+                <i class="bi bi-lock"></i> Close session
+            </button>
+        }
+        else
+        {
+            <button type="button" class="btn-solid" @onclick="OpenSessionModal">
+                <i class="bi bi-unlock"></i> Open session
+            </button>
+        }
+    </div>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    <div class="text-muted small mt-1">@s.Note</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- CURRENT SESSION SUMMARY -->
+<div class="card-box mb-4">
+    <div class="panel-title">Current session summary</div>
+    <div class="panel-sub">Expected drawer balance is computed from opening float, cash received and cash paid out.</div>
+
+    <div class="row g-3">
+        <div class="col-12 col-md-4">
+            <div class="mini-stat">
+                <div class="mini-label">Collections recorded</div>
+                <div class="mini-value">@Peso(isOpen ? Received : 0)</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="mini-stat">
+                <div class="mini-label">Expected cash in drawer</div>
+                <div class="mini-value">@Peso(isOpen ? Expected : 0)</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="mini-stat">
+                <div class="mini-label">Movements logged</div>
+                <div class="mini-value">@(isOpen ? movements.Count : 0)</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- CASH MOVEMENTS -->
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-head">
+                <div class="panel-title">Cash movements</div>
+                <div class="panel-sub mb-0">Movements on the open session</div>
+            </div>
+
+            @if (!isOpen || movements.Count == 0)
+            {
+                <div class="empty-state">
+                    <div class="empty-icon"><i class="bi bi-inbox"></i></div>
+                    <div class="fw-semibold mt-3">@(isOpen ? "No cash movements recorded" : "The drawer is closed")</div>
+                    @if (!isOpen)
+                    {
+                        <div class="text-muted small mt-1">Open a session to start recording cash movements.</div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="table data-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Type</th>
+                                <th>Reason</th>
+                                <th>Amount</th>
+                                <th>By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var m in movements.OrderByDescending(x => x.When))
+                            {
+                                <tr>
+                                    <td class="text-nowrap">@m.When.ToString("h:mm tt", Inv)</td>
+                                    <td><span class="pill @(m.Type == "in" ? "pill-green" : "pill-yellow")">@(m.Type == "in" ? "Cash in" : "Cash out")</span></td>
+                                    <td class="col-reason">@m.Reason</td>
+                                    <td class="fw-medium text-nowrap @(m.Type == "in" ? "qty-in" : "qty-out")">@(m.Type == "in" ? "+ " : "− ")@Peso(m.Amount)</td>
+                                    <td class="text-nowrap">@m.By</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- SESSION HISTORY -->
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-head">
+                <div class="panel-title">Session history</div>
+                <div class="panel-sub mb-0">Closed drawers with counted cash and variance</div>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Cashier</th>
+                            <th class="text-end">Expected</th>
+                            <th class="text-end">Counted</th>
+                            <th class="text-end">Variance</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var h in SortedHistory)
+                        {
+                            var v = h.Counted - h.Expected;
+                            <tr>
+                                <td>@h.Date.ToString("MMM d, yy", Inv)</td>
+                                <td class="fw-medium text-dark">@h.Cashier</td>
+                                <td class="text-end text-muted">@Peso(h.Expected)</td>
+                                <td class="text-end fw-bold text-dark">@Peso(h.Counted)</td>
+                                <td class="text-end fw-bold @VarTextClass(v)">@PesoSigned(v)</td>
+                                <td><span class="pill @VarPill(v)">@VarLabel(v)</span></td>
+                            </tr>
+                        }
+                        @if (SortedHistory.Count == 0)
+                        {
+                            <tr><td colspan="6" class="text-center text-muted py-5">No closed sessions yet.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ======================= MODAL: CASH IN / CASH OUT ======================= -->
+@if (modal == "in" || modal == "out")
+{
+    var isIn = modal == "in";
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="modal-heading mb-1">@(isIn ? "Record cash in" : "Record cash out")</h5>
+                    <div class="modal-sub">@(isIn ? "Cash added to the drawer (additional collection, change fund)." : "Cash released from the drawer for an expense or payout.")</div>
+                </div>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <label class="form-label">Amount (₱) <span class="req">*</span></label>
+                    <input type="number" min="0" step="0.01" autofocus class="form-control @(showErrors && AmountError != null ? "is-invalid" : "")" @bind="amountInput" />
+                    @if (showErrors && AmountError != null)
+                    {
+                        <div class="err">@AmountError</div>
+                    }
+                    @if (!isIn)
+                    {
+                        <div class="hint-text">Available in drawer: @Peso(Expected)</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Reason <span class="req">*</span></label>
+                    <input class="form-control @(showErrors && ReasonMissing ? "is-invalid" : "")" @bind="reasonInput" />
+                    @if (showErrors && ReasonMissing)
+                    {
+                        <div class="err">Reason is required.</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Performed by</label>
+                    <input class="form-control" @bind="byInput" />
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="SaveMove">Record movement</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ======================= MODAL: CLOSE SESSION ======================= -->
+@if (modal == "close")
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="modal-heading mb-1">Close cash session</h5>
+                    <div class="modal-sub">Expected cash in drawer: @Peso(Expected)</div>
+                </div>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="mt-3">
+                <label class="form-label">Counted cash (₱) <span class="req">*</span></label>
+                <input type="number" min="0" step="0.01" autofocus class="form-control @(showErrors && CountedInvalid ? "is-invalid" : "")" @bind="countedInput" @bind:event="oninput" />
+                @if (showErrors && CountedInvalid)
+                {
+                    <div class="err">Enter the counted cash (zero or more).</div>
+                }
+            </div>
+
+            @if (!CountedInvalid && countedInput != Expected)
+            {
+                var v = countedInput!.Value - Expected;
+                <div class="variance-box @(v < 0 ? "short" : "over")">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Variance: <strong>@PesoSigned(v)</strong> (@(v < 0 ? "short" : "over")). The difference will be recorded in the session history.
+                </div>
+            }
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="CloseSession">Close session</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ======================= MODAL: OPEN SESSION ======================= -->
+@if (modal == "open")
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="modal-heading mb-1">Open cash session</h5>
+                    <div class="modal-sub">Enter the starting float placed in the drawer.</div>
+                </div>
+                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <label class="form-label">Opening cash (₱) <span class="req">*</span></label>
+                    <input type="number" min="0" step="0.01" autofocus class="form-control @(showErrors && OpeningInvalid ? "is-invalid" : "")" @bind="openingInput" />
+                    @if (showErrors && OpeningInvalid)
+                    {
+                        <div class="err">Enter the opening cash (zero or more).</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Cashier</label>
+                    <input class="form-control" @bind="byInput" />
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
+                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn-save" @onclick="StartSession">Open session</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+}
+
+@code {
+    // ---------- MODELS ----------
+    class Movement
+    {
+        public int Id { get; set; }
+        public DateTime When { get; set; }
+        public string Type { get; set; } = "in";   // in | out
+        public decimal Amount { get; set; }
+        public string Reason { get; set; } = "";
+        public string By { get; set; } = "";
+    }
+
+    class SessionRec
+    {
+        public int Id { get; set; }
+        public DateTime Date { get; set; }
+        public string Cashier { get; set; } = "";
+        public decimal Expected { get; set; }
+        public decimal Counted { get; set; }
+    }
+
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    // TODO: kuhaa gikan sa naka-login nga tenant / branch
+    const string ActiveBranch = "North Field Branch";
+
+    // ---------- STATE ----------
+    bool isOpen = true;
+    string? modal;                  // in | out | close | open
+    bool showErrors;
+    string toast = "";
+
+    decimal? amountInput;
+    string reasonInput = "";
+    string byInput = "";
+    decimal? countedInput;
+    decimal? openingInput;
+
+    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // Karon nga session (gikan sa prototype)
+    DateTime sessionDate = new(2026, 10, 24);
+    string cashier = "Paolo Gutierrez";
+    decimal opening = 2000;
+
+    // Kini kay gikan sa ubang modules (Payments & Collections / Expenses), constants pa karon:
+    decimal collections = 7000;      // cash payments nga na-collect sulod sa session
+    decimal expensesPaid = 500;      // expenses nga gibayran gikan sa drawer
+
+    readonly List<Movement> movements = new();
+
+    readonly List<SessionRec> history = new()
+    {
+        new() { Id = 1, Date = new(2026, 10, 23), Cashier = "Paolo Gutierrez", Expected = 4600,  Counted = 4600 },
+        new() { Id = 2, Date = new(2026, 10, 21), Cashier = "Jhoanna Reyes",   Expected = 11280, Counted = 11130 },
+        new() { Id = 3, Date = new(2026, 10, 16), Cashier = "Jhoanna Reyes",   Expected = 4360,  Counted = 4360 },
+        new() { Id = 4, Date = new(2026, 10, 12), Cashier = "Noel Bautista",   Expected = 6000,  Counted = 6000 },
+    };
+
+    // ---------- COMPUTED ----------
+    // Expected cash in drawer = opening float + cash received − cash paid out
+    decimal Received => collections + movements.Where(m => m.Type == "in").Sum(m => m.Amount);
+    decimal PaidOut => expensesPaid + movements.Where(m => m.Type == "out").Sum(m => m.Amount);
+    decimal Expected => opening + Received - PaidOut;
+
+    List<SessionRec> SortedHistory => history.OrderByDescending(h => h.Date).ThenByDescending(h => h.Id).ToList();
+
+    List<Stat> Stats => new()
+    {
+        new("DRAWER STATUS", isOpen ? "Open" : "Closed",
+            isOpen ? "Opened for " + sessionDate.ToString("MMM d, yyyy", Inv) + " · " + cashier : "No open session",
+            "bi-wallet2", ""),
+        new("OPENING CASH", Peso(isOpen ? opening : 0), "Float at start of session", "bi-arrow-down-circle", ""),
+        new("CASH RECEIVED", Peso(isOpen ? Received : 0), "Sales and cash-in movements", "bi-arrow-down-circle", "stat-icon-plain"),
+        new("CASH PAID OUT", Peso(isOpen ? PaidOut : 0), "Expenses and withdrawals", "bi-arrow-up-circle", "stat-icon-plain"),
+    };
+
+    string? AmountError
+    {
+        get
+        {
+            if (!amountInput.HasValue || amountInput.Value <= 0) return "Enter an amount greater than zero.";
+            if (modal == "out" && amountInput.Value > Expected)
+                return "Only " + Peso(Expected) + " is available in the drawer.";
+            return null;
+        }
+    }
+
+    bool ReasonMissing => string.IsNullOrWhiteSpace(reasonInput);
+    bool CountedInvalid => !countedInput.HasValue || countedInput.Value < 0;
+    bool OpeningInvalid => !openingInput.HasValue || openingInput.Value < 0;
+
+    // ---------- HELPERS ----------
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+
+    static string PesoSigned(decimal v) =>
+        v < 0 ? "−₱" + (-v).ToString("N2", Inv) : v > 0 ? "+₱" + v.ToString("N2", Inv) : "₱0.00";
+
+    static string VarLabel(decimal v) => v == 0 ? "Balanced" : v < 0 ? "Short" : "Over";
+    static string VarPill(decimal v) => v == 0 ? "pill-green" : v < 0 ? "pill-red" : "pill-yellow";
+    static string VarTextClass(decimal v) => v < 0 ? "neg" : v > 0 ? "warn" : "";
+
+    // ---------- ACTIONS ----------
+    void CloseModal() => modal = null;
+
+    // Cash in / Cash out
+    void OpenMove(string type)
+    {
+        modal = type;
+        amountInput = null;
+        reasonInput = "";
+        byInput = Auth.CurrentUserName ?? "";
+        showErrors = false;
+    }
+
+    async Task SaveMove()
+    {
+        showErrors = true;
+        if (AmountError != null || ReasonMissing) return;
+
+        var type = modal == "in" ? "in" : "out";
+        var amount = amountInput!.Value;
+
+        movements.Add(new Movement
+        {
+            Id = movements.Count == 0 ? 1 : movements.Max(m => m.Id) + 1,
+            When = DateTime.Now,
+            Type = type,
+            Amount = amount,
+            Reason = reasonInput.Trim(),
+            By = string.IsNullOrWhiteSpace(byInput) ? (Auth.CurrentUserName ?? "") : byInput.Trim()
+        });
+
+        // TODO: i-save sa database ug i-log sa Audit Logs (Cash in / Cash out · Cash Drawer)
+        modal = null;
+        await ShowToast((type == "in" ? "Cash in of " : "Cash out of ") + Peso(amount) + " recorded.");
+    }
+
+    // Close session
+    void OpenClose()
+    {
+        modal = "close";
+        countedInput = Expected;   // default: parehas sa expected
+        showErrors = false;
+    }
+
+    async Task CloseSession()
+    {
+        showErrors = true;
+        if (CountedInvalid) return;
+
+        var expected = Expected;
+        var counted = countedInput!.Value;
+
+        history.Add(new SessionRec
+        {
+            Id = history.Count == 0 ? 1 : history.Max(h => h.Id) + 1,
+            Date = sessionDate,
+            Cashier = cashier,
+            Expected = expected,
+            Counted = counted
+        });
+
+        // TODO: i-save sa database ug i-log sa Audit Logs (Close session · Cash Drawer)
+        var v = counted - expected;
+        isOpen = false;
+        modal = null;
+        await ShowToast("Session closed. Counted " + Peso(counted) + (v == 0 ? " · balanced." : " · " + VarLabel(v).ToLower() + " by " + Peso(Math.Abs(v)) + "."));
+    }
+
+    // Open session (human ma-close ang miaging session)
+    void OpenSessionModal()
+    {
+        modal = "open";
+        openingInput = 2000;
+        byInput = Auth.CurrentUserName ?? "";
+        showErrors = false;
+    }
+
+    async Task StartSession()
+    {
+        showErrors = true;
+        if (OpeningInvalid) return;
+
+        isOpen = true;
+        sessionDate = DateTime.Today;
+        cashier = string.IsNullOrWhiteSpace(byInput) ? (Auth.CurrentUserName ?? "") : byInput.Trim();
+        opening = openingInput!.Value;
+        collections = 0;       // TODO: i-compute gikan sa cash payments sa bag-ong session
+        expensesPaid = 0;      // TODO: i-compute gikan sa cash expenses sa bag-ong session
+        movements.Clear();
+
+        modal = null;
+        await ShowToast("Cash session opened with a float of " + Peso(opening) + ".");
+    }
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3500);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+}

@@ -1,0 +1,559 @@
+﻿@page "/finance-analytics"
+@using System.Globalization
+@using System.Text
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Financial Analytics</h2>
+        <p class="text-muted mb-0 page-sub">In-depth analysis of revenue, costs, taxes, and bottom-line profitability.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 bg-white border shadow-sm rounded-3 px-3 py-1" style="border-color: var(--border-color) !important;">
+        <i class="bi bi-calendar3 text-success"></i>
+        <select class="filter-select border-0 shadow-none bg-transparent fw-bold p-0 pe-4" style="min-width: 140px; font-size: 0.9rem; cursor: pointer;">
+            <option>This Month</option>
+            <option>Last 30 Days</option>
+            <option>This Quarter</option>
+            <option>Year to Date</option>
+        </select>
+    </div>
+</div>
+
+<!-- REPORT GENERATOR PANEL -->
+<div class="card-box mb-4" style="background: linear-gradient(to right, #ffffff, #f8fafc); border-left: 4px solid var(--primary-green);">
+    <div class="panel-title mb-3"><i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>Generate Financial Statement</div>
+    <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label fw-semibold text-muted" style="font-size: 0.8rem;">Start Date</label>
+            <input type="date" class="form-control" @bind="startDate" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-semibold text-muted" style="font-size: 0.8rem;">End Date</label>
+            <input type="date" class="form-control" @bind="endDate" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-semibold text-muted" style="font-size: 0.8rem;">Report Type</label>
+            <select class="form-select">
+                <option>Profit & Loss (Income Statement)</option>
+                <option>Tax Summary Report</option>
+                <option>Balance Sheet</option>
+                <option>Cash Flow Statement</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-semibold text-muted" style="font-size: 0.8rem;">Format</label>
+            <div class="d-flex gap-2">
+                <select class="form-select" style="width: 100px;">
+                    <option>PDF</option>
+                    <option>Excel</option>
+                </select>
+                <button class="btn btn-primary fw-bold flex-grow-1" @onclick="GenerateReport">
+                    <i class="bi bi-download me-1"></i> Generate
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MAIN KPI CARDS -->
+<div class="row g-3 mb-3">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="stat-card h-100">
+            <span class="card-title">GROSS REVENUE</span>
+            <div class="card-value mt-2">₱485,400.00</div>
+            <div class="text-muted small mt-1 text-success fw-bold"><i class="bi bi-arrow-up-right"></i> +12.5%</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="stat-card h-100">
+            <span class="card-title">COGS (Cost of Goods)</span>
+            <div class="card-value mt-2 text-danger">-₱150,000.00</div>
+            <div class="text-muted small mt-1">Direct costs</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="stat-card h-100">
+            <span class="card-title">OPERATING EXPENSES</span>
+            <div class="card-value mt-2 text-danger">-₱94,652.00</div>
+            <div class="text-muted small mt-1">Admin & Utilities</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="stat-card h-100">
+            <span class="card-title">NET INCOME</span>
+            <div class="card-value mt-2 text-success fw-bolder">₱182,500.00</div>
+            <div class="text-muted small mt-1">Bottom line</div>
+        </div>
+    </div>
+</div>
+
+<!-- MINI KPI BAR -->
+<div class="row g-2 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card-box py-2 px-3 d-flex justify-content-between align-items-center" style="border-radius: 12px;">
+            <span class="text-muted small fw-bold">Gross Margin</span>
+            <span class="fw-bold text-success">69.1%</span>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card-box py-2 px-3 d-flex justify-content-between align-items-center" style="border-radius: 12px;">
+            <span class="text-muted small fw-bold">Tax Liability</span>
+            <span class="fw-bold text-danger">₱58,248</span>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card-box py-2 px-3 d-flex justify-content-between align-items-center" style="border-radius: 12px;">
+            <span class="text-muted small fw-bold">AR Turnover</span>
+            <span class="fw-bold text-dark">15 Days</span>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card-box py-2 px-3 d-flex justify-content-between align-items-center" style="border-radius: 12px;">
+            <span class="text-muted small fw-bold">Current Ratio</span>
+            <span class="fw-bold text-dark">2.4</span>
+        </div>
+    </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs mb-4">
+    <button type="button" class="tab-btn @(activeTab == "revenue" ? "active" : "")" @onclick='() => activeTab = "revenue"'>Revenue &amp; profit</button>
+    <button type="button" class="tab-btn @(activeTab == "profit" ? "active" : "")" @onclick='() => activeTab = "profit"'>Profit estimation</button>
+    <button type="button" class="tab-btn @(activeTab == "collections" ? "active" : "")" @onclick='() => activeTab = "collections"'>Collections report</button>
+</div>
+
+<!-- ======================= REVENUE & PROFIT TAB ======================= -->
+@if (activeTab == "revenue")
+{
+    <div class="row g-4 mb-4">
+        <!-- Cash Flow Trend -->
+        <div class="col-12 col-lg-7">
+            <div class="stat-card h-100">
+                <div class="panel-title">Cash Flow Trend</div>
+                <div class="panel-sub">Inflow vs Outflow</div>
+                <svg viewBox="0 0 600 280" class="w-100 mt-3" style="max-height: 280px;">
+                    @for (int i = 0; i <= 4; i++)
+                    {
+                        var y = 20 + i * 60;
+                        <g>
+                            <line x1="50" x2="580" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="4 4" />
+                            <text x="40" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@(500 - (i * 125))k</text>
+                        </g>
+                    }
+                    <polyline points="50,220 150,180 250,150 350,160 450,110 580,80" fill="none" stroke="#1B5E34" stroke-width="4" stroke-linecap="round" />
+                    <polyline points="50,250 150,220 250,190 350,195 450,160 580,130" fill="none" stroke="#DC2626" stroke-width="3" stroke-dasharray="6 4" stroke-linecap="round" />
+                    <g>
+                        <text x="50" y="270" text-anchor="middle" font-size="11" fill="#64748B">Jan</text>
+                        <text x="150" y="270" text-anchor="middle" font-size="11" fill="#64748B">Feb</text>
+                        <text x="250" y="270" text-anchor="middle" font-size="11" fill="#64748B">Mar</text>
+                        <text x="350" y="270" text-anchor="middle" font-size="11" fill="#64748B">Apr</text>
+                        <text x="450" y="270" text-anchor="middle" font-size="11" fill="#64748B">May</text>
+                        <text x="580" y="270" text-anchor="middle" font-size="11" fill="#64748B">Jun</text>
+                    </g>
+                </svg>
+                <div class="d-flex justify-content-center gap-4 mt-2 small fw-semibold">
+                    <span><span class="legend-dot" style="background:#1B5E34"></span> Cash Inflow</span>
+                    <span><span class="legend-dot" style="background:#DC2626"></span> Cash Outflow</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Expense Breakdown (Donut) -->
+        <div class="col-12 col-lg-5">
+            <div class="stat-card h-100">
+                <div class="panel-title">Expense & Tax Breakdown</div>
+                <div class="panel-sub">Where the money goes</div>
+                <div class="d-flex justify-content-center my-3 position-relative">
+                    <svg viewBox="0 0 200 200" width="170" height="170">
+                        @{
+                            double offset = 0;
+                        }
+                        @foreach (var e in ExpenseSlices)
+                        {
+                            var len = e.Amount / TotalExpense * 2 * Math.PI * 70;
+                            var dash = Math.Max(len - 4, 0.5);
+                            <circle cx="100" cy="100" r="70" fill="none" stroke="@e.Color" stroke-width="25"
+                                    stroke-dasharray="@($"{dash} {2 * Math.PI * 70 - dash}")"
+                                    stroke-dashoffset="@(-offset)"
+                                    transform="rotate(-90 100 100)" />
+                            offset += len;
+                        }
+                    </svg>
+                    <div class="position-absolute top-50 start-50 translate-middle text-center">
+                        <h4 class="fw-bold mb-0 text-dark">₱302k</h4>
+                        <span class="text-muted" style="font-size: 0.75rem;">Total Out</span>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-center gap-3 small fw-semibold flex-wrap mt-2">
+                    @foreach (var e in ExpenseSlices)
+                    {
+                        <span><span class="legend-dot" style="background:@e.Color"></span>@e.Label</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- OpEx vs Tax Bar Chart -->
+        <div class="col-12 col-lg-5">
+            <div class="stat-card h-100">
+                <div class="panel-title mb-3">Operating Exp vs Taxes</div>
+                <div class="panel-sub">Monthly comparison</div>
+                <svg viewBox="0 0 300 250" class="w-100" style="max-height: 220px;">
+                    @for (int i = 0; i < MonthlyTrend.Count; i++)
+                    {
+                        var m = MonthlyTrend[i];
+                        var opexH = (m.OpEx / 100000.0) * 150;
+                        var taxH = (m.Tax / 50000.0) * 150;
+                        var x = 30 + i * 45;
+                        <g>
+                            <rect x="@x" y="@(200 - opexH)" width="18" height="@opexH" fill="#F59E0B" rx="4" />
+                            <rect x="@(x + 20)" y="@(200 - taxH)" width="18" height="@taxH" fill="#DC2626" rx="4" />
+                            <text x="@(x + 19)" y="220" text-anchor="middle" font-size="10" fill="#64748B" font-weight="600">@m.Month</text>
+                        </g>
+                    }
+                </svg>
+                <div class="d-flex justify-content-center gap-3 mt-2 small fw-semibold">
+                    <span><span class="legend-dot" style="background:#F59E0B"></span> OpEx</span>
+                    <span><span class="legend-dot" style="background:#DC2626"></span> Tax</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profit Margins -->
+        <div class="col-12 col-lg-7">
+            <div class="stat-card h-100">
+                <div class="panel-title">Profit Margin Analysis</div>
+                <div class="panel-sub">Gross Margin vs Net Margin (%)</div>
+                <svg viewBox="0 0 500 250" class="w-100 mt-3" style="max-height: 220px;">
+                    @for (int i = 0; i < MonthlyTrend.Count; i++)
+                    {
+                        var m = MonthlyTrend[i];
+                        var grossMarginH = (65 + (i * 2)) / 100.0 * 150;
+                        var netMarginH = (30 + (i * 3)) / 100.0 * 150;
+                        var x = 40 + i * 70;
+                        <g>
+                            <rect x="@x" y="@(200 - grossMarginH)" width="25" height="@grossMarginH" fill="#62A834" rx="4" />
+                            <rect x="@(x + 30)" y="@(200 - netMarginH)" width="25" height="@netMarginH" fill="#1B5E34" rx="4" />
+                            <text x="@(x + 27)" y="220" text-anchor="middle" font-size="10" fill="#64748B" font-weight="600">@m.Month</text>
+                        </g>
+                    }
+                    @for (int i = 0; i <= 4; i++)
+                    {
+                        var y = 20 + i * 45;
+                        <g>
+                            <line x1="30" x2="480" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="4 4" />
+                            <text x="20" y="@(y + 4)" text-anchor="end" font-size="10" fill="#64748B">@((100 - i * 25))%</text>
+                        </g>
+                    }
+                </svg>
+                <div class="d-flex justify-content-center gap-4 mt-2 small fw-semibold">
+                    <span><span class="legend-dot" style="background:#62A834"></span> Gross Margin</span>
+                    <span><span class="legend-dot" style="background:#1B5E34"></span> Net Margin</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MONTHLY FINANCIAL SUMMARY TABLE -->
+    <div class="panel mb-4">
+        <div class="panel-head">
+            <div class="panel-title">Monthly financial summary</div>
+            <div class="panel-sub mb-0">Revenue, collections, cost and margin per month</div>
+        </div>
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th>Revenue</th>
+                        <th>Collections</th>
+                        <th>Expenses</th>
+                        <th>Estimated profit</th>
+                        <th>Margin</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in months)
+                    {
+                        <tr>
+                            <td>@m.Label</td>
+                            <td class="text-nowrap">@Peso(m.Revenue)</td>
+                            <td class="text-nowrap">@Peso(m.Collections)</td>
+                            <td class="text-nowrap">@Peso(m.Expenses)</td>
+                            <td class="text-nowrap @(m.Profit < 0 ? "neg" : m.Profit > 0 ? "pos" : "")">@PesoSigned(m.Profit)</td>
+                            <td>@m.Margin%</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<!-- ======================= PROFIT ESTIMATION TAB ======================= -->
+@if (activeTab == "profit")
+{
+    <div class="row g-3">
+        <div class="col-12 col-lg-6">
+            <div class="panel h-100">
+                <div class="panel-head">
+                    <div class="panel-title">Top customers by sales value</div>
+                    <div class="panel-sub mb-0">Contribution to revenue</div>
+                </div>
+                <div class="table-wrap">
+                    <table class="table data-table align-middle mb-0">
+                        <thead><tr><th>Customer</th><th>Sales value</th><th>Share</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in customers)
+                            {
+                                <tr>
+                                    <td class="col-name">@c.Name</td>
+                                    <td class="text-nowrap">@Peso(c.Value)</td>
+                                    <td>@Share(c.Value, CustomerTotal)%</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-6">
+            <div class="panel h-100">
+                <div class="panel-head">
+                    <div class="panel-title">Cost by category</div>
+                    <div class="panel-sub mb-0">Operating cost allocation</div>
+                </div>
+                <div class="table-wrap">
+                    <table class="table data-table align-middle mb-0">
+                        <thead><tr><th>Category</th><th>Amount</th><th>Share</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in costs)
+                            {
+                                <tr>
+                                    <td class="col-name">@c.Name</td>
+                                    <td class="text-nowrap">@Peso(c.Value)</td>
+                                    <td>@Share(c.Value, CostTotal)%</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ======================= COLLECTIONS REPORT TAB ======================= -->
+@if (activeTab == "collections")
+{
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-lg-4">
+            <div class="card-box h-100">
+                <div class="panel-title">Collections by method</div>
+                <div class="panel-sub">Cash, GCash, bank and check</div>
+                <div class="d-flex justify-content-center my-3">
+                    <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Collections by method">
+                        @{
+                            double offset = 0;
+                        }
+                        @foreach (var m in methods)
+                        {
+                            var len = (double)(m.Value / MethodTotal) * Circ;
+                            var dash = Math.Max(len - 2, 0.5);
+                            <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@m.Color" stroke-width="30"
+                                    stroke-dasharray="@F(dash) @F(Circ - dash)"
+                                    stroke-dashoffset="@F(-offset)"
+                                    transform="rotate(-90 100 100)" />
+                            offset += len;
+                        }
+                    </svg>
+                </div>
+                <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
+                    @foreach (var m in methods.OrderBy(x => x.Order))
+                    {
+                        <span><span class="legend-dot" style="background:@m.Color"></span>@m.Name</span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-8">
+            <div class="panel h-100">
+                <div class="panel-head">
+                    <div class="panel-title">Sales and collection report</div>
+                    <div class="panel-sub mb-0">Recorded by cashier</div>
+                </div>
+                <div class="table-wrap">
+                    <table class="table data-table align-middle mb-0">
+                        <thead><tr><th>Cashier</th><th>Collected</th><th>Payments</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in cashiers)
+                            {
+                                <tr>
+                                    <td>@c.Name</td>
+                                    <td class="text-nowrap">@Peso(c.Collected)</td>
+                                    <td>@c.Payments</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-head">
+            <div class="panel-title">Outstanding receivables</div>
+            <div class="panel-sub mb-0">Balances still to be collected, largest first</div>
+        </div>
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr><th>Sale no.</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Receivables)
+                    {
+                        <tr>
+                            <td class="text-nowrap">@r.No</td>
+                            <td class="text-nowrap">@r.Date.ToString("MMM d, yyyy", Inv)</td>
+                            <td class="col-name">@r.Customer</td>
+                            <td class="text-nowrap">@Peso(r.Total)</td>
+                            <td class="text-nowrap">@Peso(r.Paid)</td>
+                            <td class="text-nowrap neg fw-medium">@Peso(r.Balance)</td>
+                            <td><span class="pill @(r.Paid > 0 ? "pill-yellow" : "pill-red")">@(r.Paid > 0 ? "Partial" : "Unpaid")</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (showToast)
+{
+    <div class="toast-note" style="position: fixed; bottom: 2rem; right: 2rem; z-index: 1050; background: #1B5E34; color: white; padding: 1rem 1.5rem; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 10px;">
+        <i class="bi bi-check-circle-fill fs-5"></i> <span class="fw-semibold">Financial Statement generated successfully!</span>
+    </div>
+}
+
+@code {
+    // --- MODELS ---
+    record Slice(string Label, double Amount, string Color);
+    record MonthlyData(string Month, double OpEx, double Tax);
+    record MonthRow(int Year, int Month, decimal Revenue, decimal Collections, decimal Expenses)
+    {
+        public string Label => new DateTime(Year, Month, 1).ToString("MMM", CultureInfo.InvariantCulture);
+        public decimal Profit => Revenue - Expenses;
+        public int Margin => Revenue <= 0 ? 0 : (int)Math.Round(Profit * 100 / Revenue, MidpointRounding.AwayFromZero);
+    }
+    record NamedAmt(string Name, decimal Value);
+    record MethodAmt(string Name, decimal Value, string Color, int Order);
+    record CashierRow(string Name, decimal Collected, int Payments);
+    record RecvRow(string No, DateTime Date, string Customer, decimal Total, decimal Paid)
+    {
+        public decimal Balance => Total - Paid;
+    }
+
+    // --- STATE ---
+    private DateTime startDate = DateTime.Today.AddDays(-30);
+    private DateTime endDate = DateTime.Today;
+    private bool showToast = false;
+    private string activeTab = "revenue";
+    const double Radius = 70;
+    static readonly double Circ = 2 * Math.PI * Radius;
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    // --- DATA PARA SA CHARTS (Finance) ---
+    List<Slice> ExpenseSlices => new() {
+        new("COGS", 150000, "#DC2626"),
+        new("Operating Exp", 94652, "#F59E0B"),
+        new("Taxes", 58248, "#EF4444"),
+        new("Net Income", 182500, "#1B5E34")
+    };
+    double TotalExpense => ExpenseSlices.Sum(e => e.Amount);
+
+    List<MonthlyData> MonthlyTrend => new() {
+        new("Jan", 25000, 8000),
+        new("Feb", 28000, 9500),
+        new("Mar", 22000, 7500),
+        new("Apr", 35000, 12000),
+        new("May", 40000, 15000),
+        new("Jun", 32000, 10000)
+    };
+
+    // --- DATA PARA SA TABLES ---
+    readonly List<MonthRow> months = new()
+    {
+        new(2026, 6,  8800,  8800,  3300),
+        new(2026, 7,  14000, 11300, 3200),
+        new(2026, 8,  22920, 16920, 4200),
+        new(2026, 9,  25140, 9680,  6500),
+        new(2026, 10, 52420, 45420, 79510),
+        new(2026, 11, 0,     0,     0),
+    };
+
+    readonly List<NamedAmt> customers = new()
+    {
+        new("Bayanihan Trading", 32800),
+        new("Rural Bank Cooperative Store", 28860),
+        new("Municipal Market Vendors", 20260),
+        new("Barangay Nutrition Program", 18500),
+        new("Verdant Fresh Retail", 15580),
+        new("Walk-in customers", 7280),
+    };
+
+    readonly List<NamedAmt> costs = new()
+    {
+        new("Labor", 21360), new("Supplies", 44300), new("Fuel", 11700), new("Utilities", 7000),
+        new("Transport", 2800), new("Equipment", 1250), new("Maintenance", 6500), new("Other", 1800),
+    };
+
+    readonly List<MethodAmt> methods = new()
+    {
+        new("Cash", 38100, "#206A3B", 1),
+        new("Gcash", 30000, "#92D050", 3),
+        new("Bank", 24020, "#62A834", 2),
+    };
+
+    readonly List<CashierRow> cashiers = new()
+    {
+        new("Noel Bautista", 9400, 2),
+        new("Paolo Gutierrez", 47980, 7),
+        new("Jhoanna Reyes", 34740, 5),
+    };
+
+    readonly List<RecvRow> receivables = new()
+    {
+        new("SO-0006", new(2026, 9, 2),  "Bayanihan Trading",            12900, 5000),
+        new("SO-0008", new(2026, 9, 27), "Municipal Market Vendors",      7560, 0),
+        new("SO-0010", new(2026, 10, 12), "Rural Bank Cooperative Store", 13860, 6860),
+        new("SO-0004", new(2026, 8, 5),  "Rural Bank Cooperative Store", 15000, 9000),
+        new("SO-0003", new(2026, 7, 19), "Verdant Fresh Retail",          5700, 3000),
+    };
+
+    // --- COMPUTED ---
+    decimal CustomerTotal => customers.Sum(c => c.Value);
+    decimal CostTotal => costs.Sum(c => c.Value);
+    decimal MethodTotal => Math.Max(1, methods.Sum(m => m.Value));
+    List<RecvRow> Receivables => receivables.OrderByDescending(r => r.Balance).ToList();
+
+    // --- HELPERS ---
+    static string F(double d) => d.ToString("0.##", Inv);
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    static string PesoSigned(decimal v) => v < 0 ? "-₱" + (-v).ToString("N2", Inv) : Peso(v);
+    static int Share(decimal value, decimal total) => total <= 0 ? 0 : (int)Math.Round(value * 100 / total, MidpointRounding.AwayFromZero);
+
+    async Task GenerateReport()
+    {
+        await Task.Delay(1500);
+        showToast = true;
+        StateHasChanged();
+        await Task.Delay(3000);
+        showToast = false;
+        StateHasChanged();
+    }
+}

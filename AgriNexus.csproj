@@ -72,4 +72,11 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Components\Pages\BranchManager\" />
+      <Folder Include="Components\Pages\InventoryOfficer\" />
+      <Folder Include="Components\Pages\LaborHarvestOfficer\" />
+      <Folder Include="Components\Pages\SalesCashierOfficer\" />
+    </ItemGroup>
+
 </Project>
