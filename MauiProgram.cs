@@ -1,5 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
-using AgriNexus.Services; 
+using AgriNexus.Services;
+using Microsoft.EntityFrameworkCore;
+using AgriNexus.DataLayer; 
 
 namespace AgriNexus
 {
@@ -17,8 +19,11 @@ namespace AgriNexus
 
             builder.Services.AddMauiBlazorWebView();
 
-          
             builder.Services.AddScoped<AuthService>();
+
+            // Register the Database Context with the connection string
+            builder.Services.AddDbContext<AgriNexusDbContext>(options =>
+                options.UseSqlServer("Server=LAPTOP-1NVCTOTP;Database=AgriNexus_DB;Trusted_Connection=True;TrustServerCertificate=True;"));
 
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();

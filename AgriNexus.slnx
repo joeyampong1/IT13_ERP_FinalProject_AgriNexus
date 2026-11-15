@@ -1,4 +1,6 @@
 <Solution>
+  <Project Path="../AgriNexus.DataLayer/AgriNexus.DataLayer.csproj" Id="fe64716e-671d-4b96-9ae8-be76ee14ede3" />
+  <Project Path="../AgriNexus.Migrations/AgriNexus.Migrations.csproj" Id="a3392d18-ae02-4bae-ad93-2e49d02752c7" />
   <Project Path="AgriNexus.csproj">
     <Deploy Solution="Debug|*" />
   </Project>

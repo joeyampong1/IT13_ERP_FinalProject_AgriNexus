@@ -1,4 +1,7 @@
-﻿namespace AgriNexus.Services
+﻿using System;
+using AgriNexus.DataLayer.Models; 
+
+namespace AgriNexus.Services
 {
     public enum UserRole
     {
@@ -29,22 +32,29 @@
             NotifyStateChanged();
         }
 
-        public void Login(string email)
+        // Updated Login method: Now accepts the actual User model from the database
+        public void Login(User user)
         {
-            // 🛡️ Safety net: Kung walay gi-type nga email, i-default sa Super Admin
-            if (string.IsNullOrWhiteSpace(email))
+            CurrentUserName = user.FullName;
+
+            // Convert the string role from the database to the Enum
+            if (Enum.TryParse<UserRole>(user.Role, true, out var parsedRole))
             {
-                email = "admin@agrinexus.com";
+                CurrentRole = parsedRole;
+            }
+            else
+            {
+                CurrentRole = UserRole.TenantAdmin; // Default fallback
             }
 
-            // Mock logic base sa email nga i-type
-            if (email.Contains("owner")) { CurrentRole = UserRole.TenantAdmin; CurrentUserName = "Business Owner / Tenant Admin"; AccessLevel = "Business-wide access"; }
-            else if (email.Contains("branch")) { CurrentRole = UserRole.BranchManager; CurrentUserName = "Branch Manager"; AccessLevel = "Assigned branch access"; }
-            else if (email.Contains("inventory")) { CurrentRole = UserRole.InventoryOfficer; CurrentUserName = "Inventory Officer"; AccessLevel = "Assigned branch access"; }
-            else if (email.Contains("labor")) { CurrentRole = UserRole.LaborOfficer; CurrentUserName = "Labor & Harvest Officer"; AccessLevel = "Assigned branch access"; }
-            else if (email.Contains("sales")) { CurrentRole = UserRole.SalesOfficer; CurrentUserName = "Sales & Cashier Officer"; AccessLevel = "Assigned branch access"; }
-            else if (email.Contains("finance")) { CurrentRole = UserRole.Accountant; CurrentUserName = "Accountant / Finance Officer"; AccessLevel = "Business-wide access"; }
-            else { CurrentRole = UserRole.SuperAdmin; CurrentUserName = "Super Admin"; AccessLevel = "Platform-wide access"; }
+            // Set the access level based on the role
+            AccessLevel = CurrentRole switch
+            {
+                UserRole.SuperAdmin => "Platform-wide access",
+                UserRole.TenantAdmin => "Business-wide access",
+                UserRole.Accountant => "Business-wide access",
+                _ => "Assigned branch access"
+            };
 
             IsAuthenticated = true;
             NotifyStateChanged();

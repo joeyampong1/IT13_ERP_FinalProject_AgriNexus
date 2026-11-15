@@ -67,6 +67,8 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.14" />
         <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
         <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
@@ -77,6 +79,10 @@
       <Folder Include="Components\Pages\InventoryOfficer\" />
       <Folder Include="Components\Pages\LaborHarvestOfficer\" />
       <Folder Include="Components\Pages\SalesCashierOfficer\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\AgriNexus.DataLayer\AgriNexus.DataLayer.csproj" />
     </ItemGroup>
 
 </Project>
