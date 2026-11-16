@@ -1,0 +1,381 @@
+﻿@page "/sales-cashier-dashboard"
+@using System.Globalization
+
+<!-- BUSINESS / BRANCH FILTER -->
+<div class="filter-bar mb-4">
+    <div class="filter-box">
+        <i class="bi bi-buildings"></i>
+        <span class="filter-label">BUSINESS</span>
+        <select class="filter-select" @bind="business" @bind:after="OnBusinessChanged">
+            @foreach (var b in BusinessNames)
+            {
+                <option value="@b">@b</option>
+            }
+        </select>
+    </div>
+
+    <div class="filter-box">
+        <i class="bi bi-shop"></i>
+        <span class="filter-label">BRANCH</span>
+        <select class="filter-select" @bind="branch">
+            @foreach (var b in CurrentBranches)
+            {
+                <option value="@b">@b</option>
+            }
+        </select>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Sales &amp; Cashier Dashboard</h2>
+        <p class="text-muted mb-0 page-sub">Sales transactions, collections, outstanding balances, and produce availability for your branch.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="payments" class="btn-outline-lg">Collect payment</a>
+        <a href="sales" class="btn-primary-lg">New sale</a>
+    </div>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    <div class="text-muted small mt-1">@s.Note</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- CHARTS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-6">
+        <div class="card-box h-100">
+            <div class="panel-title">Sales — last 7 days</div>
+            <div class="panel-sub">Daily sales value</div>
+
+            <svg viewBox="0 0 540 240" class="w-100" role="img" aria-label="Sales last 7 days">
+                @for (int i = 0; i <= 4; i++)
+                {
+                    var y = 20 + i * 45;
+                    var val = SalesMax / 4 * (4 - i);
+                    <g>
+                        <line x1="62" x2="530" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                        <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
+                    </g>
+                }
+                <polyline points="@SalesPolyline" fill="none" stroke="#1F6B3B" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+                @for (int i = 0; i < SalesDays.Count; i++)
+                {
+                    var x = 62 + i * (468.0 / Math.Max(1, SalesDays.Count - 1));
+                    <g>
+                        <text x="@F(x)" y="220" text-anchor="middle" font-size="11" fill="#475569">@SalesDays[i].Label</text>
+                    </g>
+                }
+            </svg>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card-box h-100">
+            <div class="panel-title">Top produce by sales value</div>
+            <div class="panel-sub">Best performing items</div>
+
+            <svg viewBox="0 0 540 260" class="w-100" role="img" aria-label="Top produce by sales value">
+                @for (int j = 0; j <= 4; j++)
+                {
+                    var gx = 130 + j * 100;
+                    var gv = ProduceMax / 4 * j;
+                    <g>
+                        <line x1="@gx" x2="@gx" y1="10" y2="230" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                        <text x="@gx" y="250" text-anchor="middle" font-size="11" fill="#475569">@AxisLabel(gv)</text>
+                    </g>
+                }
+                @for (int i = 0; i < TopProduce.Count; i++)
+                {
+                    var p = TopProduce[i];
+                    var rowH = 220.0 / TopProduce.Count;
+                    var cy = 10 + i * rowH + rowH / 2;
+                    var bh = rowH * 0.7;
+                    var bw = (double)p.Value / ProduceMax * 400;
+                    <g>
+                        <rect x="130" y="@F(cy - bh / 2)" width="@F(bw)" height="@F(bh)" rx="4" fill="#62A834">
+                            <title>@p.Name — @p.Grade: @Peso(p.Value)</title>
+                        </rect>
+                        <text x="120" y="@F(cy - 3)" text-anchor="end" font-size="11" fill="#475569">
+                            <tspan x="120">@(p.Name + " —")</tspan>
+                            <tspan x="120" dy="13">@p.Grade</tspan>
+                        </text>
+                    </g>
+                }
+            </svg>
+        </div>
+    </div>
+</div>
+
+<!-- RECEIVABLES + PRODUCE AVAILABILITY -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-head d-flex justify-content-between align-items-start gap-2">
+                <div>
+                    <div class="panel-title">Receivables to follow up</div>
+                    <div class="panel-sub mb-0">Customers with a remaining balance</div>
+                </div>
+                <a href="payments" class="btn-pill">Payments</a>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Sale no.</th>
+                            <th>Customer</th>
+                            <th>Total</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Receivables)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@r.No</td>
+                                <td class="col-customer">@r.Customer</td>
+                                <td class="text-nowrap">@Peso(r.Total)</td>
+                                <td class="text-nowrap neg">@Peso(r.Balance)</td>
+                                <td><span class="pill @StatusClass(r)">@StatusText(r)</span></td>
+                            </tr>
+                        }
+                        @if (Receivables.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center text-muted py-4">No outstanding balances.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-head d-flex justify-content-between align-items-start gap-2">
+                <div>
+                    <div class="panel-title">Produce availability</div>
+                    <div class="panel-sub mb-0">Harvested stock ready to sell</div>
+                </div>
+                <i class="bi bi-cash-stack head-icon"></i>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Produce</th>
+                            <th>On hand</th>
+                            <th>Unit value</th>
+                            <th>Stock value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Availability)
+                        {
+                            <tr>
+                                <td class="col-produce">@p.Name — @p.Grade</td>
+                                <td class="text-nowrap">@p.OnHand @p.Unit</td>
+                                <td class="text-nowrap">@Peso(p.UnitValue)</td>
+                                <td class="text-nowrap">@Peso(p.OnHand * p.UnitValue)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- RECENT SALES -->
+<div class="panel mb-4">
+    <div class="panel-head">
+        <div class="panel-title">Recent sales transactions</div>
+        <div class="panel-sub mb-0">Latest sales orders recorded at this branch</div>
+    </div>
+    <div class="table-wrap">
+        <table class="table data-table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Sale no.</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Method</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in RecentSales)
+                {
+                    <tr>
+                        <td class="text-nowrap">@r.No</td>
+                        <td class="col-customer">@r.Customer</td>
+                        <td class="text-nowrap">@r.Date.ToString("MMM d, yyyy", Inv)</td>
+                        <td class="text-nowrap">@Peso(r.Total)</td>
+                        <td class="text-nowrap">@Peso(r.Paid)</td>
+                        <td class="text-nowrap">@Peso(r.Balance)</td>
+                        <td>@r.Method</td>
+                        <td><span class="pill @StatusClass(r)">@StatusText(r)</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    // ---------- MODELS ----------
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record DayAmt(DateTime Date, decimal Amount)
+    {
+        public string Label => Date.ToString("ddd", CultureInfo.InvariantCulture);
+    }
+    record SaleRow(string No, string Customer, DateTime Date, decimal Total, decimal Paid, string Method)
+    {
+        public decimal Balance => Total - Paid;
+    }
+    record ProduceSale(string Name, string Grade, decimal Value);
+    record ProduceStock(string Name, string Grade, decimal OnHand, string Unit, decimal UnitValue);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    // ---------- FILTER STATE ----------
+    string business = "Verdant Agri Ventures";
+    string branch = "North Field Branch";
+
+    static readonly string[] BusinessNames =
+    {
+        "Sunrise Rice Farmers Coop", "Green Valley Farms", "Verdant Agri Ventures",
+        "Harvest Hills Agri Corp", "Bicol River Organic Growers",
+    };
+
+    // TODO: kuhaa sa database ang branches kada business
+    static readonly Dictionary<string, string[]> BranchesByBusiness = new()
+    {
+        ["Verdant Agri Ventures"] = new[] { "North Field Branch", "South Valley Branch", "Central Packing Branch" },
+    };
+
+    string[] CurrentBranches =>
+        BranchesByBusiness.TryGetValue(business, out var b) ? b : new[] { "Main Branch" };
+
+    void OnBusinessChanged() => branch = CurrentBranches[0];
+
+    // ---------- TEMPORARY DATA (North Field Branch, ilisi sa database later) ----------
+    // Total sales: ₱50,680 (mohaum sa North Field sa Branch performance)
+    readonly List<SaleRow> sales = new()
+    {
+        new("SO-0013", "Walk-in customers",       new(2026, 10, 23), 2600,  2600,  "Cash"),
+        new("SO-0011", "Bayanihan Trading",       new(2026, 10, 18), 11100, 11100, "Bank"),
+        new("SO-0009", "Verdant Fresh Retail",    new(2026, 10, 6),  9880,  9880,  "Gcash"),
+        new("SO-0007", "Walk-in customers",       new(2026, 9, 14),  4680,  4680,  "Cash"),
+        new("SO-0005", "Barangay Nutrition Program", new(2026, 8, 21), 7920, 7920, "Bank"),
+        new("SO-0003", "Verdant Fresh Retail",    new(2026, 7, 19),  5700,  3000,  "Cash"),
+        new("SO-0001", "Bayanihan Trading",       new(2026, 6, 25),  8800,  8800,  "Cash"),
+    };
+
+    // Total: ₱50,680 (parehas sa total sa sales sa ibabaw)
+    readonly List<ProduceSale> produceSales = new()
+    {
+        new("Cabbage",   "Grade A", 38950),
+        new("Rice",      "Grade A", 8850),
+        new("Ampalaya",  "Grade A", 2880),
+    };
+
+    readonly List<ProduceStock> availability = new()
+    {
+        new("Cabbage", "Grade A", 1170, "kg", 38),
+    };
+
+    // ---------- COMPUTED ----------
+    List<SaleRow> RecentSales => sales.OrderByDescending(r => r.Date).Take(7).ToList();
+    List<SaleRow> Receivables => sales.Where(r => r.Balance > 0).OrderByDescending(r => r.Balance).ToList();
+    List<ProduceSale> TopProduce => produceSales.OrderByDescending(p => p.Value).Take(3).ToList();
+    List<ProduceStock> Availability => availability;
+
+    List<DayAmt> SalesDays
+    {
+        get
+        {
+            var today = DateTime.Today;
+            return Enumerable.Range(0, 7)
+                .Select(i => today.AddDays(i - 6))
+                .Select(d => new DayAmt(d, sales.Where(r => r.Date.Date == d).Sum(r => r.Total)))
+                .ToList();
+        }
+    }
+
+    // Axis: minimum 4 (₱0-₱4), kung naay data i-round up sa 4,000
+    double SalesMax
+    {
+        get
+        {
+            var max = (double)SalesDays.Max(d => d.Amount);
+            return max <= 4 ? 4 : Math.Ceiling(max / 4000) * 4000;
+        }
+    }
+
+    // Horizontal bar axis: i-round up sa 10K (4 ka intervals)
+    double ProduceMax =>
+        Math.Max(10000, Math.Ceiling((double)TopProduce.Max(p => p.Value) / 10000) * 10000);
+
+    // Line: x 62..530, y 20..200
+    string SalesPolyline
+    {
+        get
+        {
+            var days = SalesDays;
+            var max = SalesMax;
+            var step = 468.0 / Math.Max(1, days.Count - 1);
+            return string.Join(" ", days.Select((d, i) =>
+                F(62 + i * step) + "," + F(200 - (double)d.Amount / max * 180)));
+        }
+    }
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var now = DateTime.Today;
+            var todaySales = sales.Where(r => r.Date.Date == now).ToList();
+            var monthSales = sales.Where(r => r.Date.Year == now.Year && r.Date.Month == now.Month).ToList();
+            var monthPaid = monthSales.Where(r => r.Paid > 0).ToList();
+
+            return new()
+            {
+                new("SALES TODAY", Peso(todaySales.Sum(r => r.Total)), Txn(todaySales.Count), "bi-cart", ""),
+                new("SALES THIS MONTH", Peso(monthSales.Sum(r => r.Total)), Txn(monthSales.Count), "bi-graph-up-arrow", "stat-icon-plain stat-icon-green"),
+                new("COLLECTIONS THIS MONTH", Peso(monthPaid.Sum(r => r.Paid)),
+                    monthPaid.Count + (monthPaid.Count == 1 ? " payment received" : " payments received"), "bi-wallet2", ""),
+                new("OUTSTANDING BALANCES", Peso(Receivables.Sum(r => r.Balance)), Receivables.Count + " unpaid or partial", "bi-exclamation-triangle", "stat-icon-warn"),
+            };
+        }
+    }
+
+    // ---------- HELPERS ----------
+    static string F(double d) => d.ToString("0.##", Inv);
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    static string Txn(int n) => n + (n == 1 ? " transaction" : " transactions");
+
+    static string AxisLabel(double v) =>
+        v >= 1000 ? "₱" + (v / 1000).ToString("0.#", Inv) + "K" : "₱" + v.ToString("0", Inv);
+
+    static string StatusText(SaleRow r) => r.Balance <= 0 ? "Paid" : r.Paid > 0 ? "Partial" : "Unpaid";
+    static string StatusClass(SaleRow r) => r.Balance <= 0 ? "pill-green" : r.Paid > 0 ? "pill-yellow" : "pill-red";
+}

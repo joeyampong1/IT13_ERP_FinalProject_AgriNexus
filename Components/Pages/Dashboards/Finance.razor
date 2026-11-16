@@ -1,0 +1,364 @@
+﻿@page "/finance-dashboard"
+@using System.Globalization
+
+<!-- BUSINESS FILTER (walay branch filter, finance ni sa tibuok negosyo) -->
+<div class="filter-bar mb-4">
+    <div class="filter-box">
+        <i class="bi bi-buildings"></i>
+        <span class="filter-label">BUSINESS</span>
+        <select class="filter-select" @bind="business">
+            @foreach (var b in BusinessNames)
+            {
+                <option value="@b">@b</option>
+            }
+        </select>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Finance Dashboard</h2>
+        <p class="text-muted mb-0 page-sub">Revenue, expenses, estimated profitability, and receivables across the business.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="production-costing" class="btn-outline-lg">Production costing</a>
+        <a href="financials" class="btn-primary-lg">Financial reports</a>
+    </div>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    <div class="text-muted small mt-1">@s.Note</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- CHARTS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-8">
+        <div class="card-box h-100">
+            <div class="panel-title">Revenue vs expenses</div>
+            <div class="panel-sub">Last 6 months</div>
+
+            <svg viewBox="0 0 640 300" class="w-100" role="img" aria-label="Revenue vs expenses">
+                @for (int i = 0; i <= 4; i++)
+                {
+                    var y = 20 + i * 60;
+                    var val = BarMax / 4 * (4 - i);
+                    <g>
+                        <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                        <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
+                    </g>
+                }
+                @for (int i = 0; i < months.Count; i++)
+                {
+                    var m = months[i];
+                    var slot = 568.0 / months.Count;
+                    var bw = slot * 0.34;
+                    var gap = slot * 0.02;
+                    var start = 62 + i * slot + (slot - (bw * 2 + gap)) / 2;
+                    var hR = (double)m.Revenue / BarMax * 240;
+                    var hE = (double)m.Expenses / BarMax * 240;
+                    <g>
+                        <rect x="@F(start)" y="@F(260 - hR)" width="@F(bw)" height="@F(hR)" rx="4" fill="#62A834" />
+                        <rect x="@F(start + bw + gap)" y="@F(260 - hE)" width="@F(bw)" height="@F(hE)" rx="4" fill="#A86B4C" />
+                        <text x="@F(62 + i * slot + slot / 2)" y="282" text-anchor="middle" font-size="11" fill="#475569">@m.Label</text>
+                    </g>
+                }
+            </svg>
+
+            <div class="d-flex justify-content-center gap-3 small mt-1">
+                <span class="lg" style="color:#6FA82E"><span class="swatch" style="background:#62A834"></span>Revenue</span>
+                <span class="lg" style="color:#A86B4C"><span class="swatch" style="background:#A86B4C"></span>Expenses</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card-box h-100">
+            <div class="panel-title">Cost allocation</div>
+            <div class="panel-sub">Expenses by category</div>
+
+            <div class="d-flex justify-content-center my-4">
+                <svg viewBox="0 0 200 200" width="240" height="240" role="img" aria-label="Cost allocation">
+                    @foreach (var seg in DonutSegments)
+                    {
+                        <circle cx="100" cy="100" r="@F(Radius)" fill="none" stroke="@seg.Color" stroke-width="32"
+                                stroke-dasharray="@seg.Dash" stroke-dashoffset="@seg.Offset"
+                                transform="rotate(-90 100 100)" />
+                    }
+                </svg>
+            </div>
+
+            <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
+                @foreach (var name in LegendNames)
+                {
+                    <span><span class="legend-dot" style="background:@ColorOf(name)"></span>@name</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- EXPENSES AWAITING APPROVAL + RECENT COLLECTIONS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-head d-flex justify-content-between align-items-start gap-2">
+                <div>
+                    <div class="panel-title">Expenses awaiting approval</div>
+                    <div class="panel-sub mb-0">Review before they are posted as costs</div>
+                </div>
+                <i class="bi bi-clipboard-check head-icon"></i>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Category</th>
+                            <th>Amount</th>
+                            <th>Date</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in PendingExpenses)
+                        {
+                            <tr>
+                                <td class="col-desc">@e.Description</td>
+                                <td class="text-nowrap">@e.Category</td>
+                                <td class="text-nowrap">@Peso(e.Amount)</td>
+                                <td class="col-date">@e.Date.ToString("MMM d, yyyy", Inv)</td>
+                                <td class="text-end">
+                                    <button type="button" class="btn-pill" @onclick="() => ApproveExpense(e.Id)">Approve</button>
+                                </td>
+                            </tr>
+                        }
+                        @if (PendingExpenses.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center text-muted py-4">Nothing awaiting approval.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-head d-flex justify-content-between align-items-start gap-2">
+                <div>
+                    <div class="panel-title">Recent collections</div>
+                    <div class="panel-sub mb-0">Cashier payments posted to the ledger</div>
+                </div>
+                <a href="payments" class="btn-pill">All payments</a>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Customer</th>
+                            <th>Sale no.</th>
+                            <th>Method</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in RecentPayments)
+                        {
+                            <tr>
+                                <td class="col-date">@p.Date.ToString("MMM d, yyyy", Inv)</td>
+                                <td class="col-customer">@p.Customer</td>
+                                <td class="text-nowrap">@p.SaleNo</td>
+                                <td>@p.Method</td>
+                                <td class="text-nowrap">@Peso(p.Amount)</td>
+                                <td><span class="pill pill-green">@p.Status</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // ---------- MODELS ----------
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record MonthRow(int Year, int Month, decimal Revenue, decimal Expenses)
+    {
+        public string Label => new DateTime(Year, Month, 1).ToString("MMM", CultureInfo.InvariantCulture);
+    }
+    record CostRow(string Name, decimal Value);
+    record ExpenseRec(int Id, string Description, string Category, decimal Amount, DateTime Date, bool Approved);
+    record PaymentRec(DateTime Date, string Customer, string SaleNo, string Method, decimal Amount, string Status);
+    record RecvRec(string No, decimal Total, decimal Paid)
+    {
+        public decimal Balance => Total - Paid;
+    }
+    record Segment(string Color, string Dash, string Offset);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    const double Radius = 70;
+    static readonly double Circ = 2 * Math.PI * Radius;
+
+    // ---------- FILTER STATE ----------
+    string business = "Verdant Agri Ventures";
+
+    static readonly string[] BusinessNames =
+    {
+        "Sunrise Rice Farmers Coop", "Green Valley Farms", "Verdant Agri Ventures",
+        "Harvest Hills Agri Corp", "Bicol River Organic Growers",
+    };
+
+    // ---------- TEMPORARY DATA (Verdant Agri Ventures, ilisi sa database later) ----------
+    // Parehas sa Financial Reports: revenue 123,280 · expenses 96,710
+    readonly List<MonthRow> months = new()
+    {
+        new(2026, 6,  8800,  3300),
+        new(2026, 7,  14000, 3200),
+        new(2026, 8,  22920, 4200),
+        new(2026, 9,  25140, 6500),
+        new(2026, 10, 52420, 79510),
+        new(2026, 11, 0,     0),
+    };
+
+    // Total: 96,710
+    readonly List<CostRow> costs = new()
+    {
+        new("Labor", 21360), new("Supplies", 44300), new("Fuel", 11700), new("Utilities", 7000),
+        new("Transport", 2800), new("Equipment", 1250), new("Maintenance", 6500), new("Other", 1800),
+    };
+
+    // Kolor kada category
+    static readonly Dictionary<string, string> CostColors = new()
+    {
+        ["Supplies"] = "#1F6B3B",
+        ["Other"] = "#62A834",
+        ["Utilities"] = "#1F6B3B",
+        ["Maintenance"] = "#7FBFA8",
+        ["Equipment"] = "#3B9AA8",
+        ["Transport"] = "#A86B4C",
+        ["Fuel"] = "#92D050",
+        ["Labor"] = "#62A834",
+    };
+
+    // Order sa pag-drawing sa donut, clockwise gikan sa taas (parehas sa screenshot)
+    static readonly string[] DonutOrder =
+        { "Supplies", "Other", "Utilities", "Maintenance", "Equipment", "Transport", "Fuel", "Labor" };
+
+    // Legend sa screenshot: 5 lang ang gipakita
+    static readonly string[] LegendNames = { "Supplies", "Labor", "Fuel", "Transport", "Equipment" };
+
+    readonly List<ExpenseRec> expenses = new()
+    {
+        new(1, "Empty sacks and twine restock",         "Supplies",  5200, new(2026, 10, 22), false),
+        new(2, "Repair of knapsack sprayer nozzles",    "Equipment", 1250, new(2026, 10, 14), false),
+        new(3, "Pesticide restock — insecticide and herbicide", "Supplies", 6800, new(2026, 10, 9), false),
+    };
+
+    readonly List<PaymentRec> payments = new()
+    {
+        new(new(2026, 10, 24), "Municipal Market Vendors",       "SO-0014", "Cash",  4400,  "Posted"),
+        new(new(2026, 10, 23), "Walk-in customers",              "SO-0013", "Cash",  2600,  "Posted"),
+        new(new(2026, 10, 21), "Barangay Nutrition Program",     "SO-0012", "Cash",  10580, "Posted"),
+        new(new(2026, 10, 18), "Bayanihan Trading",              "SO-0011", "Bank",  11100, "Posted"),
+        new(new(2026, 10, 16), "Rural Bank Cooperative Store",   "SO-0010", "Gcash", 2860,  "Posted"),
+        new(new(2026, 10, 12), "Rural Bank Cooperative Store",   "SO-0010", "Cash",  4000,  "Posted"),
+    };
+
+    // Sales nga naay balance (total balance = ₱31,160, parehas sa Financial Reports)
+    readonly List<RecvRec> receivables = new()
+    {
+        new("SO-0006", 12900, 5000),
+        new("SO-0008", 7560,  0),
+        new("SO-0010", 13860, 6860),
+        new("SO-0004", 15000, 9000),
+        new("SO-0003", 5700,  3000),
+    };
+
+    // Constants hangtod naa na ang Sales/Payments database
+    const int SalesOnRecord = 14;
+    const int PaymentsPosted = 14;
+
+    // ---------- COMPUTED ----------
+    List<ExpenseRec> PendingExpenses => expenses.Where(e => !e.Approved).OrderByDescending(e => e.Date).ToList();
+    List<PaymentRec> RecentPayments => payments.OrderByDescending(p => p.Date).Take(6).ToList();
+    decimal CostTotal => costs.Sum(c => c.Value);
+
+    // Bar axis: 4 ka intervals, i-round up sa 20K
+    double BarMax => Math.Max(20000, Math.Ceiling((double)months.Max(m => Math.Max(m.Revenue, m.Expenses)) / 20000) * 20000);
+
+    List<Segment> DonutSegments
+    {
+        get
+        {
+            var list = new List<Segment>();
+            var total = (double)Math.Max(1, CostTotal);
+            double offset = 0;
+            foreach (var name in DonutOrder)
+            {
+                var value = costs.Where(c => c.Name == name).Sum(c => c.Value);
+                if (value <= 0) continue;
+                var len = (double)value / total * Circ;
+                var dash = Math.Max(len - 2, 0.5);
+                list.Add(new Segment(ColorOf(name), F(dash) + " " + F(Circ - dash), F(-offset)));
+                offset += len;
+            }
+            return list;
+        }
+    }
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var t = DateTime.Today;
+            var m = months.FirstOrDefault(x => x.Year == t.Year && x.Month == t.Month);
+            var rev = m?.Revenue ?? 0;
+            var exp = m?.Expenses ?? 0;
+            var profit = rev - exp;
+            var margin = rev <= 0 ? 0 : (int)Math.Round(profit * 100 / rev, MidpointRounding.AwayFromZero);
+
+            return new()
+            {
+                new("REVENUE THIS MONTH", Peso(rev), SalesOnRecord + " sales on record", "bi-graph-up-arrow", ""),
+                new("EXPENSES THIS MONTH", Peso(exp), PendingExpenses.Count + " awaiting approval", "bi-coin", "stat-icon-plain stat-icon-brown"),
+                new("ESTIMATED PROFIT", PesoSigned(profit), margin + "% of revenue", "bi-pie-chart", "stat-icon-plain stat-icon-green"),
+                new("UNCOLLECTED RECEIVABLES", Peso(receivables.Sum(r => r.Balance)), PaymentsPosted + " payments posted", "bi-cash-stack", "stat-icon-warn"),
+            };
+        }
+    }
+
+    // ---------- ACTIONS ----------
+    // TODO: i-save sa database ug i-log sa Audit Trail
+    void ApproveExpense(int id)
+    {
+        var i = expenses.FindIndex(e => e.Id == id);
+        if (i >= 0) expenses[i] = expenses[i] with { Approved = true };
+    }
+
+    // ---------- HELPERS ----------
+    static string F(double d) => d.ToString("0.##", Inv);
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    static string PesoSigned(decimal v) => v < 0 ? "-₱" + (-v).ToString("N2", Inv) : Peso(v);
+    static string ColorOf(string name) => CostColors.TryGetValue(name, out var c) ? c : "#94A3B8";
+
+    static string AxisLabel(double v) =>
+        v == 0 ? "₱0" : "₱" + (v / 1000).ToString("0", Inv) + "K";
+}

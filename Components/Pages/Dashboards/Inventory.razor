@@ -1,0 +1,355 @@
+﻿@page "/inventory-dashboard"
+@using System.Globalization
+
+<!-- BUSINESS / BRANCH FILTER -->
+<div class="filter-bar mb-4">
+    <div class="filter-box">
+        <i class="bi bi-buildings"></i>
+        <span class="filter-label">BUSINESS</span>
+        <select class="filter-select" @bind="business" @bind:after="OnBusinessChanged">
+            @foreach (var b in BusinessNames)
+            {
+                <option value="@b">@b</option>
+            }
+        </select>
+    </div>
+
+    <div class="filter-box">
+        <i class="bi bi-shop"></i>
+        <span class="filter-label">BRANCH</span>
+        <select class="filter-select" @bind="branch">
+            @foreach (var b in CurrentBranches)
+            {
+                <option value="@b">@b</option>
+            }
+        </select>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Inventory Dashboard</h2>
+        <p class="text-muted mb-0 page-sub">Stock position for seeds, fertilizers, tools, fuel and harvested produce across your branch.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="stock-movements" class="btn-outline-lg">Receive / issue stock</a>
+        <a href="inventory" class="btn-primary-lg">Manage items</a>
+    </div>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    <div class="text-muted small mt-1">@s.Note</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- CHARTS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-8">
+        <div class="card-box h-100">
+            <div class="panel-title">Quantity on hand by category</div>
+            <div class="panel-sub">Current balances</div>
+
+            <svg viewBox="0 0 640 300" class="w-100" role="img" aria-label="Quantity on hand by category">
+                @for (int i = 0; i <= 4; i++)
+                {
+                    var y = 20 + i * 60;
+                    var val = BarMax / 4 * (4 - i);
+                    <g>
+                        <line x1="56" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                        <text x="48" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@F(val)</text>
+                    </g>
+                }
+                @for (int i = 0; i < CategoryTotals.Count; i++)
+                {
+                    var c = CategoryTotals[i];
+                    var slot = 574.0 / CategoryTotals.Count;
+                    var bw = slot * 0.7;
+                    var x = 56 + i * slot + (slot - bw) / 2;
+                    var h = c.Qty <= 0 ? 0 : Math.Max(2, (double)c.Qty / BarMax * 240);
+                    <g>
+                        <rect x="@F(x)" y="@F(260 - h)" width="@F(bw)" height="@F(h)" rx="6" fill="#1F6B3B" />
+                        <text x="@F(x + bw / 2)" y="282" text-anchor="middle" font-size="12" fill="#475569">@c.Name.ToLowerInvariant()</text>
+                    </g>
+                }
+            </svg>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card-box h-100">
+            <div class="panel-title">Inventory categories</div>
+            <div class="panel-sub">Share of item records</div>
+
+            <div class="d-flex justify-content-center my-4">
+                <svg viewBox="0 0 200 200" width="240" height="240" role="img" aria-label="Inventory categories">
+                    @foreach (var seg in DonutSegments)
+                    {
+                        <circle cx="100" cy="100" r="@F(Radius)" fill="none" stroke="@seg.Color" stroke-width="32"
+                                stroke-dasharray="@seg.Dash" stroke-dashoffset="@seg.Offset"
+                                transform="rotate(-90 100 100)" />
+                    }
+                </svg>
+            </div>
+
+            <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
+                @foreach (var c in CategoryTotals)
+                {
+                    <span><span class="legend-dot" style="background:@c.Color"></span>@c.Name</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- LOW STOCK + MOVEMENTS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-head d-flex justify-content-between align-items-start gap-2">
+                <div>
+                    <div class="panel-title">Low-stock monitoring</div>
+                    <div class="panel-sub mb-0">Reorder these items soon</div>
+                </div>
+                <a href="inventory-reports" class="btn-pill">Inventory reports</a>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Category</th>
+                            <th>On hand</th>
+                            <th>Reorder at</th>
+                            <th>Supplier</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var i in LowStock)
+                        {
+                            <tr>
+                                <td class="col-name">@i.Name</td>
+                                <td class="text-nowrap">@i.Category</td>
+                                <td class="text-nowrap">@Qty(i.OnHand) @i.Unit</td>
+                                <td class="text-nowrap reorder">@Qty(i.Reorder)</td>
+                                <td class="col-supplier">@i.Supplier</td>
+                            </tr>
+                        }
+                        @if (LowStock.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center text-muted py-4">Nothing to reorder.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-head d-flex justify-content-between align-items-start gap-2">
+                <div>
+                    <div class="panel-title">Recent stock movements</div>
+                    <div class="panel-sub mb-0">Receipts, issuances and adjustments</div>
+                </div>
+                <a href="stock-movements" class="btn-pill">View history</a>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Type</th>
+                            <th>Qty</th>
+                            <th>Date</th>
+                            <th>Reference</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in RecentMovements)
+                        {
+                            <tr>
+                                <td class="col-move">@m.Item</td>
+                                <td><span class="pill @PillClass(m.Type)">@m.Type</span></td>
+                                <td class="text-nowrap">@Qty(m.Qty) @m.Unit</td>
+                                <td class="text-nowrap">@m.Date.ToString("MMM d, yyyy", Inv)</td>
+                                <td class="text-nowrap text-muted">@m.Ref</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- HARVESTED PRODUCE -->
+<div class="stat-card mb-4">
+    <div class="d-flex justify-content-between align-items-start gap-2">
+        <span class="card-title">HARVESTED PRODUCE RECORDED</span>
+        <div class="stat-icon stat-icon-plain stat-icon-brown"><i class="bi bi-flower3"></i></div>
+    </div>
+    <div class="mt-3">
+        <div class="card-value">@Qty(HarvestKgEquivalent) kg equivalent</div>
+        <div class="text-muted small mt-1">@HarvestRecords harvest records · @HarvestAwaiting awaiting approval</div>
+    </div>
+</div>
+
+@code {
+    // ---------- MODELS ----------
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record Item(string Name, string Category, decimal OnHand, string Unit, decimal Reorder, decimal UnitCost, string Supplier);
+    record Movement(string Item, string Type, decimal Qty, string Unit, DateTime Date, string Ref);
+    record CategoryRow(string Name, decimal Qty, int Records, string Color);
+    record Segment(string Color, string Dash, string Offset);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    const double Radius = 70;
+    static readonly double Circ = 2 * Math.PI * Radius;
+
+    // ---------- FILTER STATE ----------
+    string business = "Verdant Agri Ventures";
+    string branch = "North Field Branch";
+
+    static readonly string[] BusinessNames =
+    {
+        "Sunrise Rice Farmers Coop", "Green Valley Farms", "Verdant Agri Ventures",
+        "Harvest Hills Agri Corp", "Bicol River Organic Growers",
+    };
+
+    // TODO: kuhaa sa database ang branches kada business
+    static readonly Dictionary<string, string[]> BranchesByBusiness = new()
+    {
+        ["Verdant Agri Ventures"] = new[] { "North Field Branch", "South Valley Branch", "Central Packing Branch" },
+    };
+
+    string[] CurrentBranches =>
+        BranchesByBusiness.TryGetValue(business, out var b) ? b : new[] { "Main Branch" };
+
+    void OnBusinessChanged() => branch = CurrentBranches[0];
+
+    // ---------- TEMPORARY DATA (North Field Branch, ilisi sa database later) ----------
+    // 13 ka items, total stock value = ₱167,604.00
+    readonly List<Item> items = new()
+    {
+        new("Diesel",                           "Fuel",       38,   "liter",  60,  63,    "Valley Fuel Depot"),
+        new("Hybrid corn seeds (Pioneer 30T80)", "Seeds",      30,   "kg",     40,  380,   "Picardo Seeds Trading"),
+        new("Certified rice seeds",             "Seeds",      180,  "kg",     100, 45,    "Picardo Seeds Trading"),
+        new("Urea (46-0-0)",                    "Fertilizer", 6,    "sack",   10,  1450,  "Central Luzon Agri Supply"),
+        new("Complete fertilizer (14-14-14)",   "Fertilizer", 69,   "sack",   20,  1380,  "Central Luzon Agri Supply"),
+        new("Insecticide (lambda-cyhalothrin)", "Pesticide",  2,    "bottle", 5,   850,   "Greenguard Crop Protection"),
+        new("Fungicide (mancozeb)",             "Pesticide",  6,    "bottle", 3,   700,   "Greenguard Crop Protection"),
+        new("Knapsack sprayer",                 "Tools",      4,    "pc",     2,   3200,  "Agri Tools Hub"),
+        new("Sickle",                           "Tools",      14,   "pc",     5,   250,   "Agri Tools Hub"),
+        new("Pruning shears",                   "Tools",      12,   "pc",     5,   300,   "Agri Tools Hub"),
+        new("Empty sacks",                      "Supplies",   300,  "pc",     100, 13,    "Central Luzon Agri Supply"),
+        new("Twine",                            "Supplies",   65,   "roll",   20,  150,   "Central Luzon Agri Supply"),
+        new("Rice (produce lot)",               "Produce",    1170, "kg",     0,   2,     "Own harvest"),
+    };
+
+    // 9 ka movements sa kasaysayan, 0 karong bulana (Nov)
+    readonly List<Movement> movements = new()
+    {
+        new("Insecticide (lambda-cyhalothrin)", "Adjusted", 2,   "bottle", new(2026, 10, 20), "ADJ-0044"),
+        new("Urea (46-0-0)",                    "Issued",   6,   "sack",   new(2026, 10, 19), "ISS-0031"),
+        new("Urea (46-0-0)",                    "Received", 20,  "sack",   new(2026, 10, 18), "DR-21090"),
+        new("Complete fertilizer (14-14-14)",   "Issued",   8,   "sack",   new(2026, 10, 16), "ISS-0030"),
+        new("Diesel",                           "Issued",   62,  "liter",  new(2026, 10, 12), "ISS-0029"),
+        new("Diesel",                           "Received", 100, "liter",  new(2026, 10, 11), "DR-21071"),
+        new("Certified rice seeds",             "Received", 180, "kg",     new(2026, 10, 8),  "DR-21060"),
+        new("Empty sacks",                      "Received", 300, "pc",     new(2026, 10, 6),  "DR-21052"),
+        new("Fungicide (mancozeb)",             "Received", 6,   "bottle", new(2026, 10, 5),  "DR-21047"),
+    };
+
+    // Harvest summary (hangtod naa na ang Harvest module)
+    const decimal HarvestKgEquivalent = 1450;
+    const int HarvestRecords = 2;
+    const int HarvestAwaiting = 0;
+
+    // Fixed nga order ug kolor sa categories (parehas sa screenshot)
+    static readonly (string Name, string Color)[] Categories =
+    {
+        ("Pesticide", "#1F6B3B"), ("Fertilizer", "#62A834"), ("Tools", "#92D050"), ("Fuel", "#A86B4C"),
+        ("Supplies", "#3B9AA8"), ("Seeds", "#7FBFA8"), ("Produce", "#1F6B3B"),
+    };
+
+    // ---------- COMPUTED ----------
+    List<Item> LowStock => items.Where(i => i.OnHand <= i.Reorder && i.Category != "Produce").ToList();
+
+    List<Movement> RecentMovements => movements.OrderByDescending(m => m.Date).Take(6).ToList();
+
+    decimal StockValue => items.Sum(i => i.OnHand * i.UnitCost);
+
+    List<CategoryRow> CategoryTotals => Categories
+        .Select(c => new CategoryRow(
+            c.Name,
+            items.Where(i => i.Category == c.Name).Sum(i => i.OnHand),
+            items.Count(i => i.Category == c.Name),
+            c.Color))
+        .ToList();
+
+    // Bar axis: 4 ka intervals, i-round up sa 300
+    double BarMax => Math.Max(300, Math.Ceiling((double)CategoryTotals.Max(c => c.Qty) / 300) * 300);
+
+    // Donut: share sa item records kada category
+    List<Segment> DonutSegments
+    {
+        get
+        {
+            var list = new List<Segment>();
+            var total = Math.Max(1, items.Count);
+            double offset = 0;
+            foreach (var c in CategoryTotals.Where(c => c.Records > 0))
+            {
+                var len = (double)c.Records / total * Circ;
+                var dash = Math.Max(len - 2, 0.5);
+                list.Add(new Segment(c.Color, F(dash) + " " + F(Circ - dash), F(-offset)));
+                offset += len;
+            }
+            return list;
+        }
+    }
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var now = DateTime.Today;
+            var thisMonth = movements.Count(m => m.Date.Year == now.Year && m.Date.Month == now.Month);
+            var lots = items.Count(i => i.Category == "Produce");
+
+            return new()
+            {
+                new("ITEMS TRACKED", items.Count.ToString(), lots + (lots == 1 ? " produce lot" : " produce lots"), "bi-boxes", ""),
+                new("STOCK VALUE ON HAND", Peso(StockValue), "Quantity × unit cost", "bi-coin", "stat-icon-plain stat-icon-green"),
+                new("LOW STOCK ALERTS", LowStock.Count.ToString(), "At or below reorder level", "bi-exclamation-triangle", "stat-icon-warn"),
+                new("MOVEMENTS THIS MONTH", thisMonth.ToString(), movements.Count + " in history", "bi-arrow-left-right", "stat-icon-info"),
+            };
+        }
+    }
+
+    // ---------- HELPERS ----------
+    static string F(double d) => d.ToString("0.##", Inv);
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
+
+    static string PillClass(string type) => type switch
+    {
+        "Received" => "pill-green",
+        "Adjusted" => "pill-yellow",
+        _ => "pill-outline",
+    };
+}

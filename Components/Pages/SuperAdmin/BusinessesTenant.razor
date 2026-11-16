@@ -1,4 +1,8 @@
 ﻿@page "/businesses"
+@layout MainLayout
+@inject AgriNexus.DataLayer.AgriNexusDbContext DbContext
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer.Models
 
 <div class="mb-4">
     <h2 class="page-title">Business / Tenant Management</h2>
@@ -42,7 +46,7 @@
 <!-- TABLE -->
 <div class="panel">
     <div class="table-wrap">
-        <table class="table biz-table align-middle mb-0">
+        <table class="table table-hover biz-table align-middle mb-0">
             <thead>
                 <tr>
                     <th>Business</th>
@@ -57,13 +61,13 @@
             <tbody>
                 @foreach (var t in Filtered)
                 {
-                    <tr>
+                    <tr style="cursor: pointer;" @onclick="() => OpenDetails(t)">
                         <td>
                             <div class="fw-semibold">@t.Name</div>
                             <div class="sub">@t.Code@(string.IsNullOrWhiteSpace(t.Province) ? "" : " · " + t.Province)</div>
                         </td>
                         <td>
-                            <div>@t.Owner</div>
+                            <div>@t.OwnerName</div>
                             <div class="sub">@t.Email</div>
                         </td>
                         <td class="fw-medium">@(string.IsNullOrEmpty(t.Plan) ? "—" : t.Plan)</td>
@@ -71,17 +75,23 @@
                         <td><span class="pill @SyncClass(t.Sync)">@t.Sync</span></td>
                         <td class="text-nowrap">@t.Registered.ToString("MMM d, yyyy")</td>
                         <td class="text-end action-cell">
-                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(t.Id)" aria-label="Actions">
+                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(t.Id)" @onclick:stopPropagation="true" aria-label="Actions">
                                 <i class="bi bi-three-dots"></i>
                             </button>
                             @if (openMenuId == t.Id)
                             {
                                 <div class="menu-backdrop" @onclick="CloseMenu"></div>
                                 <div class="row-menu">
-                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(t)">
+                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(t)" @onclick:stopPropagation="true">
                                         <i class="bi bi-pencil"></i> Edit
                                     </button>
-                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(t)">
+                                    @if (t.Status == "Trial")
+                                    {
+                                        <button type="button" class="row-menu-item text-success" @onclick="() => AcceptTenant(t)" @onclick:stopPropagation="true">
+                                            <i class="bi bi-check-circle"></i> Accept Request
+                                        </button>
+                                    }
+                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(t)" @onclick:stopPropagation="true">
                                         <i class="bi bi-trash"></i> Delete
                                     </button>
                                 </div>
@@ -98,97 +108,297 @@
     </div>
 </div>
 
-<!-- MODAL -->
+<!-- DETAILS MODAL -->
+@if (showDetailsModal && selectedTenant != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header border-0 pb-0 pt-4 px-4">
+                    <h4 class="modal-title fw-bolder" style="color: #0A2B1D;">Business Details</h4>
+                    <button type="button" class="btn-close" @onclick="CloseDetailsModal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-12 mb-2">
+                            <h5 class="fw-bold mb-1" style="color: var(--primary-green);">@selectedTenant.Name</h5>
+                            <span class="text-muted small">Tenant Code: @selectedTenant.Code</span>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold text-uppercase">Owner Name</label>
+                            <p class="mb-0 fw-medium">@selectedTenant.OwnerName</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold text-uppercase">Owner Email</label>
+                            <p class="mb-0 fw-medium">@selectedTenant.Email</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold text-uppercase">Temporary Password</label>
+                            <p class="mb-0 fw-medium">
+                                <span class="badge bg-warning text-dark px-3 py-2 rounded-3">
+                                    <i class="bi bi-key me-1"></i> @selectedTenant.Password
+                                </span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold text-uppercase">Contact Number</label>
+                            <p class="mb-0 fw-medium">@(string.IsNullOrEmpty(selectedTenant.Contact) ? "N/A" : selectedTenant.Contact)</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold text-uppercase">Region / Province</label>
+                            <p class="mb-0 fw-medium">@(string.IsNullOrEmpty(selectedTenant.Province) ? "N/A" : selectedTenant.Province)</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold text-uppercase">Subscription Plan</label>
+                            <p class="mb-0 fw-medium">@(string.IsNullOrEmpty(selectedTenant.Plan) ? "None" : selectedTenant.Plan)</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold text-uppercase">Status</label>
+                            <p class="mb-0">
+                                <span class="pill @StatusClass(selectedTenant.Status)">@selectedTenant.Status</span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold text-uppercase">Date Registered</label>
+                            <p class="mb-0 fw-medium">@selectedTenant.Registered.ToString("MMMM d, yyyy")</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small fw-bold text-uppercase">Synchronization</label>
+                            <p class="mb-0">
+                                <span class="pill @SyncClass(selectedTenant.Sync)">@selectedTenant.Sync</span>
+                            </p>
+                        </div>
+                        <div class="col-12 mt-4">
+                            <label class="text-muted small fw-bold text-uppercase">Address</label>
+                            <p class="mb-0">@(string.IsNullOrEmpty(selectedTenant.Address) ? "No address provided." : selectedTenant.Address)</p>
+                        </div>
+                        <div class="col-12 mt-3">
+                            <label class="text-muted small fw-bold text-uppercase">Internal Notes</label>
+                            <p class="mb-0 text-muted">@(string.IsNullOrEmpty(selectedTenant.Notes) ? "No notes available." : selectedTenant.Notes)</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 px-4 pb-4 d-flex justify-content-between">
+                    <button type="button" class="btn btn-light rounded-3 fw-bold px-4" @onclick="CloseDetailsModal">Close</button>
+
+                    <div>
+                        @if (selectedTenant.Status == "Trial")
+                        {
+                            <button type="button" class="btn btn-success rounded-3 fw-bold px-4 me-2" @onclick="() => AcceptTenant(selectedTenant)">
+                                <i class="bi bi-check-lg me-1"></i> Accept
+                            </button>
+                        }
+                        <button type="button" class="btn-save" @onclick="() => OpenEdit(selectedTenant)">Edit Details</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ADD / EDIT MODAL (WITH SPLIT NAME FIELDS) -->
 @if (showModal)
 {
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New business" : "Edit business")</h5>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header border-0 pb-0 pt-4 px-4">
+                    <h4 class="modal-title fw-bolder" style="color: #0A2B1D;">@(editingId == null ? "New Business" : "Edit Business")</h4>
+                    <button type="button" class="btn-close" @onclick="CloseModal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <form>
+                        <div class="row g-3">
+                            <!-- Business Name & Code -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Business name <span class="text-danger">*</span></label>
+                                <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "border border-danger rounded-3" : "")">
+                                    <span class="input-group-text"><i class="bi bi-shop"></i></span>
+                                    <input class="form-control" placeholder="e.g. Verdant Agri Ventures" @bind="form.Name" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Tenant code <span class="text-danger">*</span></label>
+                                <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.Code) ? "border border-danger rounded-3" : "")">
+                                    <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
+                                    <input class="form-control" placeholder="@NextCode()" @bind="form.Code" />
+                                </div>
+                            </div>
+
+                            <!-- Owner Names (Split into 3) -->
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-muted">First Name</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                                    <input class="form-control" @bind="form.FName" placeholder="Juan" />
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-muted">Middle Name</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                                    <input class="form-control" @bind="form.MName" placeholder="D." />
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-muted">Last Name</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                                    <input class="form-control" @bind="form.LName" placeholder="Dela Cruz" />
+                                </div>
+                            </div>
+
+                            <!-- Email & Contact -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Owner email</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                    <input type="email" class="form-control" @bind="form.Email" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Contact number</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text"><i class="bi bi-telephone"></i></span>
+                                    <input class="form-control" @bind="form.Contact" />
+                                </div>
+                            </div>
+
+                            <!-- Province & Plan -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Region / province</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
+                                    <input class="form-control" @bind="form.Province" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Subscription plan</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text"><i class="bi bi-card-checklist"></i></span>
+                                    <select class="form-select" @bind="form.Plan">
+                                        <option value="">Select...</option>
+                                        @foreach (var p in Plans.Keys)
+                                        {
+                                            <option value="@p">@p</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Status & Sync -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Account status</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text"><i class="bi bi-info-circle"></i></span>
+                                    <select class="form-select" @bind="form.Status">
+                                        <option>Active</option>
+                                        <option>Suspended</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Synchronization</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text"><i class="bi bi-arrow-repeat"></i></span>
+                                    <select class="form-select" @bind="form.Sync">
+                                        <option>Synced</option>
+                                        <option>Pending</option>
+                                        <option>Offline</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Date & Address -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Date registered</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text"><i class="bi bi-calendar"></i></span>
+                                    <input type="date" class="form-control" @bind="form.Registered" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Address</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text"><i class="bi bi-map"></i></span>
+                                    <input class="form-control" @bind="form.Address" />
+                                </div>
+                            </div>
+
+                            <!-- Internal Notes -->
+                            <div class="col-12">
+                                <label class="form-label fw-bold small text-muted">Internal notes</label>
+                                <div class="input-group modern-input">
+                                    <span class="input-group-text" style="align-items: flex-start; padding-top: 10px;"><i class="bi bi-journal-text"></i></span>
+                                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-0 pt-0 px-4 pb-4">
+                    <button type="button" class="btn btn-light rounded-3 fw-bold px-4" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save" @onclick="Save">Save Business</button>
+                </div>
             </div>
+        </div>
+    </div>
+}
+<!-- SUCCESS CREDENTIALS MODAL -->
+@if (showSuccessModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="bg-success bg-opacity-10 text-success rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
+                        <i class="bi bi-check-circle" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h4 class="fw-bolder mb-1" style="color: #0A2B1D;">Account Created!</h4>
+                    <p class="text-muted small mb-4">Please copy these temporary credentials and provide them to the business owner.</p>
 
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Business name <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
-                    {
-                        <div class="err">Business name is required.</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Tenant code <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Code) ? "is-invalid" : "")" placeholder="@NextCode()" @bind="form.Code" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Code))
-                    {
-                        <div class="err">Tenant code is required.</div>
-                    }
-                </div>
+                    <div class="text-start p-3 rounded-3 mb-4" style="background-color: #f8f9fa; border: 1px solid #dee2e6;">
+                        <div class="mb-2">
+                            <label class="text-muted small fw-bold text-uppercase">Email Address</label>
+                            <div class="fw-bold">@generatedEmail</div>
+                        </div>
+                        <div>
+                            <label class="text-muted small fw-bold text-uppercase">Temporary Password</label>
+                            <div class="fw-bold" style="color: var(--primary-green);">@generatedPassword</div>
+                        </div>
+                    </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Owner / administrator</label>
-                    <input class="form-control" @bind="form.Owner" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Owner email</label>
-                    <input type="email" class="form-control" @bind="form.Email" />
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Contact number</label>
-                    <input class="form-control" @bind="form.Contact" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Region / province</label>
-                    <input class="form-control" @bind="form.Province" />
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Subscription plan</label>
-                    <select class="form-select" @bind="form.Plan">
-                        <option value="">Select...</option>
-                        @foreach (var p in Plans.Keys)
-                        {
-                            <option value="@p">@p</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Account status</label>
-                    <select class="form-select" @bind="form.Status">
-                        <option>Active</option>
-                        <option>Trial</option>
-                        <option>Suspended</option>
-                    </select>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Date registered</label>
-                    <input type="date" class="form-control" @bind="form.Registered" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Synchronization</label>
-                    <select class="form-select" @bind="form.Sync">
-                        <option>Synced</option>
-                        <option>Pending</option>
-                        <option>Offline</option>
-                    </select>
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label">Address</label>
-                    <input class="form-control" @bind="form.Address" />
-                </div>
-                <div class="col-12">
-                    <label class="form-label">Internal notes</label>
-                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                    <button type="button" class="btn-save w-100 py-2" @onclick="() => showSuccessModal = false">
+                        Got it, close this window
+                    </button>
                 </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
+<!-- DELETE CONFIRMATION MODAL -->
+@if (showDeleteModal && tenantToDelete != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
+                        <i class="bi bi-exclamation-triangle" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Delete Business?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to delete <strong>@tenantToDelete.Name</strong>? This action cannot be undone and will also delete its associated user accounts.
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light rounded-3 fw-bold px-4" @onclick="CloseDeleteModal">Cancel</button>
+                        <button type="button" class="btn btn-danger rounded-3 fw-bold px-4 shadow-sm" @onclick="ConfirmDelete">
+                            <i class="bi bi-trash me-1"></i> Yes, Delete
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -198,11 +408,23 @@
     // ---------- MODELS ----------
     class Tenant
     {
-        public int Id { get; set; }
+        public long Id { get; set; }
         public string Name { get; set; } = "";
         public string Code { get; set; } = "";
-        public string Owner { get; set; } = "";
+
+        // Name Properties for the User
+        public string FName { get; set; } = "";
+        public string MName { get; set; } = "";
+        public string LName { get; set; } = "";
+
+        // Computed Property for displaying Full Name safely
+        public string OwnerName => $"{FName} {MName} {LName}".Replace("  ", " ").Trim();
+
         public string Email { get; set; } = "";
+
+        // NEW: Property to hold the password for display
+        public string Password { get; set; } = "";
+
         public string Contact { get; set; } = "";
         public string Province { get; set; } = "";
         public string Plan { get; set; } = "";
@@ -221,11 +443,22 @@
     string searchText = "";
     bool showModal;
     bool showErrors;
-    int? editingId;
-    int? openMenuId;
+    long? editingId;
+    long? openMenuId;
     Tenant form = new();
 
-    // Temporary monthly price per plan (para sa recurring revenue)
+    bool showDetailsModal;
+    Tenant? selectedTenant;
+
+    bool showSuccessModal;
+    string generatedEmail = "";
+    string generatedPassword = "";
+
+    bool showDeleteModal;
+    Tenant? tenantToDelete;
+
+    List<Tenant> tenants = new();
+
     static readonly Dictionary<string, decimal> Plans = new()
     {
         ["Starter"] = 2998m,
@@ -234,20 +467,39 @@
         ["Cooperative Custom"] = 14999m,
     };
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    readonly List<Tenant> tenants = new()
+    protected override async Task OnInitializedAsync()
     {
-        new() { Id = 1, Name = "Verdant Agri Ventures", Code = "AGV-001", Province = "Nueva Ecija", Owner = "Maria L. Santos",
-                Email = "maria.santos@verdantagri.ph", Plan = "Growth", Status = "Active", Sync = "Synced", Registered = new(2024, 2, 14) },
-        new() { Id = 2, Name = "Harvest Hills Agri Corp", Code = "HAR-002", Province = "Pampanga", Owner = "Jose P. Rivera",
-                Email = "jose@harvesthills.ph", Plan = "Enterprise", Status = "Active", Sync = "Synced", Registered = new(2023, 8, 2) },
-        new() { Id = 3, Name = "Sunrise Rice Farmers Coop", Code = "SRF-003", Province = "Isabela", Owner = "Andres B. Cruz",
-                Email = "andres@sunriserice.coop", Plan = "Cooperative Custom", Status = "Active", Sync = "Pending", Registered = new(2024, 6, 19) },
-        new() { Id = 4, Name = "Green Valley Farms", Code = "GRN-004", Province = "Benguet", Owner = "Teresa M. Lim",
-                Email = "teresa@greenvalley.ph", Plan = "Starter", Status = "Trial", Sync = "Offline", Registered = new(2026, 9, 30) },
-        new() { Id = 5, Name = "Bicol River Organic Growers", Code = "BRO-005", Province = "Camarines Sur", Owner = "Rafael D. Ocampo",
-                Email = "rafael@bicolriver.ph", Plan = "Starter", Status = "Suspended", Sync = "Offline", Registered = new(2025, 11, 8) },
-    };
+        await LoadTenantsAsync();
+    }
+
+    private async Task LoadTenantsAsync()
+    {
+        var businesses = await DbContext.Businesses.Include(b => b.Users).ToListAsync();
+
+        tenants = businesses.Select(b =>
+        {
+            var owner = b.Users?.FirstOrDefault(u => u.Role == "TenantAdmin");
+            return new Tenant
+            {
+                Id = b.BusinessId,
+                Name = b.BusinessName,
+                Code = $"TEN-{b.BusinessId:000}",
+                FName = owner?.FName ?? "",
+                MName = owner?.MName ?? "",
+                LName = owner?.LName ?? "",
+                Email = b.Email,
+                Password = owner?.PasswordHash ?? "", 
+                Plan = b.PlanName,
+                Status = b.Status,
+                Sync = b.SyncStatus,
+                Registered = b.RegisteredAt,
+                Contact = b.ContactNumber,
+                Province = b.Province,
+                Address = b.Address,
+                Notes = b.Notes
+            };
+        }).ToList();
+    }
 
     // ---------- COMPUTED ----------
     List<Tenant> Filtered => string.IsNullOrWhiteSpace(searchText)
@@ -255,7 +507,7 @@
         : tenants.Where(t =>
             t.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
             t.Code.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            t.Owner.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            t.OwnerName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
             t.Province.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
 
     List<Stat> Stats
@@ -294,12 +546,27 @@
         _ => "pill-gray"
     };
 
-    string NextCode() => $"AGV-{tenants.Count + 1:000}";
+    string NextCode() => $"TEN-{(tenants.Count + 1):000}";
+
+    // NEW METHOD: Generate Random 8-Character Password
+    private string GenerateTempPassword()
+    {
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+        var random = new Random();
+        return new string(Enumerable.Repeat(chars, 8)
+            .Select(s => s[random.Next(s.Length)]).ToArray());
+    }
 
     // ---------- ACTIONS ----------
     void OpenNew()
     {
-        form = new Tenant { Registered = DateTime.Today, Status = "Trial", Sync = "Synced" };
+        form = new Tenant
+        {
+            Registered = DateTime.Today,
+            Status = "Active",
+            Sync = "Synced",
+            Code = NextCode()
+        };
         editingId = null;
         showErrors = false;
         showModal = true;
@@ -307,6 +574,7 @@
 
     void OpenEdit(Tenant t)
     {
+        showDetailsModal = false; // Close details modal if open
         form = t.Clone();
         editingId = t.Id;
         showErrors = false;
@@ -316,7 +584,36 @@
 
     void CloseModal() => showModal = false;
 
-    void Save()
+    void OpenDetails(Tenant t)
+    {
+        selectedTenant = t;
+        showDetailsModal = true;
+    }
+
+    void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedTenant = null;
+    }
+
+    // ACCEPT FUNCTION (From Trial to Active)
+    async Task AcceptTenant(Tenant t)
+    {
+        var business = await DbContext.Businesses.FindAsync(t.Id);
+        if (business != null)
+        {
+            business.Status = "Active";
+            DbContext.Businesses.Update(business);
+            await DbContext.SaveChangesAsync();
+
+            // Refresh
+            await LoadTenantsAsync();
+            if (showDetailsModal) CloseDetailsModal();
+        }
+    }
+
+    // Updated Save method (With Auto Password Generation)
+    async Task Save()
     {
         showErrors = true;
         if (string.IsNullOrWhiteSpace(form.Name) || string.IsNullOrWhiteSpace(form.Code))
@@ -324,23 +621,131 @@
 
         if (editingId == null)
         {
-            form.Id = tenants.Count == 0 ? 1 : tenants.Max(t => t.Id) + 1;
-            tenants.Add(form);
+            // CREATE NEW BUSINESS
+            var newBusiness = new Business
+            {
+                BusinessName = form.Name,
+                Email = form.Email,
+                PlanName = form.Plan,
+                Status = form.Status,
+                SyncStatus = form.Sync,
+                RegisteredAt = form.Registered,
+                ContactNumber = form.Contact,
+                Province = form.Province,
+                Address = form.Address,
+                Notes = form.Notes
+            };
+
+            DbContext.Businesses.Add(newBusiness);
+            await DbContext.SaveChangesAsync();
+
+            // GENERATE TEMPORARY PASSWORD
+            string tempPassword = GenerateTempPassword();
+
+            // CREATE USER ACCOUNT
+            var newUser = new User
+            {
+                BusinessId = newBusiness.BusinessId,
+                Role = "TenantAdmin",
+                FName = form.FName,
+                MName = form.MName,
+                LName = form.LName,
+                Email = form.Email,
+                PasswordHash = tempPassword, // Use the generated password
+                Status = "Active",
+                CreatedAt = DateTime.Now
+            };
+            DbContext.Users.Add(newUser);
+            await DbContext.SaveChangesAsync();
+
+            // SHOW SUCCESS MODAL
+            generatedEmail = form.Email;
+            generatedPassword = tempPassword;
+
+            showModal = false; // Close the Add Modal
+            showSuccessModal = true; // Open the Success Modal
         }
         else
         {
-            var idx = tenants.FindIndex(t => t.Id == editingId);
-            if (idx >= 0) tenants[idx] = form;
+            // UPDATE BUSINESS
+            var existingBusiness = await DbContext.Businesses.FindAsync(editingId);
+            if (existingBusiness != null)
+            {
+                existingBusiness.BusinessName = form.Name;
+                existingBusiness.Email = form.Email;
+                existingBusiness.PlanName = form.Plan;
+                existingBusiness.Status = form.Status;
+                existingBusiness.SyncStatus = form.Sync;
+                existingBusiness.RegisteredAt = form.Registered;
+                existingBusiness.ContactNumber = form.Contact;
+                existingBusiness.Province = form.Province;
+                existingBusiness.Address = form.Address;
+                existingBusiness.Notes = form.Notes;
+
+                DbContext.Businesses.Update(existingBusiness);
+                await DbContext.SaveChangesAsync();
+
+                // UPDATE USER ACCOUNT
+                var existingUser = await DbContext.Users.FirstOrDefaultAsync(u => u.BusinessId == editingId && u.Role == "TenantAdmin");
+                if (existingUser != null)
+                {
+                    existingUser.FName = form.FName;
+                    existingUser.MName = form.MName;
+                    existingUser.LName = form.LName;
+                    existingUser.Email = form.Email;
+                    DbContext.Users.Update(existingUser);
+                    await DbContext.SaveChangesAsync();
+                }
+            }
+
+            showModal = false; // Close modal for edit
         }
-        showModal = false;
+
+        await LoadTenantsAsync();
     }
 
+    // 1. Open the delete confirmation modal
     void Delete(Tenant t)
     {
-        tenants.Remove(t);
-        openMenuId = null;
+        tenantToDelete = t;
+        showDeleteModal = true;
+        openMenuId = null; 
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    // 2. Close the modal
+    void CloseDeleteModal()
+    {
+        showDeleteModal = false;
+        tenantToDelete = null;
+    }
+
+    // 3. Execute the deletion process
+    async Task ConfirmDelete()
+    {
+        if (tenantToDelete == null) return;
+
+        // Include Users to avoid Foreign Key constraint errors
+        var businessToDelete = await DbContext.Businesses
+            .Include(b => b.Users)
+            .FirstOrDefaultAsync(b => b.BusinessId == tenantToDelete.Id);
+
+        if (businessToDelete != null)
+        {
+            // Delete related user accounts first
+            if (businessToDelete.Users != null && businessToDelete.Users.Any())
+            {
+                DbContext.Users.RemoveRange(businessToDelete.Users);
+            }
+
+            // Then delete the business record
+            DbContext.Businesses.Remove(businessToDelete);
+            await DbContext.SaveChangesAsync();
+        }
+
+        CloseDeleteModal();
+        await LoadTenantsAsync();
+    }
+
+    void ToggleMenu(long id) => openMenuId = openMenuId == id ? null : id;
     void CloseMenu() => openMenuId = null;
 }

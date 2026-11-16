@@ -1,0 +1,159 @@
+﻿@page "/select-plan"
+@layout LandingLayout
+@inject NavigationManager NavigationManager
+@inject AgriNexus.DataLayer.AgriNexusDbContext DbContext
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer.Models
+
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h2 class="fw-bolder" style="color: #0A2B1D;">Choose Your Subscription Plan</h2>
+        <p class="text-muted">Start with a 14-day free trial. No credit card required.</p>
+    </div>
+
+    <!-- ERROR DISPLAY -->
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger text-center mb-4">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @errorMessage
+        </div>
+    }
+
+    <div class="row g-4 justify-content-center">
+        @foreach (var plan in AvailablePlans)
+        {
+            <div class="col-12 col-md-4">
+                <div class="card-box h-100 p-4 shadow-sm border @(plan.Recommended ? "border-success" : "")">
+                    @if (plan.Recommended)
+                    {
+                        <span class="badge bg-success mb-2">Recommended</span>
+                    }
+                    <h4 class="fw-bold text-dark">@plan.Name</h4>
+                    <p class="text-muted small">@plan.Description</p>
+                    <h2 class="fw-bolder text-success mb-3">₱@plan.Price.ToString("N2")<span class="fs-6 text-muted">/mo</span></h2>
+
+                    <ul class="list-unstyled small mb-4">
+                        <li><i class="bi bi-check2 text-success me-2"></i> Up to @plan.BranchLimit Branches</li>
+                        <li><i class="bi bi-check2 text-success me-2"></i> Up to @plan.StaffLimit Staff Accounts</li>
+                        <li><i class="bi bi-check2 text-success me-2"></i> @plan.StorageGb GB Storage</li>
+                    </ul>
+
+                    <button type="button" class="btn-save w-100 py-3 rounded-3" @onclick="() => Subscribe(plan)" disabled="@isProcessing">
+                        @if (isProcessing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Select Plan
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    // CHANGED: int to long
+    private long currentBusinessId = 0;
+    private List<SubscriptionPlan> AvailablePlans = new();
+    private bool isProcessing = false;
+    private string errorMessage = ""; // Added for error display
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 1. Manually parse the query string from the URL
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = uri.Query;
+
+        if (!string.IsNullOrEmpty(query))
+        {
+            var queryString = query.TrimStart('?');
+            var parameters = queryString.Split('&');
+
+            foreach (var param in parameters)
+            {
+                var keyValue = param.Split('=');
+                if (keyValue.Length == 2 && keyValue[0] == "businessId")
+                {
+                    // CHANGED: int.TryParse to long.TryParse
+                    if (long.TryParse(keyValue[1], out long bizId))
+                    {
+                        currentBusinessId = bizId;
+                    }
+                }
+            }
+        }
+
+        // 2. Fetch plans from the database
+        AvailablePlans = await DbContext.SubscriptionPlans.ToListAsync();
+
+        // Fallback if the DB is empty
+        if (!AvailablePlans.Any())
+        {
+            AvailablePlans = new List<SubscriptionPlan>
+            {
+                new() { PlanId = 1, Name = "Starter", Price = 1499, Description = "For small farms", BranchLimit = 1, StaffLimit = 5, StorageGb = 5, Recommended = false },
+                new() { PlanId = 2, Name = "Growth", Price = 3999, Description = "For growing businesses", BranchLimit = 3, StaffLimit = 25, StorageGb = 50, Recommended = true },
+                new() { PlanId = 3, Name = "Enterprise", Price = 9999, Description = "For large operations", BranchLimit = 15, StaffLimit = 150, StorageGb = 250, Recommended = false }
+            };
+        }
+    }
+
+    private async Task Subscribe(SubscriptionPlan selectedPlan)
+    {
+        errorMessage = "";
+
+        // I-check kung na-parse ba ang BusinessId
+        if (currentBusinessId == 0)
+        {
+            errorMessage = "System Error: Business ID not found in the URL. Please go back and register again.";
+            return;
+        }
+
+        if (isProcessing) return;
+        isProcessing = true;
+
+        try
+        {
+            // 1. Update the Business Record with the chosen plan
+            var business = await DbContext.Businesses.FindAsync(currentBusinessId);
+            if (business != null)
+            {
+                business.PlanName = selectedPlan.Name;
+            }
+            else
+            {
+                errorMessage = "Business not found in the database.";
+                isProcessing = false;
+                return;
+            }
+
+            // 2. Create a Subscription Record
+            var subscription = new Subscription
+            {
+                BusinessId = currentBusinessId,
+                SubscriptionPlanId = selectedPlan.PlanId,
+                Amount = selectedPlan.Price,
+                Cycle = "monthly",
+                RenewalDate = DateTime.Today.AddDays(30),
+                PaymentStatus = "Pending",
+                Status = "Pending",
+                AutoRenew = true
+            };
+            DbContext.Subscriptions.Add(subscription);
+
+            await DbContext.SaveChangesAsync();
+
+            // 3. Redirect to login
+            NavigationManager.NavigateTo("/login?registered=true");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Database Error: " + ex.Message;
+            Console.WriteLine("Error: " + ex.Message);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}

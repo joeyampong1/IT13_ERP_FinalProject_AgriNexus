@@ -42,6 +42,22 @@
             {
                 <NavLink class="nav-link" href="/branch-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
             }
+            else if (Auth.CurrentRole == AgriNexus.Services.UserRole.InventoryOfficer)
+            {
+                <NavLink class="nav-link" href="/inventory-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+            }
+            else if (Auth.CurrentRole == AgriNexus.Services.UserRole.LaborOfficer)
+            {
+                <NavLink class="nav-link" href="/labor-harvest-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+            }
+            else if (Auth.CurrentRole == AgriNexus.Services.UserRole.SalesOfficer)
+            {
+                <NavLink class="nav-link" href="/sales-cashier-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+            }
+            else if (Auth.CurrentRole == AgriNexus.Services.UserRole.Accountant)
+            {
+                <NavLink class="nav-link" href="/finance-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+            }
             else
             {
                 <NavLink class="nav-link" href="/dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>

@@ -1,0 +1,354 @@
+﻿@page "/branch-dashboard"
+@using System.Globalization
+
+<!-- BUSINESS / BRANCH FILTER -->
+<div class="filter-bar mb-4">
+    <div class="filter-box">
+        <i class="bi bi-buildings"></i>
+        <span class="filter-label">BUSINESS</span>
+        <select class="filter-select" @bind="business" @bind:after="OnBusinessChanged">
+            @foreach (var b in BusinessNames)
+            {
+                <option value="@b">@b</option>
+            }
+        </select>
+    </div>
+
+    <div class="filter-box">
+        <i class="bi bi-shop"></i>
+        <span class="filter-label">BRANCH</span>
+        <select class="filter-select" @bind="branch">
+            @foreach (var b in CurrentBranches)
+            {
+                <option value="@b">@b</option>
+            }
+        </select>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Branch Dashboard</h2>
+        <p class="text-muted mb-0 page-sub">@branch · day-to-day operations, monitoring, and branch performance.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="farms" class="btn-outline-lg">Farms &amp; plots</a>
+        <a href="sales" class="btn-primary-lg">Record a sale</a>
+    </div>
+</div>
+
+<!-- STAT CARDS (ROW 1) -->
+<div class="row g-3 mb-4">
+    @foreach (var s in TopStats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    <div class="text-muted small mt-1">@s.Note</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- CHARTS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-6">
+        <div class="card-box h-100">
+            <div class="panel-title">Sales — last 7 days</div>
+            <div class="panel-sub">Branch sales value per day</div>
+            <svg viewBox="0 0 540 240" class="w-100" role="img" aria-label="Sales last 7 days">
+                @ChartBody(SalesDays, SalesMax)
+            </svg>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card-box h-100">
+            <div class="panel-title">Branch expenses — last 7 days</div>
+            <div class="panel-sub">Supplies, labor, fuel and other costs</div>
+            <svg viewBox="0 0 540 240" class="w-100" role="img" aria-label="Branch expenses last 7 days">
+                @ChartBody(ExpenseDays, ExpenseMax)
+            </svg>
+        </div>
+    </div>
+</div>
+
+<!-- STAT CARDS (ROW 2) -->
+<div class="row g-3 mb-4">
+    @foreach (var s in BottomStats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- LOW STOCK + HARVEST -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-head d-flex justify-content-between align-items-start gap-2">
+                <div>
+                    <div class="panel-title">Low stock alerts</div>
+                    <div class="panel-sub mb-0">Items at or below reorder level</div>
+                </div>
+                <a href="inventory" class="btn-pill">Inventory</a>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Category</th>
+                            <th>On hand</th>
+                            <th>Reorder at</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var i in LowStock)
+                        {
+                            <tr>
+                                <td class="col-name">@i.Item</td>
+                                <td class="text-nowrap">@i.Category</td>
+                                <td class="text-nowrap">@i.OnHand @i.Unit</td>
+                                <td class="text-nowrap text-muted">@i.Reorder @i.Unit</td>
+                            </tr>
+                        }
+                        @if (LowStock.Count == 0)
+                        {
+                            <tr><td colspan="4" class="text-center text-muted py-4">No low stock items.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-head d-flex justify-content-between align-items-start gap-2">
+                <div>
+                    <div class="panel-title">Harvest awaiting approval</div>
+                    <div class="panel-sub mb-0">Approve to post into produce stock</div>
+                </div>
+                <a href="harvest" class="btn-pill">Harvest</a>
+            </div>
+
+            @if (PendingHarvests.Count == 0)
+            {
+                <div class="empty-state">
+                    <div class="empty-icon"><i class="bi bi-inbox"></i></div>
+                    <div class="fw-semibold">No harvests waiting</div>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="table data-table align-middle mb-0">
+                        <thead><tr><th>Lot</th><th>Crop</th><th>Quantity</th><th>Grade</th></tr></thead>
+                        <tbody>
+                            @foreach (var h in PendingHarvests)
+                            {
+                                <tr>
+                                    <td class="text-nowrap">@h.Lot</td>
+                                    <td>@h.Crop</td>
+                                    <td class="text-nowrap">@h.Kg kg</td>
+                                    <td>@h.Grade</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    // ---------- MODELS ----------
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record DayAmt(DateTime Date, decimal Amount)
+    {
+        public string Label => Date.ToString("ddd", CultureInfo.InvariantCulture);
+    }
+    record StockRow(string Item, string Category, decimal OnHand, string Unit, decimal Reorder);
+    record HarvestRow(string Lot, string Crop, int Kg, string Grade, bool Approved);
+    record SaleRec(DateTime Date, decimal Amount);
+    record ExpenseRec(DateTime Date, decimal Amount);
+    record PlotRec(string Name, bool Growing);
+
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    // ---------- FILTER STATE ----------
+    string business = "Verdant Agri Ventures";
+    string branch = "North Field Branch";
+
+    static readonly string[] BusinessNames =
+    {
+        "Sunrise Rice Farmers Coop", "Green Valley Farms", "Verdant Agri Ventures",
+        "Harvest Hills Agri Corp", "Bicol River Organic Growers",
+    };
+
+    // TODO: kuhaa sa database ang branches kada business
+    static readonly Dictionary<string, string[]> BranchesByBusiness = new()
+    {
+        ["Verdant Agri Ventures"] = new[] { "North Field Branch", "South Valley Branch", "Central Packing Branch" },
+    };
+
+    string[] CurrentBranches =>
+        BranchesByBusiness.TryGetValue(business, out var b) ? b : new[] { "Main Branch" };
+
+    void OnBusinessChanged() => branch = CurrentBranches[0];
+
+    // ---------- TEMPORARY DATA (North Field Branch, ilisi sa database later) ----------
+    // Walay sales/expense records karong bulana, mao nga ₱0.00 ang tanan.
+    readonly List<SaleRec> sales = new();
+    readonly List<ExpenseRec> expenses = new();
+
+    readonly List<HarvestRow> harvests = new()
+    {
+        new("LOT-004", "Rice", 320, "Grade A", true),
+        new("LOT-005", "Corn", 210, "Grade A", true),
+    };
+
+    readonly List<PlotRec> plots = new()
+    {
+        new("Plot A", true), new("Plot B", true), new("Plot C", false),
+    };
+
+    // Mohaum sa screenshot: 3 crop cycles, 4 workers, 4 open assignments, 13 items tracked
+    const int CropCycles = 3;
+    const int Workers = 4;
+    const int OpenAssignments = 4;
+    const int InventoryTracked = 13;
+
+    readonly List<StockRow> lowStock = new()
+    {
+        new("Diesel", "Fuel", 38, "liter", 50),
+        new("Hybrid corn seeds (Pioneer 30T80)", "Seeds", 30, "kg", 40),
+        new("Urea (46-0-0)", "Fertilizer", 6, "sack", 10),
+        new("Insecticide (lambda-cyhalothrin)", "Pesticide", 2, "bottle", 5),
+    };
+
+    // ---------- COMPUTED ----------
+    List<StockRow> LowStock => lowStock;
+    List<HarvestRow> PendingHarvests => harvests.Where(h => !h.Approved).ToList();
+
+    List<DayAmt> SalesDays => Last7(sales.Select(s => (s.Date, s.Amount)));
+    List<DayAmt> ExpenseDays => Last7(expenses.Select(e => (e.Date, e.Amount)));
+
+    double SalesMax => NiceMax(SalesDays);
+    double ExpenseMax => NiceMax(ExpenseDays);
+
+    List<DayAmt> Last7(IEnumerable<(DateTime Date, decimal Amount)> src)
+    {
+        var list = src.ToList();
+        var today = DateTime.Today;
+        return Enumerable.Range(0, 7)
+            .Select(i => today.AddDays(i - 6))
+            .Select(d => new DayAmt(d, list.Where(x => x.Date.Date == d).Sum(x => x.Amount)))
+            .ToList();
+    }
+
+    // Axis: minimum 4 (₱0-₱4), kung naay data i-round up sa 4,000
+    static double NiceMax(List<DayAmt> days)
+    {
+        var max = (double)days.Max(d => d.Amount);
+        if (max <= 4) return 4;
+        return Math.Ceiling(max / 4000) * 4000;
+    }
+
+    List<Stat> TopStats
+    {
+        get
+        {
+            var today = DateTime.Today;
+            var todaySales = sales.Where(s => s.Date.Date == today).ToList();
+            return new()
+            {
+                new("SALES TODAY", Peso(todaySales.Sum(s => s.Amount)),
+                    todaySales.Count + (todaySales.Count == 1 ? " transaction" : " transactions"),
+                    "bi-graph-up-arrow", ""),
+                new("PENDING HARVEST APPROVALS", PendingHarvests.Count.ToString(),
+                    harvests.Count + " harvest records", "bi-flower1", ""),
+                new("OPEN WORK ASSIGNMENTS", OpenAssignments.ToString(),
+                    Workers + " workers on record", "bi-clipboard-check", "stat-icon-plain"),
+                new("LOW STOCK ITEMS", LowStock.Count.ToString(),
+                    InventoryTracked + " inventory items tracked", "bi-boxes", "stat-icon-danger"),
+            };
+        }
+    }
+
+    List<Stat> BottomStats
+    {
+        get
+        {
+            var now = DateTime.Today;
+            var monthExpenses = expenses
+                .Where(e => e.Date.Year == now.Year && e.Date.Month == now.Month)
+                .Sum(e => e.Amount);
+
+            return new()
+            {
+                new("PLOTS", plots.Count.ToString(), plots.Count(p => p.Growing) + " actively growing", "bi-map", ""),
+                new("CROP CYCLES", CropCycles.ToString(), "", "bi-flower2", "stat-icon-plain stat-icon-green"),
+                new("WORKERS", Workers.ToString(), "", "bi-person-workspace", "stat-icon-plain stat-icon-brown"),
+                new("MONTH EXPENSES", Peso(monthExpenses), "Approved and pending", "bi-boxes", "stat-icon-gray"),
+            };
+        }
+    }
+
+    // ---------- HELPERS ----------
+    static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    static string F(double d) => d.ToString("0.##", Inv);
+
+    static string AxisLabel(double v) =>
+        v >= 1000 ? "₱" + (v / 1000).ToString("0.#", Inv) + "K" : "₱" + v.ToString("0", Inv);
+
+    // Plot area: x 62..530, y 20..200
+    RenderFragment ChartBody(List<DayAmt> days, double max) => __builder =>
+    {
+        const double left = 62, right = 530, top = 20, bottom = 200;
+        var step = (right - left) / Math.Max(1, days.Count - 1);
+
+        for (int i = 0; i <= 4; i++)
+        {
+            var y = top + i * (bottom - top) / 4;
+            var val = max / 4 * (4 - i);
+            <g>
+                <line x1="@F(left)" x2="@F(right)" y1="@F(y)" y2="@F(y)" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                <text x="52" y="@F(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
+            </g>
+        }
+
+        var pts = days.Select((d, i) => (X: left + i * step, Y: bottom - (double)d.Amount / max * (bottom - top))).ToList();
+        var polyPoints = string.Join(" ", pts.Select(p => F(p.X) + "," + F(p.Y)));
+
+        <polyline points="@polyPoints" fill="none" stroke="#4C8B1F" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+
+        for (int i = 0; i < days.Count; i++)
+        {
+            <g>
+                <text x="@F(pts[i].X)" y="220" text-anchor="middle" font-size="11" fill="#475569">@days[i].Label</text>
+            </g>
+        }
+    };
+}

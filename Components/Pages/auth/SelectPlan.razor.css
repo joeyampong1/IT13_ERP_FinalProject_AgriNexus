@@ -1,0 +1,85 @@
+/* =========================================
+   SELECT PLAN PAGE - PREMIUM STYLES
+   ========================================= */
+
+.card-box {
+    background-color: var(--card-bg);
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+    /* Hover effect para mo-lutaw ang card */
+    .card-box:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 40px rgba(10, 43, 29, 0.1) !important;
+        border-color: #bbf7d0; /* Light green border on hover */
+    }
+
+/* Highlight ang Recommended Plan */
+.border-success {
+    border: 2px solid var(--primary-green) !important;
+    box-shadow: 0 10px 25px rgba(56, 142, 60, 0.15);
+}
+
+/* Ang Recommended Badge */
+.badge.bg-success {
+    background-color: var(--primary-green) !important;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    box-shadow: 0 4px 10px rgba(56, 142, 60, 0.3);
+}
+
+/* Pricing Text */
+h2.fw-bolder {
+    font-size: 2.5rem;
+    letter-spacing: -1px;
+}
+
+    h2.fw-bolder span {
+        font-size: 1rem;
+        font-weight: 500;
+    }
+
+/* Features List */
+ul.list-unstyled li {
+    padding: 8px 0;
+    font-size: 0.9rem;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+}
+
+    ul.list-unstyled li i {
+        font-size: 1.1rem;
+    }
+
+/* Buttons */
+.btn-save {
+    background-color: var(--primary-green); 
+    color: #fff;
+    border: 0;
+    padding: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+}
+
+    .btn-save:hover:not(:disabled) {
+        background-color: #144A29; 
+        transform: translateY(-2px);
+        box-shadow: 0 8px 15px rgba(56, 142, 60, 0.3) !important;
+    }
+
+/* Responsive adjustment */
+@media (max-width: 768px) {
+    h2.fw-bolder {
+        font-size: 2rem;
+    }
+}

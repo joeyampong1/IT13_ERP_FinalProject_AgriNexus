@@ -332,3 +332,13 @@
     .btn-save:hover {
         background: #144A29;
     }
+
+/* Add this at the bottom of your CSS file */
+.biz-table tbody tr {
+    transition: background-color 0.15s ease-in-out;
+}
+
+    .biz-table tbody tr:hover {
+        background-color: #F1F5F9; /* Light gray background on hover */
+        cursor: pointer;
+    }

@@ -1,5 +1,6 @@
 ﻿using System;
-using AgriNexus.DataLayer.Models; 
+using System.Linq;
+using AgriNexus.DataLayer.Models;
 
 namespace AgriNexus.Services
 {
@@ -32,10 +33,11 @@ namespace AgriNexus.Services
             NotifyStateChanged();
         }
 
-        // Updated Login method: Now accepts the actual User model from the database
         public void Login(User user)
         {
-            CurrentUserName = user.FullName;
+            // Safely combine name parts, ignoring empty middle names to prevent double spaces
+            var nameParts = new[] { user.FName, user.MName, user.LName };
+            CurrentUserName = string.Join(" ", nameParts.Where(part => !string.IsNullOrWhiteSpace(part)));
 
             // Convert the string role from the database to the Enum
             if (Enum.TryParse<UserRole>(user.Role, true, out var parsedRole))
@@ -47,12 +49,23 @@ namespace AgriNexus.Services
                 CurrentRole = UserRole.TenantAdmin; // Default fallback
             }
 
-            // Set the access level based on the role
+            // Explicitly assign access levels based on the multi-tenant hierarchy
             AccessLevel = CurrentRole switch
             {
+                // Level 1: Platform Level
                 UserRole.SuperAdmin => "Platform-wide access",
+
+                // Level 2: Tenant Level (Business-wide)
                 UserRole.TenantAdmin => "Business-wide access",
                 UserRole.Accountant => "Business-wide access",
+
+                // Level 3 & 4: Branch Level (Assigned branch access)
+                UserRole.BranchManager => "Assigned branch access",
+                UserRole.InventoryOfficer => "Assigned branch access",
+                UserRole.LaborOfficer => "Assigned branch access",
+                UserRole.SalesOfficer => "Assigned branch access",
+
+                // Fallback for any unhandled roles
                 _ => "Assigned branch access"
             };
 
