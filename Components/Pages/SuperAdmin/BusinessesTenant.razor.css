@@ -79,8 +79,12 @@
     }
 
         .search-box input:focus {
-            border-color: var(--primary-green);
+            border-color: #1B5E34; 
+            box-shadow: 0 0 0 0.2rem rgba(27, 94, 52, 0.15); 
         }
+    .search-box:focus-within i {
+        color: #1B5E34; 
+    }
 
 .btn-new {
     display: inline-flex;
@@ -333,12 +337,132 @@
         background: #144A29;
     }
 
-/* Add this at the bottom of your CSS file */
+/* =========================================
+   TABLE ROW & FLOATING ACTION MENU (FINAL)
+   ========================================= */
+
 .biz-table tbody tr {
     transition: background-color 0.15s ease-in-out;
 }
 
     .biz-table tbody tr:hover {
-        background-color: #F1F5F9; /* Light gray background on hover */
+        background-color: #F1F5F9;
         cursor: pointer;
     }
+
+/* Floating Action Menu (Fixed Position) */
+.vertical-action-menu {
+    position: fixed; /* Prevents clipping by table overflow */
+    z-index: 1060;
+    width: 170px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.15);
+    text-align: left;
+}
+
+/* Backdrop for closing the menu */
+.menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+}
+
+/* Individual action buttons */
+.action-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #334155;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+    .action-item:hover {
+        background-color: #F1F5F9;
+        color: #0A2B1D;
+    }
+
+    .action-item.text-danger:hover {
+        background-color: #FEE2E2;
+        color: #B91C1C;
+    }
+/* =========================================
+   TOOLBAR TOGGLE TABS (FINAL FIX)
+   ========================================= */
+
+/* 1. Reset the container */
+.toolbar .btn-group {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    background-color: transparent !important;
+}
+
+    /* 2. Default state for BOTH tabs (Unselected) */
+    .toolbar .btn-group .btn {
+        font-size: 0.85rem;
+        padding: 0.5rem 1.2rem;
+        font-weight: 600;
+        border: none !important;
+        background-color: transparent !important;
+        color: #64748B;
+        box-shadow: none !important;
+    }
+
+/* 3. ACTIVE TAB (Selected) */
+.btn-check:checked + .btn-outline-success {
+    background-color: #1B5E34 !important;
+    background-image: none !important;
+    border-color: #1B5E34 !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+}
+
+    /* ACTIVE TAB HOVER */
+    .btn-check:checked + .btn-outline-success:hover {
+        background-color: #144A29 !important;
+        border-color: #144A29 !important;
+    }
+
+    /* Force Icon & Text to White inside Active Tab */
+    .btn-check:checked + .btn-outline-success i,
+    .btn-check:checked + .btn-outline-success span {
+        color: #ffffff !important;
+    }
+
+/* 4. ARCHIVED TAB (Selected) */
+.btn-check:checked + .btn-outline-secondary {
+    background-color: #475569 !important;
+    background-image: none !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+}
+
+    /* ARCHIVED TAB HOVER */
+    .btn-check:checked + .btn-outline-secondary:hover {
+        background-color: #334155 !important;
+        border-color: #334155 !important;
+    }
+
+/* 5. UNSELECTED TAB HOVER */
+.btn-check:not(:checked) + .btn:hover {
+    background-color: #F8FAFC !important;
+    color: #1B5E34;
+}
+
+/* 6. Restore Button Hover (Optional) */
+.action-item.text-success:hover {
+    background-color: #E6F0E9;
+    color: #1B5E34;
+}

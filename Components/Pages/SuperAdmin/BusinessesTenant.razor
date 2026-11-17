@@ -1,8 +1,12 @@
 ﻿@page "/businesses"
+@using Russkyc.Addressess.Philippines
+@using Russkyc.Addressess.Philippines.Entities
 @layout MainLayout
 @inject AgriNexus.DataLayer.AgriNexusDbContext DbContext
 @using Microsoft.EntityFrameworkCore
 @using AgriNexus.DataLayer.Models
+@inject IJSRuntime JS
+@using Microsoft.AspNetCore.Components.Web
 
 <div class="mb-4">
     <h2 class="page-title">Business / Tenant Management</h2>
@@ -31,71 +35,84 @@
     }
 </div>
 
-<!-- TOOLBAR -->
-<div class="toolbar mb-3">
+<!-- TOOLBAR WITH TABS -->
+<div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+
+    <!-- ACTIVE / ARCHIVED TABS -->
+    <div class="btn-group shadow-sm" role="group" aria-label="View Tabs">
+        <!-- Active Tab -->
+        <input type="radio" class="btn-check" name="viewTabs" id="tabActive" autocomplete="off"
+               checked="@(!showArchived)" @onchange="() => ToggleTab(false)">
+        <label class="btn btn-outline-success fw-bold" for="tabActive">
+            <i class="bi bi-check-circle me-1"></i> Active
+        </label>
+
+        <!-- Archived Tab -->
+        <input type="radio" class="btn-check" name="viewTabs" id="tabArchived" autocomplete="off"
+               checked="@showArchived" @onchange="() => ToggleTab(true)">
+        <label class="btn btn-outline-secondary fw-bold" for="tabArchived">
+            <i class="bi bi-archive me-1"></i> Archived
+        </label>
+    </div>
+
+    <!-- SEARCH BOX -->
     <div class="search-box">
         <i class="bi bi-search"></i>
-        <input type="text" placeholder="Search tenants..." @bind="searchText" @bind:event="oninput" />
+        <input type="text" placeholder="Search tenants..."
+               @bind="searchText"
+               @bind:event="oninput"
+               @bind:after="ResetPagination" />
     </div>
+
     <span class="text-muted small count-label">@Filtered.Count @(Filtered.Count == 1 ? "business" : "businesses")</span>
+
+    <!-- NEW BUTTON -->
     <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
         <i class="bi bi-plus-lg"></i> New business
     </button>
 </div>
 
-<!-- TABLE -->
-<div class="panel">
-    <div class="table-wrap">
-        <table class="table table-hover biz-table align-middle mb-0">
-            <thead>
+<!-- TABLE (WITH SCROLL, PAGINATION & ROUNDED CORNERS) -->
+<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 12px; border: 1px solid #e9ecef; max-height: calc(100vh - 280px); overflow: hidden;">
+
+    <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+            <thead class="bg-light" style="position: sticky; top: 0; z-index: 1;">
                 <tr>
-                    <th>Business</th>
-                    <th>Owner</th>
-                    <th>Plan</th>
-                    <th>Status</th>
-                    <th>Sync</th>
-                    <th>Registered</th>
-                    <th></th>
+                    <th class="text-muted small fw-bold text-uppercase py-3 px-4">Business</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Owner</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Plan</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Status</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Sync</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Registered</th>
+                    <th class="py-3"></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var t in Filtered)
+                @for (int i = 0; i < PaginatedTenants.Count(); i++)
                 {
+                    var t = PaginatedTenants.ElementAt(i);
+
                     <tr style="cursor: pointer;" @onclick="() => OpenDetails(t)">
-                        <td>
+                        <td class="px-4">
                             <div class="fw-semibold">@t.Name</div>
-                            <div class="sub">@t.Code@(string.IsNullOrWhiteSpace(t.Province) ? "" : " · " + t.Province)</div>
+                            <div class="text-muted small mt-1">@t.Code@(string.IsNullOrWhiteSpace(t.Province) ? "" : " · " + t.Province)</div>
                         </td>
                         <td>
-                            <div>@t.OwnerName</div>
-                            <div class="sub">@t.Email</div>
+                            <div class="fw-medium">@t.OwnerName</div>
+                            <div class="text-muted small mt-1">@t.Email</div>
                         </td>
                         <td class="fw-medium">@(string.IsNullOrEmpty(t.Plan) ? "—" : t.Plan)</td>
                         <td><span class="pill @StatusClass(t.Status)">@t.Status</span></td>
                         <td><span class="pill @SyncClass(t.Sync)">@t.Sync</span></td>
                         <td class="text-nowrap">@t.Registered.ToString("MMM d, yyyy")</td>
-                        <td class="text-end action-cell">
-                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(t.Id)" @onclick:stopPropagation="true" aria-label="Actions">
+                        <td class="text-end px-4 action-cell">
+                            <!-- Importante ang (e) ug ang ToggleMenuAsync -->
+                            <button type="button" class="btn-dots"
+                                    @onclick="(e) => ToggleMenuAsync(e, t.Id)"
+                                    @onclick:stopPropagation="true" aria-label="Actions">
                                 <i class="bi bi-three-dots"></i>
                             </button>
-                            @if (openMenuId == t.Id)
-                            {
-                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                <div class="row-menu">
-                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(t)" @onclick:stopPropagation="true">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </button>
-                                    @if (t.Status == "Trial")
-                                    {
-                                        <button type="button" class="row-menu-item text-success" @onclick="() => AcceptTenant(t)" @onclick:stopPropagation="true">
-                                            <i class="bi bi-check-circle"></i> Accept Request
-                                        </button>
-                                    }
-                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(t)" @onclick:stopPropagation="true">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </div>
-                            }
                         </td>
                     </tr>
                 }
@@ -106,89 +123,221 @@
             </tbody>
         </table>
     </div>
+
+    <!-- PAGINATION FOOTER -->
+    @if (Filtered.Count > 0)
+    {
+        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-radius: 0 0 12px 12px;">
+            <div class="text-muted small mb-2 mb-md-0">
+                Showing <span class="fw-bold text-dark">@StartItem</span> - <span class="fw-bold text-dark">@EndItem</span> of <span class="fw-bold text-dark">@Filtered.Count</span> businesses
+            </div>
+
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                    Previous
+                </button>
+
+                @for (int i = 1; i <= TotalPages; i++)
+                {
+                    var pageNumber = i;
+                    <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                            @onclick="() => GoToPage(pageNumber)">
+                        @pageNumber
+                    </button>
+                }
+
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                    Next
+                </button>
+            </div>
+        </div>
+    }
 </div>
 
-<!-- DETAILS MODAL -->
+<!-- ACTION MENU -->
+@if (openMenuId != null)
+{
+    var menuTenant = tenants.FirstOrDefault(x => x.Id == openMenuId);
+    if (menuTenant != null)
+    {
+        <div class="menu-backdrop" @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
+
+        <div class="vertical-action-menu shadow-lg" style="top:@(menuTop)px; left:@(menuLeft)px;">
+
+            @if (!showArchived)
+            {
+                <!-- Edit (always available in Active tab) -->
+                <button type="button" class="action-item"
+                        @onclick="() => OpenEdit(menuTenant)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-pencil-square text-success"></i> Edit 
+                </button>
+
+                @if (menuTenant.Status == "Trial")
+                {
+                    <!-- Trial: Accept OR Reject -->
+                    <button type="button" class="action-item"
+                            @onclick="() => AcceptTenant(menuTenant)"
+                            @onclick:stopPropagation="true">
+                        <i class="bi bi-check-circle text-primary"></i> Accept
+                    </button>
+                    <button type="button" class="action-item text-danger"
+                            @onclick="() => Reject(menuTenant)"
+                            @onclick:stopPropagation="true">
+                        <i class="bi bi-x-circle"></i> Reject 
+                    </button>
+                }
+                else
+                {
+                    <!-- Active / Suspended: Archive -->
+                    <button type="button" class="action-item text-danger"
+                            @onclick="() => Archive(menuTenant)"
+                            @onclick:stopPropagation="true">
+                        <i class="bi bi-archive-fill"></i> Archive 
+                    </button>
+                }
+            }
+            else
+            {
+                <!-- Archived tab: Restore only -->
+                <button type="button" class="action-item text-success"
+                        @onclick="() => RestoreTenant(menuTenant)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-arrow-counterclockwise"></i> Restore
+                </button>
+            }
+
+        </div>
+    }
+}
+
+<!-- DETAILS MODAL (MODERN UI) -->
 @if (showDetailsModal && selectedTenant != null)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
-            <div class="modal-content border-0 shadow-lg rounded-4">
-                <div class="modal-header border-0 pb-0 pt-4 px-4">
-                    <h4 class="modal-title fw-bolder" style="color: #0A2B1D;">Business Details</h4>
-                    <button type="button" class="btn-close" @onclick="CloseDetailsModal" aria-label="Close"></button>
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <!-- Modern Header -->
+                <div class="modal-header border-0 bg-light p-4 d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="bg-success bg-opacity-10 text-success rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                            <i class="bi bi-building fs-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedTenant.Name</h4>
+                            <span class="badge bg-secondary bg-opacity-10 text-dark border px-2 py-1 mt-1 rounded-pill">
+                                <i class="bi bi-upc-scan me-1 text-success"></i>@selectedTenant.Code
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
                 </div>
-                <div class="modal-body p-4">
-                    <div class="row g-3">
-                        <div class="col-12 mb-2">
-                            <h5 class="fw-bold mb-1" style="color: var(--primary-green);">@selectedTenant.Name</h5>
-                            <span class="text-muted small">Tenant Code: @selectedTenant.Code</span>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+
+                    <!-- SECTION 1: Owner & Contact -->
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-person-badge me-2 text-success"></i>Owner & Contact Info
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Owner Name</label>
+                                <p class="mb-0 fw-medium fs-6 text-dark">@selectedTenant.OwnerName</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Owner Email</label>
+                                <p class="mb-0 fw-medium fs-6 text-dark">@selectedTenant.Email</p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Temporary Password</label>
+                                <div class="mt-1">
+                                    <span class="badge bg-warning text-dark px-3 py-2 rounded-3 fs-6 shadow-sm">
+                                        <i class="bi bi-key-fill me-2"></i>@selectedTenant.Password
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Contact Number</label>
+                                <p class="mb-0 fw-medium fs-6 text-dark">
+                                    @(string.IsNullOrEmpty(selectedTenant.Contact) ? "N/A" : selectedTenant.Contact)
+                                </p>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small fw-bold text-uppercase">Owner Name</label>
-                            <p class="mb-0 fw-medium">@selectedTenant.OwnerName</p>
+                    </div>
+
+                    <!-- SECTION 2: Location & Plan -->
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-geo-alt me-2 text-success"></i>Location & Subscription
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Province</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-pin-map text-success me-2"></i>@(string.IsNullOrEmpty(selectedTenant.Province) ? "N/A" : selectedTenant.Province)
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Subscription Plan</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-card-checklist text-success me-2"></i>@(string.IsNullOrEmpty(selectedTenant.Plan) ? "None" : selectedTenant.Plan)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Date Registered</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-calendar-event text-success me-2"></i>@selectedTenant.Registered.ToString("MMMM d, yyyy")
+                                </p>
+                            </div>
+                            <div class="col-12 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Complete Address</label>
+                                <p class="mb-0 text-muted fst-italic">@(string.IsNullOrEmpty(selectedTenant.Address) ? "No address provided." : selectedTenant.Address)</p>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small fw-bold text-uppercase">Owner Email</label>
-                            <p class="mb-0 fw-medium">@selectedTenant.Email</p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small fw-bold text-uppercase">Temporary Password</label>
-                            <p class="mb-0 fw-medium">
-                                <span class="badge bg-warning text-dark px-3 py-2 rounded-3">
-                                    <i class="bi bi-key me-1"></i> @selectedTenant.Password
-                                </span>
-                            </p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small fw-bold text-uppercase">Contact Number</label>
-                            <p class="mb-0 fw-medium">@(string.IsNullOrEmpty(selectedTenant.Contact) ? "N/A" : selectedTenant.Contact)</p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small fw-bold text-uppercase">Region / Province</label>
-                            <p class="mb-0 fw-medium">@(string.IsNullOrEmpty(selectedTenant.Province) ? "N/A" : selectedTenant.Province)</p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small fw-bold text-uppercase">Subscription Plan</label>
-                            <p class="mb-0 fw-medium">@(string.IsNullOrEmpty(selectedTenant.Plan) ? "None" : selectedTenant.Plan)</p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small fw-bold text-uppercase">Status</label>
-                            <p class="mb-0">
+                    </div>
+
+                    <!-- SECTION 3: System Status & Notes -->
+                    <div class="p-4 rounded-4" style="background-color: #f8f9fa; border: 1px dashed #ced4da;">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-gear-wide-connected me-2 text-success"></i>System Status & Notes
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-2">Account Status</label>
                                 <span class="pill @StatusClass(selectedTenant.Status)">@selectedTenant.Status</span>
-                            </p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small fw-bold text-uppercase">Date Registered</label>
-                            <p class="mb-0 fw-medium">@selectedTenant.Registered.ToString("MMMM d, yyyy")</p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="text-muted small fw-bold text-uppercase">Synchronization</label>
-                            <p class="mb-0">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-2">Sync Status</label>
                                 <span class="pill @SyncClass(selectedTenant.Sync)">@selectedTenant.Sync</span>
-                            </p>
-                        </div>
-                        <div class="col-12 mt-4">
-                            <label class="text-muted small fw-bold text-uppercase">Address</label>
-                            <p class="mb-0">@(string.IsNullOrEmpty(selectedTenant.Address) ? "No address provided." : selectedTenant.Address)</p>
-                        </div>
-                        <div class="col-12 mt-3">
-                            <label class="text-muted small fw-bold text-uppercase">Internal Notes</label>
-                            <p class="mb-0 text-muted">@(string.IsNullOrEmpty(selectedTenant.Notes) ? "No notes available." : selectedTenant.Notes)</p>
+                            </div>
+
+                            <!-- Notes  -->
+                            <div class="col-12 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-2">Internal Notes</label>
+                                <div class="p-3 bg-white rounded-3 border">
+                                    <p class="mb-0 text-muted small">@(string.IsNullOrEmpty(selectedTenant.Notes) ? "No notes available." : selectedTenant.Notes)</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer border-0 pt-0 px-4 pb-4 d-flex justify-content-between">
-                    <button type="button" class="btn btn-light rounded-3 fw-bold px-4" @onclick="CloseDetailsModal">Close</button>
 
-                    <div>
+                <!-- Footer Actions -->
+                <div class="modal-footer border-0 p-4 bg-light d-flex justify-content-between">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+
+                    <div class="d-flex gap-2">
                         @if (selectedTenant.Status == "Trial")
                         {
-                            <button type="button" class="btn btn-success rounded-3 fw-bold px-4 me-2" @onclick="() => AcceptTenant(selectedTenant)">
-                                <i class="bi bi-check-lg me-1"></i> Accept
+                            <button type="button" class="btn btn-success fw-bold px-4 rounded-3 shadow-sm" @onclick="() => AcceptTenant(selectedTenant)">
+                                <i class="bi bi-check2-circle me-2"></i>Accept Request
                             </button>
                         }
-                        <button type="button" class="btn-save" @onclick="() => OpenEdit(selectedTenant)">Edit Details</button>
+                        <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedTenant)">
+                            <i class="bi bi-pencil-square me-2"></i>Edit Details
+                        </button>
                     </div>
                 </div>
             </div>
@@ -196,154 +345,225 @@
     </div>
 }
 
-<!-- ADD / EDIT MODAL (WITH SPLIT NAME FIELDS) -->
+<!-- ADD / EDIT MODAL (MODERN UI) -->
 @if (showModal)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
-            <div class="modal-content border-0 shadow-lg rounded-4">
-                <div class="modal-header border-0 pb-0 pt-4 px-4">
-                    <h4 class="modal-title fw-bolder" style="color: #0A2B1D;">@(editingId == null ? "New Business" : "Edit Business")</h4>
-                    <button type="button" class="btn-close" @onclick="CloseModal" aria-label="Close"></button>
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <!-- Modern Header -->
+                <div class="modal-header border-0 bg-light p-4">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="bg-success bg-opacity-10 text-success rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                            <i class="bi @(editingId == null ? "bi-shop" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingId == null ? "Register New Business" : "Edit Business Details")
+                            </h4>
+                            <p class="text-muted small mb-0">Fill in the information below to @(editingId == null ? "onboard a new tenant" : "update the tenant").</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
                 </div>
-                <div class="modal-body p-4">
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
                     <form>
-                        <div class="row g-3">
-                            <!-- Business Name & Code -->
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-muted">Business name <span class="text-danger">*</span></label>
-                                <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "border border-danger rounded-3" : "")">
-                                    <span class="input-group-text"><i class="bi bi-shop"></i></span>
-                                    <input class="form-control" placeholder="e.g. Verdant Agri Ventures" @bind="form.Name" />
+                        <!-- SECTION 1: Business Information -->
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-building me-2 text-success"></i>Business Information
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <label class="form-label fw-bold small text-muted">Business Name <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-shop text-success"></i></span>
+                                        <input class="form-control" placeholder="e.g. Verdant Agri Ventures"
+                                               @bind="form.Name"
+                                               @bind:after="() => form.Name = CapitalizeWords(form.Name)" />
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">Tenant Code <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input bg-light">
+                                        <span class="input-group-text bg-transparent border-end-0"><i class="bi bi-upc-scan text-success"></i></span>
+                                        <input class="form-control bg-transparent border-start-0 text-muted fw-bold" readonly @bind="form.Code" />
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-muted">Tenant code <span class="text-danger">*</span></label>
-                                <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.Code) ? "border border-danger rounded-3" : "")">
-                                    <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
-                                    <input class="form-control" placeholder="@NextCode()" @bind="form.Code" />
-                                </div>
-                            </div>
+                        </div>
 
-                            <!-- Owner Names (Split into 3) -->
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold small text-muted">First Name</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
-                                    <input class="form-control" @bind="form.FName" placeholder="Juan" />
+                        <!-- SECTION 2: Owner Details -->
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-person-badge me-2 text-success"></i>Owner Details
+                            </h6>
+                            <div class="row g-3">
+                                <!-- Name Fields (Consistent na sila karon) -->
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">First Name</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                                        <input class="form-control" @bind="form.FName"
+                                               @bind:after="() => form.FName = CapitalizeWords(form.FName)"
+                                               placeholder="Juan" />
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold small text-muted">Middle Name</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
-                                    <input class="form-control" @bind="form.MName" placeholder="D." />
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">Middle Name</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                                        <input class="form-control" @bind="form.MName"
+                                               @bind:after="() => form.MName = CapitalizeWords(form.MName)"
+                                               placeholder="D." />
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold small text-muted">Last Name</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
-                                    <input class="form-control" @bind="form.LName" placeholder="Dela Cruz" />
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">Last Name</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                                        <input class="form-control" @bind="form.LName"
+                                               @bind:after="() => form.LName = CapitalizeWords(form.LName)"
+                                               placeholder="Dela Cruz" />
+                                    </div>
                                 </div>
-                            </div>
 
-                            <!-- Email & Contact -->
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-muted">Owner email</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-                                    <input type="email" class="form-control" @bind="form.Email" />
+                                <div class="col-md-6 mt-4">
+                                    <label class="form-label fw-bold small text-muted">Owner Email</label>
+                                    <div class="input-group modern-input @(!string.IsNullOrEmpty(emailError) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-envelope text-success"></i></span>
+                                        <input type="email" class="form-control" @bind="form.Email" placeholder="owner@email.com" />
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(emailError))
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i>@emailError</div>
+                                    }
+                                </div>
+                                <div class="col-md-6 mt-4">
+                                    <label class="form-label fw-bold small text-muted">Contact Number</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-telephone text-success"></i></span>
+                                        <input type="tel" class="form-control"
+                                               @bind="form.Contact"
+                                               @bind:event="oninput"
+                                               @bind:after="FormatContactNumber"
+                                               placeholder="09XX XXX XXXX"
+                                               spellcheck="false" />
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-muted">Contact number</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text"><i class="bi bi-telephone"></i></span>
-                                    <input class="form-control" @bind="form.Contact" />
-                                </div>
-                            </div>
+                        </div>
 
-                            <!-- Province & Plan -->
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-muted">Region / province</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
-                                    <input class="form-control" @bind="form.Province" />
+                        <!-- SECTION 3: Location & Plan -->
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-geo-alt me-2 text-success"></i>Location & Subscription
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Region</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-globe-asia-australia text-success"></i></span>
+                                        <select class="form-select" @bind="selectedRegionCode" @bind:after="OnRegionChanged">
+                                            <option value="">Select Region...</option>
+                                            @foreach (var r in regions)
+                                            {
+                                                <option value="@r.Code">@r.Name</option>
+                                            }
+                                        </select>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-muted">Subscription plan</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text"><i class="bi bi-card-checklist"></i></span>
-                                    <select class="form-select" @bind="form.Plan">
-                                        <option value="">Select...</option>
-                                        @foreach (var p in Plans.Keys)
-                                        {
-                                            <option value="@p">@p</option>
-                                        }
-                                    </select>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Province</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-pin-map text-success"></i></span>
+                                        <select class="form-select" @bind="selectedProvinceCode" @bind:after="OnProvinceChanged">
+                                            <option value="">Select Province...</option>
+                                            @foreach (var p in provinces)
+                                            {
+                                                <option value="@p.Code">@p.Name</option>
+                                            }
+                                        </select>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <!-- Status & Sync -->
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-muted">Account status</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text"><i class="bi bi-info-circle"></i></span>
-                                    <select class="form-select" @bind="form.Status">
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small text-muted">Complete Address</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-geo text-success"></i></span>
+                                        <input class="form-control" @bind="form.Address"
+                                               @bind:after="() => form.Address = CapitalizeWords(form.Address)"
+                                               placeholder="House No., Street, Barangay, City" />
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6 mt-4">
+                                    <label class="form-label fw-bold small text-muted">Subscription Plan</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-card-checklist text-success"></i></span>
+                                        <select class="form-select" @bind="form.Plan">
+                                            <option value="">Select Plan...</option>
+                                            @foreach (var p in Plans.Keys)
+                                            {
+                                                <option value="@p">@p</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mt-4">
+                                    <label class="form-label fw-bold small text-muted">Date Registered</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-calendar-event text-success"></i></span>
+                                        <input type="date" class="form-control" @bind="form.Registered" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SECTION 4: System Status & Notes -->
+                        <div class="p-4 rounded-4" style="background-color: #f8f9fa; border: 1px dashed #ced4da;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-gear-wide-connected me-2 text-success"></i>System Status & Notes
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Account Status</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="form.Status">
                                         <option>Active</option>
                                         <option>Suspended</option>
+                                        <option>Trial</option>
                                     </select>
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-muted">Synchronization</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text"><i class="bi bi-arrow-repeat"></i></span>
-                                    <select class="form-select" @bind="form.Sync">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Sync Status</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="form.Sync">
                                         <option>Synced</option>
                                         <option>Pending</option>
                                         <option>Offline</option>
                                     </select>
                                 </div>
-                            </div>
-
-                            <!-- Date & Address -->
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-muted">Date registered</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text"><i class="bi bi-calendar"></i></span>
-                                    <input type="date" class="form-control" @bind="form.Registered" />
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-muted">Address</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text"><i class="bi bi-map"></i></span>
-                                    <input class="form-control" @bind="form.Address" />
-                                </div>
-                            </div>
-
-                            <!-- Internal Notes -->
-                            <div class="col-12">
-                                <label class="form-label fw-bold small text-muted">Internal notes</label>
-                                <div class="input-group modern-input">
-                                    <span class="input-group-text" style="align-items: flex-start; padding-top: 10px;"><i class="bi bi-journal-text"></i></span>
-                                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                                <div class="col-12 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Internal Notes</label>
+                                    <textarea class="form-control border-0 shadow-sm" rows="3" @bind="form.Notes" placeholder="Type any additional notes or instructions here..."></textarea>
                                 </div>
                             </div>
                         </div>
                     </form>
                 </div>
-                <div class="modal-footer border-0 pt-0 px-4 pb-4">
-                    <button type="button" class="btn btn-light rounded-3 fw-bold px-4" @onclick="CloseModal">Cancel</button>
-                    <button type="button" class="btn-save" @onclick="Save">Save Business</button>
+
+                <div class="modal-footer border-0 p-4 bg-light d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="Save">
+                        <i class="bi bi-check2-circle me-2"></i>@(editingId == null ? "Save Business" : "Update Business")
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 }
+
 <!-- SUCCESS CREDENTIALS MODAL -->
 @if (showSuccessModal)
 {
@@ -377,25 +597,58 @@
     </div>
 }
 
-<!-- DELETE CONFIRMATION MODAL -->
-@if (showDeleteModal && tenantToDelete != null)
+<!-- REJECT CONFIRMATION MODAL -->
+@if (showRejectModal && tenantToReject != null)
 {
     <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
             <div class="modal-content border-0 shadow-lg rounded-4 text-center">
                 <div class="modal-body p-4 mt-2">
                     <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
-                        <i class="bi bi-exclamation-triangle" style="font-size: 2.5rem;"></i>
+                        <i class="bi bi-x-circle" style="font-size: 2.5rem;"></i>
                     </div>
-                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Delete Business?</h4>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Reject Application?</h4>
                     <p class="text-muted small mb-4">
-                        Are you sure you want to delete <strong>@tenantToDelete.Name</strong>? This action cannot be undone and will also delete its associated user accounts.
+                        Are you sure you want to <strong>reject</strong> the application of <strong>@tenantToReject.Name</strong>?<br />
+                        The owner will not be able to log in.
                     </p>
 
                     <div class="d-flex justify-content-center gap-3">
-                        <button type="button" class="btn btn-light rounded-3 fw-bold px-4" @onclick="CloseDeleteModal">Cancel</button>
-                        <button type="button" class="btn btn-danger rounded-3 fw-bold px-4 shadow-sm" @onclick="ConfirmDelete">
-                            <i class="bi bi-trash me-1"></i> Yes, Delete
+                        <button type="button" class="btn btn-light rounded-3 fw-bold px-4" @onclick="CloseRejectModal">Cancel</button>
+                        <button type="button" class="btn btn-danger rounded-3 fw-bold px-4 shadow-sm" @onclick="ConfirmReject">
+                            <i class="bi bi-x-circle-fill me-1"></i> Yes, Reject
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ARCHIVE CONFIRMATION MODAL -->
+@if (showArchiveModal && tenantToArchive != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <!-- Changed icon to archive and color to warning/danger -->
+                    <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
+                        <i class="bi bi-archive" style="font-size: 2.5rem;"></i>
+                    </div>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Archive Business?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to archive <strong>@tenantToArchive.Name</strong>? <br />
+                        It will be hidden from the active list, but the data will be safely kept in the database.
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <!-- Changed methods to Archive -->
+                        <button type="button" class="btn btn-light rounded-3 fw-bold px-4" @onclick="CloseArchiveModal">Cancel</button>
+                        <button type="button" class="btn btn-danger rounded-3 fw-bold px-4 shadow-sm" @onclick="ConfirmArchive">
+                            <i class="bi bi-archive-fill me-1"></i> Yes, Archive
                         </button>
                     </div>
                 </div>
@@ -439,8 +692,15 @@
 
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
 
+    class Viewport
+    {
+        public double W { get; set; }
+        public double H { get; set; }
+    }
+
     // ---------- STATE ----------
     string searchText = "";
+    string emailError = "";
     bool showModal;
     bool showErrors;
     long? editingId;
@@ -454,10 +714,25 @@
     string generatedEmail = "";
     string generatedPassword = "";
 
-    bool showDeleteModal;
-    Tenant? tenantToDelete;
+    bool showRejectModal;
+    Tenant? tenantToReject;
+
+    bool showArchived = false;
+    bool showArchiveModal;
+    Tenant? tenantToArchive;
 
     List<Tenant> tenants = new();
+
+    private List<Region> regions = new();
+    private List<Province> provinces = new();
+    private string selectedRegionCode = "";
+    private string selectedProvinceCode = "";
+
+    private int currentPage = 1;
+    private int pageSize = 5;
+
+    private double menuTop;
+    private double menuLeft;
 
     static readonly Dictionary<string, decimal> Plans = new()
     {
@@ -470,11 +745,56 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadTenantsAsync();
+
+        regions = (await AddressProvider.GetRegionsAsync()).ToList();
     }
+
+    private async Task OnRegionChanged()
+    {
+        if (!string.IsNullOrEmpty(selectedRegionCode))
+        {
+            provinces = (await AddressProvider.GetProvincesByRegionCodeAsync(selectedRegionCode)).ToList();
+        }
+        else
+        {
+            provinces.Clear();
+        }
+
+        form.Province = "";
+        selectedProvinceCode = "";
+    }
+
+    private void OnProvinceChanged()
+    {
+        var selectedProvince = provinces.FirstOrDefault(p => p.Code == selectedProvinceCode);
+        if (selectedProvince != null)
+        {
+            form.Province = selectedProvince.Name; 
+        }
+    }
+
+    // Pagination Methods
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1; 
 
     private async Task LoadTenantsAsync()
     {
-        var businesses = await DbContext.Businesses.Include(b => b.Users).ToListAsync();
+        // Start with the base query
+        var query = DbContext.Businesses.Include(b => b.Users).AsQueryable();
+
+        // Check if we are viewing Archived or Active
+        if (showArchived)
+        {
+            query = query.Where(b => b.IsArchived);
+        }
+        else
+        {
+            query = query.Where(b => !b.IsArchived);
+        }
+
+        var businesses = await query.ToListAsync();
 
         tenants = businesses.Select(b =>
         {
@@ -488,7 +808,7 @@
                 MName = owner?.MName ?? "",
                 LName = owner?.LName ?? "",
                 Email = b.Email,
-                Password = owner?.PasswordHash ?? "", 
+                Password = owner?.PasswordHash ?? "",
                 Plan = b.PlanName,
                 Status = b.Status,
                 Sync = b.SyncStatus,
@@ -509,6 +829,55 @@
             t.Code.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
             t.OwnerName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
             t.Province.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    // Pagination Computed Properties
+    private int TotalPages => (int)Math.Ceiling((double)Filtered.Count / pageSize);
+    private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<Tenant> PaginatedTenants => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private async Task ToggleMenuAsync(MouseEventArgs e, long id)
+    {
+        // If clicking the same menu, close it
+        if (openMenuId == id)
+        {
+            openMenuId = null;
+            return;
+        }
+
+        // ✅ Compute height based on actual button count
+        var menuTenant = tenants.FirstOrDefault(x => x.Id == id);
+        int itemCount = 1; // default: Restore (Archived tab)
+
+        if (!showArchived && menuTenant != null)
+        {
+            // Trial → 3 buttons (Edit + Accept + Reject)
+            // Active/Suspended → 2 buttons (Edit + Archive)
+            itemCount = menuTenant.Status == "Trial" ? 3 : 2;
+        }
+
+        const double itemHeight = 42;  // approximate per button (adjust based on CSS)
+        const double padding = 16;     // top + bottom padding
+        const double menuWidth = 200;  // update if your CSS width is different
+
+        double menuHeight = (itemCount * itemHeight) + padding;
+
+        //  Single JS interop call for both dimensions
+        var viewport = await JS.InvokeAsync<Viewport>("eval",
+            "({ w: window.innerWidth, h: window.innerHeight })");
+        var viewportWidth = viewport.W;
+        var viewportHeight = viewport.H;
+
+        // Compute Left Position (keep within screen bounds)
+        menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewportWidth - menuWidth - 10);
+
+        // Compute Top Position (flip upwards if not enough space below)
+        menuTop = (e.ClientY + menuHeight > viewportHeight)
+            ? e.ClientY - menuHeight - 5
+            : e.ClientY + 15;
+
+        openMenuId = id;
+    }
 
     List<Stat> Stats
     {
@@ -535,6 +904,8 @@
         "Active" => "pill-green",
         "Trial" => "pill-blue",
         "Suspended" => "pill-red",
+        "Rejected" => "pill-gray",     
+        "Archived" => "pill-gray",     
         _ => "pill-gray"
     };
 
@@ -546,7 +917,65 @@
         _ => "pill-gray"
     };
 
-    string NextCode() => $"TEN-{(tenants.Count + 1):000}";
+    string NextCode()
+    {
+        long nextId = tenants.Any() ? tenants.Max(t => t.Id) + 1 : 1;
+        return $"TEN-{nextId:000}";
+    }
+
+    // Helper for auto-capitalization
+    private string CapitalizeWords(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input;
+        // I-convert Title Case (e.g., "juan dela cruz" -> "Juan Dela Cruz")
+        return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input.ToLower().Trim());
+    }
+
+    // Method to format the contact number after typing
+    private void FormatContactNumber()
+    {
+        if (string.IsNullOrEmpty(form.Contact)) return;
+
+        // get the symbols and digits from the input
+        var digits = new string(form.Contact.Where(char.IsDigit).ToArray());
+
+        if (string.IsNullOrEmpty(digits))
+        {
+            form.Contact = "";
+            return;
+        }
+
+        // 2. SMART LOGIC: Handle '63' or '9' prefixes
+        if (digits.StartsWith("63") && digits.Length > 2)
+        {
+            digits = "0" + digits.Substring(2);
+        }
+        else if (digits.StartsWith("9"))
+        {
+       
+            digits = "0" + digits;
+        }
+
+        // 3. Limit to 11 digits
+        if (digits.Length > 11)
+        {
+            digits = digits.Substring(0, 11);
+        }
+
+        // 4. Format to "09XX XXX XXXX"
+        if (digits.Length > 7)
+        {
+            form.Contact = $"{digits.Substring(0, 4)} {digits.Substring(4, 3)} {digits.Substring(7)}";
+        }
+        else if (digits.Length > 4)
+        {
+            form.Contact = $"{digits.Substring(0, 4)} {digits.Substring(4)}";
+        }
+        else
+        {
+            form.Contact = digits;
+        }
+    }
 
     // NEW METHOD: Generate Random 8-Character Password
     private string GenerateTempPassword()
@@ -569,16 +998,18 @@
         };
         editingId = null;
         showErrors = false;
+        emailError = "";
         showModal = true;
     }
 
     void OpenEdit(Tenant t)
     {
-        showDetailsModal = false; // Close details modal if open
+        showDetailsModal = false; 
         form = t.Clone();
         editingId = t.Id;
         showErrors = false;
         openMenuId = null;
+        emailError = "";
         showModal = true;
     }
 
@@ -616,11 +1047,29 @@
     async Task Save()
     {
         showErrors = true;
+        emailError = "";
+
         if (string.IsNullOrWhiteSpace(form.Name) || string.IsNullOrWhiteSpace(form.Code))
             return;
 
+        var rawContact = new string(form.Contact.Where(char.IsDigit).ToArray());
+        if (rawContact.Length != 11)
+        {
+            // You can log or display an error message here if needed
+            Console.WriteLine("Contact number must be 11 digits.");
+            return; 
+        }
+
         if (editingId == null)
         {
+            // NEW CODE: CHECK FOR DUPLICATE EMAIL
+            var emailExists = await DbContext.Users.AnyAsync(u => u.Email.ToLower() == form.Email.Trim().ToLower());
+
+            if (emailExists)
+            {
+                emailError = "This email is already registered to an existing user.";
+                return; 
+            }
             // CREATE NEW BUSINESS
             var newBusiness = new Business
             {
@@ -704,48 +1153,113 @@
         await LoadTenantsAsync();
     }
 
-    // 1. Open the delete confirmation modal
-    void Delete(Tenant t)
+    // 1. Open the reject confirmation modal
+    void Reject(Tenant t)
     {
-        tenantToDelete = t;
-        showDeleteModal = true;
-        openMenuId = null; 
+        tenantToReject = t;
+        showRejectModal = true;
+        openMenuId = null;
     }
 
     // 2. Close the modal
-    void CloseDeleteModal()
+    void CloseRejectModal()
     {
-        showDeleteModal = false;
-        tenantToDelete = null;
+        showRejectModal = false;
+        tenantToReject = null;
     }
 
-    // 3. Execute the deletion process
-    async Task ConfirmDelete()
+    // 3. Execute the reject process
+    async Task ConfirmReject()
     {
-        if (tenantToDelete == null) return;
+        if (tenantToReject == null) return;
 
-        // Include Users to avoid Foreign Key constraint errors
-        var businessToDelete = await DbContext.Businesses
-            .Include(b => b.Users)
-            .FirstOrDefaultAsync(b => b.BusinessId == tenantToDelete.Id);
-
-        if (businessToDelete != null)
+        var business = await DbContext.Businesses.FindAsync(tenantToReject.Id);
+        if (business != null)
         {
-            // Delete related user accounts first
-            if (businessToDelete.Users != null && businessToDelete.Users.Any())
-            {
-                DbContext.Users.RemoveRange(businessToDelete.Users);
-            }
+            business.IsArchived = true;         // goes to Archived tab
+            business.Status = "Rejected";       // distinct from Archived
 
-            // Then delete the business record
-            DbContext.Businesses.Remove(businessToDelete);
+            // Disable the owner's account
+            var owner = await DbContext.Users
+                .FirstOrDefaultAsync(u => u.BusinessId == tenantToReject.Id && u.Role == "TenantAdmin");
+            if (owner != null)
+                owner.Status = "Inactive";
+
             await DbContext.SaveChangesAsync();
         }
 
-        CloseDeleteModal();
+        CloseRejectModal();
         await LoadTenantsAsync();
     }
 
-    void ToggleMenu(long id) => openMenuId = openMenuId == id ? null : id;
+    // 1. Open the archive confirmation modal
+    void Archive(Tenant t)
+    {
+        tenantToArchive = t;
+        showArchiveModal = true;
+        openMenuId = null;
+    }
+
+    // 2. Close the modal
+    void CloseArchiveModal()
+    {
+        showArchiveModal = false;
+        tenantToArchive = null;
+    }
+
+    // 3. Execute the archive process (Soft Delete)
+    async Task ConfirmArchive()
+    {
+        if (tenantToArchive == null) return;
+
+        var businessToArchive = await DbContext.Businesses.FindAsync(tenantToArchive.Id);
+
+        if (businessToArchive != null)
+        {
+            businessToArchive.IsArchived = true;
+            businessToArchive.Status = "Archived";  // track reason
+
+            // Disable owner (same as Reject)
+            var owner = await DbContext.Users
+                .FirstOrDefaultAsync(u => u.BusinessId == tenantToArchive.Id && u.Role == "TenantAdmin");
+            if (owner != null)
+                owner.Status = "Inactive";
+
+            await DbContext.SaveChangesAsync();
+        }
+
+        CloseArchiveModal();
+        await LoadTenantsAsync();
+    }
+
+    private async Task ToggleTab(bool isArchived)
+    {
+        showArchived = isArchived;
+        currentPage = 1;
+        await LoadTenantsAsync();
+    }
+
+    async Task RestoreTenant(Tenant t)
+    {
+        var business = await DbContext.Businesses.FindAsync(t.Id);
+        if (business != null)
+        {
+            business.IsArchived = false;
+
+            // Rejected → back to Trial (re-review), Archived → back to Active
+            business.Status = t.Status == "Rejected" ? "Trial" : "Active";
+
+            // Re-enable owner account
+            var owner = await DbContext.Users
+                .FirstOrDefaultAsync(u => u.BusinessId == t.Id && u.Role == "TenantAdmin");
+            if (owner != null)
+                owner.Status = "Active";
+
+            await DbContext.SaveChangesAsync();
+        }
+        openMenuId = null;
+        await LoadTenantsAsync();
+    }
+
     void CloseMenu() => openMenuId = null;
 }
