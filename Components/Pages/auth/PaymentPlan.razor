@@ -1,0 +1,283 @@
+﻿@page "/payment-plan"
+@layout LandingLayout
+@inject NavigationManager NavigationManager
+@inject AgriNexus.Services.RegistrationStateService RegState
+
+<div class="checkout-wrapper min-vh-100 py-4 py-md-5 px-3">
+    <div class="container" style="max-width: 1080px;">
+
+        <!-- TOP NAVIGATION & STEP INDICATOR -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+            <button type="button" class="btn btn-back-modern fw-bold px-3 py-2 rounded-3" @onclick="GoBack">
+                <i class="bi bi-arrow-left me-2"></i> Back to Plans
+            </button>
+
+            <div class="d-flex align-items-center gap-2 small fw-bold">
+                <span class="step-pill completed"><i class="bi bi-check2 me-1"></i>Account</span>
+                <i class="bi bi-chevron-right text-muted"></i>
+                <span class="step-pill completed"><i class="bi bi-check2 me-1"></i>Plan</span>
+                <i class="bi bi-chevron-right text-muted"></i>
+                <span class="step-pill active">3. Checkout</span>
+            </div>
+        </div>
+
+        <!-- MAIN CHECKOUT CARD -->
+        <div class="card border-0 shadow-lg rounded-4 overflow-hidden checkout-main-card">
+            <div class="row g-0">
+
+                <!-- LEFT COLUMN: ORDER SUMMARY (AgriNexus Brand Panel) -->
+                <div class="col-lg-5 summary-panel p-4 p-md-5 text-white d-flex flex-column justify-content-between position-relative overflow-hidden">
+                    <div class="blob-top"></div>
+                    <div class="blob-bottom"></div>
+
+                    <div class="position-relative" style="z-index: 2;">
+                        <div class="d-flex align-items-center gap-2 mb-4">
+                            <img src="images/AgriNexus_finalogo.png" alt="AgriNexus" style="height: 36px; background: white; border-radius: 8px; padding: 4px;" />
+                            <span class="fw-bolder fs-5 tracking-tight">AgriNexus</span>
+                        </div>
+
+                        <span class="badge bg-white bg-opacity-15 text-white border border-white border-opacity-25 px-3 py-1 rounded-pill small fw-semibold mb-3">
+                            <i class="bi bi-stars me-1 text-warning"></i> SUBSCRIPTION SUMMARY
+                        </span>
+
+                        <h2 class="fw-bolder mb-1">@RegState.SelectedPlan?.Name Plan</h2>
+                        <p class="text-white text-opacity-75 small mb-4">
+                            @(string.IsNullOrWhiteSpace(RegState.SelectedPlan?.Description)
+                                ? "Full multi-branch agricultural ERP access with cloud sync."
+                                : RegState.SelectedPlan.Description)
+                        </p>
+
+                        <!-- INCLUDED QUOTAS -->
+                        <div class="quota-box p-3 rounded-3 mb-4">
+                            <div class="small text-uppercase fw-bold text-white text-opacity-75 mb-2" style="letter-spacing: 0.8px; font-size: 0.7rem;">
+                                Included Plan Resources
+                            </div>
+                            <ul class="list-unstyled mb-0 small d-flex flex-column gap-2">
+                                <li class="d-flex align-items-center justify-content-between">
+                                    <span><i class="bi bi-diagram-3 me-2 text-success-light"></i>Branch Locations</span>
+                                    <span class="fw-bold">Up to @RegState.SelectedPlan?.BranchLimit</span>
+                                </li>
+                                <li class="d-flex align-items-center justify-content-between">
+                                    <span><i class="bi bi-people me-2 text-success-light"></i>Staff Accounts</span>
+                                    <span class="fw-bold">Up to @RegState.SelectedPlan?.StaffLimit</span>
+                                </li>
+                                <li class="d-flex align-items-center justify-content-between">
+                                    <span><i class="bi bi-hdd-network me-2 text-success-light"></i>Cloud Storage</span>
+                                    <span class="fw-bold">@RegState.SelectedPlan?.StorageGb GB</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- PRICE BREAKDOWN -->
+                        <div class="border-top border-white border-opacity-15 pt-3">
+                            <div class="d-flex justify-content-between small text-white text-opacity-75 mb-2">
+                                <span>Billing Cycle</span>
+                                <span class="text-capitalize fw-semibold text-white">@RegState.SelectedPlan?.Cycle</span>
+                            </div>
+                            <div class="d-flex justify-content-between small text-white text-opacity-75 mb-3">
+                                <span>Platform Setup Fee</span>
+                                <span class="text-success-light fw-semibold">FREE</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-baseline border-top border-white border-opacity-15 pt-3">
+                                <span class="fw-bold">Total Due Today</span>
+                                <div class="text-end">
+                                    <span class="fs-2 fw-bolder">₱@RegState.SelectedPlan?.Price.ToString("N2")</span>
+                                    <div class="small text-white text-opacity-75" style="font-size: 0.72rem;">VAT Inclusive</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="position-relative mt-4 pt-3 border-top border-white border-opacity-10 small text-white text-opacity-75 d-flex align-items-center gap-2" style="z-index: 2;">
+                        <i class="bi bi-shield-lock-fill fs-5 text-success-light"></i>
+                        <span>256-bit Encrypted Verification • Instant Tenant Provisioning</span>
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: PAYMENT DETAILS FORM -->
+                <div class="col-lg-7 bg-white p-4 p-md-5">
+                    <div class="mb-4">
+                        <h4 class="fw-bolder mb-1" style="color: #0A2B1D;">Complete Your Payment</h4>
+                        <p class="text-muted small mb-0">
+                            Registering for <strong class="text-dark">@RegState.BusinessName</strong> (@RegState.Email)
+                        </p>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger d-flex align-items-center p-3 small rounded-3 mb-4 border-0 shadow-sm">
+                            <i class="bi bi-exclamation-octagon-fill fs-5 me-2"></i>
+                            <div>@errorMessage</div>
+                        </div>
+                    }
+
+                    <!-- STEP 1: PAYMENT METHOD -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-uppercase text-muted small mb-2" style="letter-spacing: 0.8px; font-size: 0.72rem;">
+                            1. Choose Payment Channel
+                        </label>
+                        <div class="row g-2 g-md-3">
+                            @foreach (var method in PaymentMethods)
+                            {
+                                bool isActive = RegState.PaymentMethod == method.Name;
+                                <div class="col-12 col-md-4">
+                                    <div class="method-tile p-3 rounded-3 h-100 d-flex flex-column justify-content-between @(isActive ? "active" : "")"
+                                         @onclick="() => SelectMethod(method.Name)">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div class="method-icon-wrap">
+                                                <i class="bi @method.Icon"></i>
+                                            </div>
+                                            <i class="bi @(isActive ? "bi-check-circle-fill text-success" : "bi-circle text-muted opacity-50")"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark small">@method.Name</div>
+                                            <div class="text-muted" style="font-size: 0.7rem;">@method.Subtitle</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- DYNAMIC MERCHANT ACCOUNT CARD -->
+                    <div class="merchant-box p-3 p-md-4 rounded-3 mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="badge bg-success bg-opacity-10 text-success fw-bold px-2 py-1" style="font-size: 0.7rem;">
+                                OFFICIAL MERCHANT ACCOUNT
+                            </span>
+                            <span class="small text-muted fw-semibold">@RegState.PaymentMethod</span>
+                        </div>
+
+                        @if (RegState.PaymentMethod == "GCash")
+                        {
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div>
+                                    <div class="small text-muted">Account Name: <strong class="text-dark">AgriNexus ERP Solutions Inc.</strong></div>
+                                    <div class="fs-5 fw-bolder text-dark tracking-wide mt-1">0917 888 9900</div>
+                                </div>
+                                <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill small fw-bold">
+                                    <i class="bi bi-phone me-1"></i> GCash Express Send
+                                </span>
+                            </div>
+                        }
+                        else if (RegState.PaymentMethod == "Maya")
+                        {
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div>
+                                    <div class="small text-muted">Account Name: <strong class="text-dark">AgriNexus ERP Solutions Inc.</strong></div>
+                                    <div class="fs-5 fw-bolder text-dark tracking-wide mt-1">0918 555 4422</div>
+                                </div>
+                                <span class="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill small fw-bold">
+                                    <i class="bi bi-wallet2 me-1"></i> Maya Wallet Transfer
+                                </span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div>
+                                    <div class="small text-muted">BDO Corporate Savings: <strong class="text-dark">AgriNexus ERP Solutions Inc.</strong></div>
+                                    <div class="fs-5 fw-bolder text-dark tracking-wide mt-1">0045-8912-3341</div>
+                                </div>
+                                <span class="badge bg-dark bg-opacity-10 text-dark px-3 py-2 rounded-pill small fw-bold">
+                                    <i class="bi bi-bank me-1"></i> InstaPay / PESONet
+                                </span>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- STEP 2: PROOF OF PAYMENT INPUTS -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold text-uppercase text-muted small mb-3" style="letter-spacing: 0.8px; font-size: 0.72rem;">
+                            2. Transaction Verification
+                        </label>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Sender Account Name <span class="text-danger">*</span></label>
+                                <div class="input-group modern-checkout-input">
+                                    <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
+                                    <input type="text" class="form-control" placeholder="e.g. Juan Dela Cruz" @bind="RegState.AccountSenderName" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Reference / Trace No. <span class="text-danger">*</span></label>
+                                <div class="input-group modern-checkout-input">
+                                    <span class="input-group-text"><i class="bi bi-hash"></i></span>
+                                    <input type="text" class="form-control" placeholder="e.g. 901283746512" @bind="RegState.ReferenceNumber" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SUBMIT BUTTON -->
+                    <button type="button" class="btn btn-checkout-submit w-100 py-3 fw-bold rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-2"
+                            @onclick="ConfirmPayment">
+                        <i class="bi bi-shield-check fs-5"></i>
+                        <span>Confirm ₱@RegState.SelectedPlan?.Price.ToString("N2") Payment & Continue</span>
+                    </button>
+
+                    <p class="text-center text-muted small mt-3 mb-0" style="font-size: 0.75rem;">
+                        By confirming, you will return to registration to finalize your workspace creation.
+                    </p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string errorMessage = "";
+
+    private record PaymentOption(string Name, string Subtitle, string Icon);
+
+    private readonly List<PaymentOption> PaymentMethods = new()
+    {
+        new("GCash", "Instant e-Wallet", "bi-phone"),
+        new("Maya", "Wallet / QR Pay", "bi-wallet2"),
+        new("Bank Transfer", "BDO / BPI InstaPay", "bi-bank")
+    };
+
+    protected override void OnInitialized()
+    {
+        if (RegState.SelectedPlan == null)
+        {
+            NavigationManager.NavigateTo("/select-plan");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(RegState.PaymentMethod))
+        {
+            RegState.PaymentMethod = "GCash";
+        }
+    }
+
+    private void SelectMethod(string method)
+    {
+        RegState.PaymentMethod = method;
+        errorMessage = "";
+    }
+
+    private void GoBack() => NavigationManager.NavigateTo("/select-plan");
+
+    private void ConfirmPayment()
+    {
+        errorMessage = "";
+
+        if (string.IsNullOrWhiteSpace(RegState.AccountSenderName))
+        {
+            errorMessage = "Please enter the sender account name used for the transfer.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(RegState.ReferenceNumber) || RegState.ReferenceNumber.Trim().Length < 6)
+        {
+            errorMessage = "Please enter a valid payment reference or transaction number.";
+            return;
+        }
+
+        RegState.HasSelectedPlan = true;
+        NavigationManager.NavigateTo("/register");
+    }
+}

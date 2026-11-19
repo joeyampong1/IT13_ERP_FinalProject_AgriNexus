@@ -1,14 +1,53 @@
 ﻿@page "/my-subscription"
+@layout MainLayout
 @using System.Globalization
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@using AgriNexus.Services
+@inject AgriNexusDbContext DbContext
+@inject AuthService Auth
 @inject NavigationManager Nav
 
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <h2 class="page-title">My Subscription</h2>
-        <p class="text-muted mb-0 page-sub">@BusinessName · plan, limits, billing status and renewal schedule.</p>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@businessName</strong> · plan, limits, billing status and renewal schedule.
+        </p>
     </div>
-    <button type="button" class="btn-outline-lg" @onclick="GoSettings">Business settings</button>
+    <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn-outline-lg" @onclick="GoSettings">
+            <i class="bi bi-gear me-1"></i> Business settings
+        </button>
+        <button type="button" class="btn-upgrade shadow-sm" @onclick="OpenUpgradeModal">
+            <i class="bi bi-rocket-takeoff-fill me-1"></i> @(isTrial ? "Upgrade Plan" : "Change / Upgrade Plan")
+        </button>
+    </div>
 </div>
+
+<!-- TRIAL EXPIRATION BANNER -->
+@if (isTrial)
+{
+    <div class="trial-banner mb-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div class="d-flex align-items-start gap-3">
+            <div class="trial-icon">
+                <i class="bi bi-hourglass-split"></i>
+            </div>
+            <div>
+                <div class="fw-bolder" style="color: #0A2B1D; font-size: 1rem;">
+                    Free Trial Account · @RemainingText
+                </div>
+                <div class="text-muted small mt-1">
+                    Your trial period expires on <strong>@nextRenewal.ToString("MMMM d, yyyy", Inv)</strong>. Upgrade to a paid subscription before expiration to avoid service interruption.
+                </div>
+            </div>
+        </div>
+        <button type="button" class="btn-upgrade btn-sm px-4 py-2" @onclick="OpenUpgradeModal">
+            <i class="bi bi-arrow-up-circle-fill me-1"></i> Upgrade Now
+        </button>
+    </div>
+}
 
 <!-- STAT CARDS -->
 <div class="row g-3 mb-4">
@@ -34,50 +73,66 @@
 
 <div class="row g-3">
     <!-- PLAN USAGE -->
-    <div class="col-12 col-lg-8">
-        <div class="stat-card h-100">
-            <div class="panel-title">Plan usage</div>
-            <div class="panel-sub">@plan.Name allows @plan.Branches branches, @plan.Staff staff accounts and @plan.StorageGb GB storage.</div>
-
-            <div class="usage">
-                <div class="usage-row">
-                    <span class="usage-label"><i class="bi bi-shop"></i> Branches</span>
-                    <span class="usage-count">@branchesUsed / @plan.Branches</span>
+    <div class="col-12 col-lg-7">
+        <div class="stat-card h-100 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <div class="panel-title">Plan usage &amp; limits</div>
+                    <div class="panel-sub">@currentPlan.Name plan allows up to @currentPlan.BranchLimit branches, @currentPlan.StaffLimit staff accounts, and @currentPlan.StorageGb GB storage.</div>
                 </div>
-                <div class="bar-track"><div class="bar-fill" style="width:@Pct(branchesUsed, plan.Branches)%"></div></div>
+                <span class="pill @(isTrial ? "pill-earth" : "pill-forest")">
+                    <i class="bi @(isTrial ? "bi-hourglass-split" : "bi-patch-check-fill") me-1"></i>@(isTrial ? "Trial Mode" : "Active Plan")
+                </span>
             </div>
 
+            <!-- Branches Usage -->
             <div class="usage">
                 <div class="usage-row">
-                    <span class="usage-label"><i class="bi bi-people"></i> Staff accounts</span>
-                    <span class="usage-count">@staffUsed / @plan.Staff</span>
+                    <span class="usage-label"><i class="bi bi-shop text-success"></i> Active Branches</span>
+                    <span class="usage-count">@branchesUsed / @currentPlan.BranchLimit</span>
                 </div>
-                <div class="bar-track"><div class="bar-fill" style="width:@Pct(staffUsed, plan.Staff)%"></div></div>
+                <div class="bar-track">
+                    <div class="bar-fill @(Pct(branchesUsed, currentPlan.BranchLimit) >= 90 ? "bar-warn" : "")"
+                         style="width:@Pct(branchesUsed, currentPlan.BranchLimit)%"></div>
+                </div>
             </div>
 
-            <div class="included-title">Included in your plan</div>
+            <!-- Staff Usage -->
+            <div class="usage">
+                <div class="usage-row">
+                    <span class="usage-label"><i class="bi bi-people-fill text-success"></i> Active Staff Accounts</span>
+                    <span class="usage-count">@staffUsed / @currentPlan.StaffLimit</span>
+                </div>
+                <div class="bar-track">
+                    <div class="bar-fill @(Pct(staffUsed, currentPlan.StaffLimit) >= 90 ? "bar-warn" : "")"
+                         style="width:@Pct(staffUsed, currentPlan.StaffLimit)%"></div>
+                </div>
+            </div>
+
+            <!-- Included Features -->
+            <div class="included-title">Included in your @currentPlan.Name plan</div>
             <ul class="included-list">
-                @foreach (var f in plan.Features)
+                @foreach (var f in currentPlan.Features)
                 {
-                    <li>@f</li>
+                    <li><i class="bi bi-check-circle-fill text-success me-2"></i><span>@f</span></li>
                 }
             </ul>
         </div>
     </div>
 
-    <!-- SUBSCRIPTION STATUS -->
-    <div class="col-12 col-lg-4">
-        <div class="stat-card h-100 p-0">
+    <!-- SUBSCRIPTION & BILLING HISTORY -->
+    <div class="col-12 col-lg-5">
+        <div class="stat-card h-100 p-0 d-flex flex-column overflow-hidden">
             <div class="status-head">
-                <div class="panel-title">Subscription status</div>
-                <div class="panel-sub mb-0">Recorded billing history for this tenant</div>
+                <div class="panel-title">Subscription &amp; Billing History</div>
+                <div class="panel-sub mb-0">Recorded billing and plan history for this tenant</div>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap flex-grow-1">
                 <table class="table data-table align-middle mb-0">
                     <thead>
                         <tr>
                             <th>Plan</th>
-                            <th>Renewal</th>
+                            <th>Renewal / Exp.</th>
                             <th>Amount</th>
                             <th>Payment</th>
                             <th>Status</th>
@@ -87,11 +142,24 @@
                         @foreach (var h in history)
                         {
                             <tr>
-                                <td class="fw-medium">@h.Plan</td>
-                                <td class="text-nowrap">@h.Renewal.ToString("MMM d, yyyy", Inv)</td>
-                                <td class="text-nowrap">@Peso(h.Amount)</td>
-                                <td><span class="pill @(h.Payment == "Paid" ? "pill-green" : "pill-yellow")">@h.Payment</span></td>
-                                <td><span class="pill pill-green">@h.Status</span></td>
+                                <td>
+                                    <div class="fw-bold" style="color: #0A2B1D;">@h.Plan</div>
+                                    <div class="text-muted small text-capitalize">@h.Cycle</div>
+                                </td>
+                                <td class="text-nowrap small fw-medium">@h.Renewal.ToString("MMM d, yyyy", Inv)</td>
+                                <td class="text-nowrap fw-semibold">@Peso(h.Amount)</td>
+                                <td>
+                                    <span class="pill @(h.Payment == "Paid" ? "pill-forest" : "pill-earth")">@h.Payment</span>
+                                </td>
+                                <td>
+                                    <span class="pill @(h.Status == "Active" ? "pill-forest" : "pill-earth")">@h.Status</span>
+                                </td>
+                            </tr>
+                        }
+                        @if (history.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">No subscription records yet.</td>
                             </tr>
                         }
                     </tbody>
@@ -101,50 +169,413 @@
     </div>
 </div>
 
+<!-- UPGRADE & CHECKOUT MODAL (STEP 1: PLAN | STEP 2: PAYMENT) -->
+@if (showUpgradeModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered @(checkoutStep == 1 ? "modal-xl" : "modal-lg")" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <!-- Header -->
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 46px; height: 46px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(checkoutStep == 1 ? "bi-rocket-takeoff-fill" : "bi-credit-card-2-front-fill") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(checkoutStep == 1 ? "Step 1: Select Subscription Plan" : "Step 2: Complete Payment")
+                            </h4>
+                            <p class="text-muted small mb-0">
+                                @(checkoutStep == 1
+                                    ? "Choose the plan that best fits your business operations."
+                                    : $"Upgrading {businessName} to {ChosenPlan?.Name} ({Peso(ChosenPlan?.Price ?? 0m)})")
+                            </p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseUpgradeModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <!-- Body -->
+                <div class="modal-body p-4" style="max-height: 75vh; overflow-y: auto;">
+                    @if (!string.IsNullOrEmpty(paymentError))
+                    {
+                        <div class="alert alert-danger d-flex align-items-center p-3 small rounded-3 mb-4 border-0 shadow-sm">
+                            <i class="bi bi-exclamation-octagon-fill fs-5 me-2"></i>
+                            <div>@paymentError</div>
+                        </div>
+                    }
+
+                    @if (checkoutStep == 1)
+                    {
+                        <!-- STEP 1: PLAN SELECTION -->
+                        <div class="row g-3">
+                            @foreach (var p in availablePlans)
+                            {
+                                var isCurrent = string.Equals(p.Name, currentPlan.Name, StringComparison.OrdinalIgnoreCase) && !isTrial;
+                                var isSelected = selectedPlanId == p.PlanId;
+
+                                <div class="col-12 col-md-6 col-lg-3">
+                                    <div class="plan-option-card h-100 d-flex flex-column @(isSelected ? "selected" : "")"
+                                         @onclick="() => SelectPlan(p.PlanId)">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="fw-bolder fs-5" style="color: #0A2B1D;">@p.Name</span>
+                                            @if (isCurrent)
+                                            {
+                                                <span class="pill pill-forest">Current</span>
+                                            }
+                                            else if (isSelected)
+                                            {
+                                                <i class="bi bi-check-circle-fill text-success fs-5"></i>
+                                            }
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <span class="fw-bolder fs-3" style="color: #1B5E34;">@Peso(p.Price)</span>
+                                            <span class="text-muted small"> / @p.Cycle</span>
+                                        </div>
+
+                                        @if (!string.IsNullOrWhiteSpace(p.Description))
+                                        {
+                                            <p class="text-muted small mb-3">@p.Description</p>
+                                        }
+
+                                        <ul class="list-unstyled small mb-0 flex-grow-1 d-flex flex-column gap-2">
+                                            <li><i class="bi bi-shop text-success me-2"></i>Up to <strong>@p.BranchLimit</strong> branches</li>
+                                            <li><i class="bi bi-people-fill text-success me-2"></i>Up to <strong>@p.StaffLimit</strong> staff accounts</li>
+                                            <li><i class="bi bi-hdd-fill text-success me-2"></i><strong>@p.StorageGb GB</strong> cloud storage</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- STEP 2: PAYMENT CHANNEL & VERIFICATION -->
+                        <div class="p-3 rounded-3 mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2" style="background-color: #F4F7F5; border: 1px solid #E2ECE6;">
+                            <div>
+                                <div class="text-muted small fw-bold text-uppercase">Selected Plan</div>
+                                <div class="fw-bolder fs-5" style="color: #0A2B1D;">@ChosenPlan?.Name <span class="text-muted fw-normal small text-capitalize">(@ChosenPlan?.Cycle)</span></div>
+                            </div>
+                            <div class="text-end">
+                                <div class="text-muted small fw-bold text-uppercase">Total Amount Due</div>
+                                <div class="fw-bolder fs-4" style="color: #1B5E34;">@Peso(ChosenPlan?.Price ?? 0m)</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-uppercase text-muted small mb-2" style="letter-spacing: 0.8px; font-size: 0.72rem;">
+                                1. Choose Payment Channel
+                            </label>
+                            <div class="row g-2 g-md-3">
+                                @foreach (var method in PaymentMethods)
+                                {
+                                    bool isActive = selectedPaymentMethod == method.Name;
+                                    <div class="col-12 col-md-4">
+                                        <div class="plan-option-card p-3 h-100 d-flex flex-column justify-content-between @(isActive ? "selected" : "")"
+                                             @onclick="() => SelectPaymentMethod(method.Name)">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <span class="stat-icon"><i class="bi @method.Icon"></i></span>
+                                                <i class="bi @(isActive ? "bi-check-circle-fill text-success" : "bi-circle text-muted opacity-50")"></i>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold small" style="color: #0A2B1D;">@method.Name</div>
+                                                <div class="text-muted" style="font-size: 0.72rem;">@method.Subtitle</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- OFFICIAL MERCHANT ACCOUNT CARD -->
+                        <div class="p-3 p-md-4 rounded-3 mb-4" style="background-color: #F7FAF8; border: 1px solid #DCE6E0;">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="pill pill-forest">OFFICIAL MERCHANT ACCOUNT</span>
+                                <span class="small text-muted fw-semibold">@selectedPaymentMethod</span>
+                            </div>
+
+                            @if (selectedPaymentMethod == "GCash")
+                            {
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <div class="small text-muted">Account Name: <strong class="text-dark">AgriNexus ERP Solutions Inc.</strong></div>
+                                        <div class="fs-5 fw-bolder text-dark mt-1">0917 888 9900</div>
+                                    </div>
+                                    <span class="pill pill-forest"><i class="bi bi-phone me-1"></i> GCash Express Send</span>
+                                </div>
+                            }
+                            else if (selectedPaymentMethod == "Maya")
+                            {
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <div class="small text-muted">Account Name: <strong class="text-dark">AgriNexus ERP Solutions Inc.</strong></div>
+                                        <div class="fs-5 fw-bolder text-dark mt-1">0918 555 4422</div>
+                                    </div>
+                                    <span class="pill pill-forest"><i class="bi bi-wallet2 me-1"></i> Maya Wallet Transfer</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <div class="small text-muted">BDO Corporate Savings: <strong class="text-dark">AgriNexus ERP Solutions Inc.</strong></div>
+                                        <div class="fs-5 fw-bolder text-dark mt-1">0045-8912-3341</div>
+                                    </div>
+                                    <span class="pill pill-forest"><i class="bi bi-bank me-1"></i> InstaPay / PESONet</span>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- PROOF OF PAYMENT INPUTS -->
+                        <div>
+                            <label class="form-label fw-bold text-uppercase text-muted small mb-2" style="letter-spacing: 0.8px; font-size: 0.72rem;">
+                                2. Transaction Verification
+                            </label>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Sender Account Name <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control rounded-3" placeholder="e.g. Juan Dela Cruz" @bind="senderAccountName" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Reference / Trace No. <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control rounded-3" placeholder="e.g. 901283746512" @bind="referenceNumber" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Footer -->
+                <div class="modal-footer border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    @if (checkoutStep == 1)
+                    {
+                        <div class="text-muted small">
+                            <i class="bi bi-shield-check text-success me-1"></i> Your existing branches, staff, and farm data remain intact upon upgrade.
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseUpgradeModal">Cancel</button>
+                            <button type="button" class="btn-upgrade px-4 shadow-sm" @onclick="ProceedToPaymentStep" disabled="@(selectedPlanId == 0)">
+                                <span>Proceed to Payment</span>
+                                <i class="bi bi-arrow-right ms-1"></i>
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="BackToPlanStep" disabled="@isUpgrading">
+                            <i class="bi bi-arrow-left me-1"></i> Back to Plans
+                        </button>
+                        <button type="button" class="btn-upgrade px-5 shadow-sm" @onclick="ConfirmPaymentAndUpgradeAsync" disabled="@isUpgrading">
+                            @if (isUpgrading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <span>Processing...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-shield-check me-2"></i>
+                                <span>Confirm @Peso(ChosenPlan?.Price ?? 0m) Payment</span>
+                            }
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(toast))
+{
+    <div class="toast-note shadow-lg">
+        <i class="bi bi-check-circle-fill"></i>
+        <span>@toast</span>
+    </div>
+}
+
 @code {
     // ---------- MODELS ----------
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
-    record PlanInfo(string Name, decimal Price, string Cycle, int Branches, int Staff, int StorageGb, string[] Features);
-    record HistoryRow(string Plan, DateTime Renewal, decimal Amount, string Payment, string Status);
+    record PlanDetails(int PlanId, string Name, decimal Price, string Cycle, int BranchLimit, int StaffLimit, int StorageGb, string[] Features);
+    record HistoryRow(string Plan, string Cycle, DateTime Renewal, decimal Amount, string Payment, string Status);
+    record PaymentOption(string Name, string Subtitle, string Icon);
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // TODO: kuhaa ang business name, plan ug billing info gikan sa naka-login nga tenant
-    const string BusinessName = "Verdant Agri Ventures";
-
-    readonly PlanInfo plan = new(
-        "Growth", 3999m, "month", 3, 25, 50,
-        new[]
-        {
-            "3 branches",
-            "25 staff accounts",
-            "Labor and attendance monitoring",
-            "Cash drawer and daily collections",
-            "Production costing",
-            "Consolidated business reports",
-        });
-
-    // TODO: i-compute gikan sa Branches ug Staff modules kung naa na ang database
-    const int branchesUsed = 3;
-    const int staffUsed = 11;
-
-    const string BillingStatus = "paid";
-    readonly DateTime lastPaid = new(2026, 10, 5);
-    readonly DateTime nextRenewal = new(2026, 11, 30);
-    const bool AutoRenew = true;
-
-    readonly List<HistoryRow> history = new()
+    static readonly List<PaymentOption> PaymentMethods = new()
     {
-        new("Growth", new(2026, 11, 30), 3999m, "Paid", "Active"),
+        new("GCash", "Instant e-Wallet", "bi-phone"),
+        new("Maya", "Wallet / QR Pay", "bi-wallet2"),
+        new("Bank Transfer", "BDO / BPI InstaPay", "bi-bank")
     };
+
+    // ---------- STATE ----------
+    long currentBusinessId;
+    string businessName = "AgriNexus Farm Operations";
+    string businessStatus = "Trial";
+    bool isTrial => string.Equals(businessStatus, "Trial", StringComparison.OrdinalIgnoreCase);
+
+    PlanDetails currentPlan = new(0, "Starter", 2998m, "monthly", 1, 10, 20, new[] { "Loading plan features..." });
+    int branchesUsed;
+    int staffUsed;
+
+    string billingStatus = "Trial";
+    DateTime nextRenewal = DateTime.Today.AddDays(14);
+    bool autoRenew = true;
+
+    List<HistoryRow> history = new();
+    List<SubscriptionPlan> availablePlans = new();
+
+    bool showUpgradeModal;
+    int checkoutStep = 1;
+    int selectedPlanId;
+    string selectedPaymentMethod = "GCash";
+    string senderAccountName = "";
+    string referenceNumber = "";
+    string paymentError = "";
+    bool isUpgrading;
+    string toast = "";
+
+    SubscriptionPlan? ChosenPlan => availablePlans.FirstOrDefault(p => p.PlanId == selectedPlanId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var currentUser = await DbContext.Users
+            .Include(u => u.Business)
+            .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                   || u.FName == Auth.CurrentUserName);
+
+        if (currentUser?.BusinessId != null)
+        {
+            currentBusinessId = currentUser.BusinessId.Value;
+        }
+        else
+        {
+            var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+            if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+        }
+
+        await LoadSubscriptionDataAsync();
+    }
+
+    private async Task LoadSubscriptionDataAsync()
+    {
+        var business = await DbContext.Businesses.FindAsync(currentBusinessId);
+        if (business == null) return;
+
+        businessName = business.BusinessName;
+        businessStatus = business.Status ?? "Trial";
+
+        availablePlans = await DbContext.SubscriptionPlans
+            .Where(p => !p.IsArchived && p.Status.ToLower() == "active")
+            .OrderBy(p => p.Price)
+            .ToListAsync();
+
+        branchesUsed = await DbContext.Branches
+            .CountAsync(b => b.BusinessId == currentBusinessId && b.Status == "active");
+
+        staffUsed = await DbContext.Users
+            .CountAsync(u => u.BusinessId == currentBusinessId && u.Role != "SuperAdmin" && u.Status == "Active");
+
+        var subs = await DbContext.Subscriptions
+            .Include(s => s.SubscriptionPlan)
+            .Where(s => s.BusinessId == currentBusinessId)
+            .OrderByDescending(s => s.SubscriptionId)
+            .ToListAsync();
+
+        var latestSub = subs.FirstOrDefault();
+        var matchedPlan = availablePlans.FirstOrDefault(p =>
+            string.Equals(p.Name, business.PlanName, StringComparison.OrdinalIgnoreCase))
+            ?? latestSub?.SubscriptionPlan;
+
+        string cycle = latestSub?.Cycle ?? matchedPlan?.Cycle ?? "monthly";
+        decimal activePrice = matchedPlan?.Price ?? latestSub?.Amount ?? 2998m;
+
+        currentPlan = new PlanDetails(
+            matchedPlan?.PlanId ?? 0,
+            string.IsNullOrWhiteSpace(business.PlanName) ? (matchedPlan?.Name ?? "Starter") : business.PlanName,
+            activePrice,
+            cycle,
+            matchedPlan?.BranchLimit ?? 2,
+            matchedPlan?.StaffLimit ?? 15,
+            matchedPlan?.StorageGb ?? 25,
+            BuildFeatureList(matchedPlan)
+        );
+
+        selectedPlanId = currentPlan.PlanId;
+
+        if (latestSub != null)
+        {
+            billingStatus = isTrial ? "Free Trial" : (latestSub.PaymentStatus ?? "Paid");
+            nextRenewal = latestSub.RenewalDate;
+            autoRenew = latestSub.AutoRenew;
+        }
+        else
+        {
+            billingStatus = isTrial ? "Free Trial" : "Active";
+            nextRenewal = business.RegisteredAt.AddDays(14);
+        }
+
+        history = subs.Select(s => new HistoryRow(
+            s.SubscriptionPlan?.Name ?? business.PlanName,
+            s.Cycle,
+            s.RenewalDate,
+            s.Amount,
+            s.PaymentStatus,
+            s.Status
+        )).ToList();
+
+        if (history.Count == 0 && isTrial)
+        {
+            history.Add(new HistoryRow(currentPlan.Name, "14-day trial", nextRenewal, 0m, "Trial", "Active"));
+        }
+    }
+
+    private string[] BuildFeatureList(SubscriptionPlan? plan)
+    {
+        if (plan == null)
+        {
+            return new[]
+            {
+                "Branch & Staff Management",
+                "Farm & Plot Monitoring",
+                "Inventory & Stock Movements",
+                "Sales & Cash Drawer"
+            };
+        }
+
+        var list = new List<string>
+        {
+            $"Up to {plan.BranchLimit} active branches",
+            $"Up to {plan.StaffLimit} staff accounts",
+            $"{plan.StorageGb} GB cloud storage"
+        };
+
+        if (!string.IsNullOrWhiteSpace(plan.FeatureList))
+        {
+            var split = plan.FeatureList.Split(new[] { ',', '\n', ';' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var item in split)
+            {
+                list.Add(item.Trim());
+            }
+        }
+        else
+        {
+            list.Add("Labor & harvest tracking");
+            list.Add("Sales & daily collections");
+            list.Add("Consolidated business reports");
+        }
+
+        return list.ToArray();
+    }
 
     // ---------- COMPUTED ----------
     int DaysRemaining => (nextRenewal.Date - DateTime.Today).Days;
 
     string RemainingText => DaysRemaining switch
     {
-        0 => "Renews today",
+        0 => isTrial ? "Trial expires today" : "Renews today",
         1 => "1 day remaining",
         > 1 => DaysRemaining + " days remaining",
         -1 => "1 day overdue",
@@ -153,17 +584,131 @@
 
     List<Stat> Stats => new()
     {
-        new("CURRENT PLAN", plan.Name, Peso(plan.Price) + " per " + plan.Cycle, "bi-credit-card", ""),
-        new("BILLING STATUS", BillingStatus, "Last paid " + lastPaid.ToString("MMM d, yyyy", Inv), "bi-arrow-repeat", ""),
-        new("NEXT RENEWAL", nextRenewal.ToString("MMM d, yyyy", Inv), RemainingText, "bi-calendar-check", "stat-icon-warn"),
-        new("AUTO-RENEW", AutoRenew ? "Enabled" : "Disabled", "Managed by the platform administrator", "bi-calendar-check", "stat-icon-plain"),
+        new("CURRENT PLAN", currentPlan.Name, isTrial ? "14-Day Trial Period" : Peso(currentPlan.Price) + " / " + currentPlan.Cycle, "bi-credit-card-2-front-fill", ""),
+        new("BILLING STATUS", billingStatus, isTrial ? "No charge during trial" : "Plan cycle: " + currentPlan.Cycle, "bi-receipt-cutoff", "stat-icon-leaf"),
+        new(isTrial ? "TRIAL EXPIRATION" : "NEXT RENEWAL", nextRenewal.ToString("MMM d, yyyy", Inv), RemainingText, "bi-calendar-event-fill", isTrial || DaysRemaining <= 5 ? "stat-icon-earth" : ""),
+        new("AUTO-RENEW", autoRenew ? "Enabled" : "Disabled", "Managed via subscription billing", "bi-arrow-repeat", ""),
     };
 
     // ---------- HELPERS ----------
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
-
     static int Pct(int used, int limit) => limit <= 0 ? 0 : (int)Math.Min(100, Math.Round(used * 100.0 / limit));
 
     // ---------- ACTIONS ----------
-    void GoSettings() => Nav.NavigateTo("settings");
+    void GoSettings() => Nav.NavigateTo("/business-settings");
+
+    void OpenUpgradeModal()
+    {
+        checkoutStep = 1;
+        paymentError = "";
+        senderAccountName = "";
+        referenceNumber = "";
+        selectedPaymentMethod = "GCash";
+        selectedPlanId = currentPlan.PlanId != 0
+            ? currentPlan.PlanId
+            : (availablePlans.FirstOrDefault()?.PlanId ?? 0);
+        showUpgradeModal = true;
+    }
+
+    void CloseUpgradeModal() => showUpgradeModal = false;
+
+    void SelectPlan(int planId)
+    {
+        selectedPlanId = planId;
+        paymentError = "";
+    }
+
+    void ProceedToPaymentStep()
+    {
+        if (ChosenPlan == null)
+        {
+            paymentError = "Please select a subscription plan first.";
+            return;
+        }
+        paymentError = "";
+        checkoutStep = 2;
+    }
+
+    void BackToPlanStep()
+    {
+        paymentError = "";
+        checkoutStep = 1;
+    }
+
+    void SelectPaymentMethod(string method)
+    {
+        selectedPaymentMethod = method;
+        paymentError = "";
+    }
+
+    async Task ConfirmPaymentAndUpgradeAsync()
+    {
+        paymentError = "";
+        var chosenPlan = ChosenPlan;
+        if (chosenPlan == null) return;
+
+        if (string.IsNullOrWhiteSpace(senderAccountName))
+        {
+            paymentError = "Please enter the sender account name used for the transfer.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(referenceNumber) || referenceNumber.Trim().Length < 6)
+        {
+            paymentError = "Please enter a valid payment reference or transaction number (at least 6 characters).";
+            return;
+        }
+
+        isUpgrading = true;
+
+        try
+        {
+            var business = await DbContext.Businesses.FindAsync(currentBusinessId);
+            if (business != null)
+            {
+                string cycle = string.IsNullOrWhiteSpace(chosenPlan.Cycle) ? "monthly" : chosenPlan.Cycle;
+                int daysToAdd = cycle.Equals("yearly", StringComparison.OrdinalIgnoreCase) ? 365 : 30;
+
+                business.PlanName = chosenPlan.Name;
+                business.Status = "Active";
+                DbContext.Businesses.Update(business);
+
+                var newSub = new Subscription
+                {
+                    BusinessId = currentBusinessId,
+                    SubscriptionPlanId = chosenPlan.PlanId,
+                    Amount = chosenPlan.Price,
+                    Cycle = cycle,
+                    RenewalDate = DateTime.Today.AddDays(daysToAdd),
+                    PaymentStatus = "Paid",
+                    Status = "Active",
+                    AutoRenew = true
+                };
+
+                DbContext.Subscriptions.Add(newSub);
+                await DbContext.SaveChangesAsync();
+
+                showUpgradeModal = false;
+                await LoadSubscriptionDataAsync();
+                await ShowToast($"Upgraded to {chosenPlan.Name} via {selectedPaymentMethod}!");
+            }
+        }
+        catch (Exception ex)
+        {
+            paymentError = "Upgrade failed: " + ex.Message;
+        }
+        finally
+        {
+            isUpgrading = false;
+        }
+    }
+
+    async Task ShowToast(string message)
+    {
+        toast = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3200);
+        toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
 }

@@ -2,158 +2,268 @@
 @layout LandingLayout
 @inject NavigationManager NavigationManager
 @inject AgriNexus.DataLayer.AgriNexusDbContext DbContext
+@inject AgriNexus.Services.RegistrationStateService RegState
 @using Microsoft.EntityFrameworkCore
 @using AgriNexus.DataLayer.Models
 
-<div class="container py-5">
-    <div class="text-center mb-5">
-        <h2 class="fw-bolder" style="color: #0A2B1D;">Choose Your Subscription Plan</h2>
-        <p class="text-muted">Start with a 14-day free trial. No credit card required.</p>
-    </div>
+<div class="pricing-wrapper min-vh-100 py-4 py-md-5 px-3">
+    <div class="container" style="max-width: 1140px;">
 
-    <!-- ERROR DISPLAY -->
-    @if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <div class="alert alert-danger text-center mb-4">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i> @errorMessage
+        <!-- TOP NAVIGATION & STEP INDICATOR -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+            <button type="button" class="btn btn-back-modern fw-bold px-3 py-2 rounded-3" @onclick="GoBack">
+                <i class="bi bi-arrow-left me-2"></i> Back to Register
+            </button>
+
+            <div class="d-flex align-items-center gap-2 small fw-bold">
+                <span class="step-pill completed"><i class="bi bi-check2 me-1"></i>1. Account</span>
+                <i class="bi bi-chevron-right text-muted"></i>
+                <span class="step-pill active">2. Choose Plan</span>
+                <i class="bi bi-chevron-right text-muted"></i>
+                <span class="step-pill upcoming">3. Finish</span>
+            </div>
         </div>
-    }
 
-    <div class="row g-4 justify-content-center">
-        @foreach (var plan in AvailablePlans)
-        {
-            <div class="col-12 col-md-4">
-                <div class="card-box h-100 p-4 shadow-sm border @(plan.Recommended ? "border-success" : "")">
-                    @if (plan.Recommended)
-                    {
-                        <span class="badge bg-success mb-2">Recommended</span>
-                    }
-                    <h4 class="fw-bold text-dark">@plan.Name</h4>
-                    <p class="text-muted small">@plan.Description</p>
-                    <h2 class="fw-bolder text-success mb-3">₱@plan.Price.ToString("N2")<span class="fs-6 text-muted">/mo</span></h2>
+        <!-- HEADER SECTION -->
+        <div class="text-center mx-auto mb-5" style="max-width: 680px;">
+            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2 rounded-pill fw-bold small mb-3">
+                <i class="bi bi-layers-half me-1"></i> FLEXIBLE AGRIBUSINESS PRICING
+            </span>
+            <h1 class="fw-bolder mb-2" style="color: #0A2B1D; letter-spacing: -0.5px;">
+                Choose Your Subscription Plan
+            </h1>
+            <p class="text-muted mb-0">
+                Start risk-free with a <strong>14-day free trial</strong> or unlock full multi-branch capacity immediately with a subscription tier.
+            </p>
+        </div>
 
-                    <ul class="list-unstyled small mb-4">
-                        <li><i class="bi bi-check2 text-success me-2"></i> Up to @plan.BranchLimit Branches</li>
-                        <li><i class="bi bi-check2 text-success me-2"></i> Up to @plan.StaffLimit Staff Accounts</li>
-                        <li><i class="bi bi-check2 text-success me-2"></i> @plan.StorageGb GB Storage</li>
-                    </ul>
-
-                    <button type="button" class="btn-save w-100 py-3 rounded-3" @onclick="() => Subscribe(plan)" disabled="@isProcessing">
-                        @if (isProcessing)
+        <!-- FEATURED 14-DAY FREE TRIAL BANNER CARD -->
+        <div class="trial-banner-card rounded-4 p-4 p-md-4 mb-5 @(RegState.IsFreeTrial && !isTrialUsed ? "selected" : "") @(isTrialUsed ? "opacity-75 bg-light" : "")">
+            <div class="row align-items-center g-3">
+                <div class="col-lg-8">
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <span class="badge @(isTrialUsed ? "bg-secondary" : "bg-dark") text-white px-3 py-1 rounded-pill small fw-bold">
+                            <i class="bi @(isTrialUsed ? "bi-lock-fill" : "bi-lightning-charge-fill text-warning") me-1"></i>
+                            @(isTrialUsed ? "TRIAL USED" : "FREE TRIAL")
+                        </span>
+                        @if (isTrialUsed)
                         {
-                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span class="small fw-bold text-danger">Your 14-day free trial has already been used. Please choose a paid plan below.</span>
                         }
-                        Select Plan
-                    </button>
+                        else
+                        {
+                            <span class="small fw-bold text-success">No credit card or payment required today</span>
+                        }
+                    </div>
+                    <h4 class="fw-bolder mb-1" style="color: #0A2B1D;">14-Day Free Trial Access</h4>
+                    <p class="text-muted small mb-2">
+                        Test AgriNexus ERP on your farm operations for 14 days. Includes <strong>1 Branch</strong>, <strong>3 Staff Accounts</strong>, and <strong>2 GB Cloud Storage</strong>.
+                    </p>
+                </div>
+                <div class="col-lg-4 text-lg-end">
+                    <div class="d-flex flex-column flex-sm-row flex-lg-column align-items-lg-end justify-content-between gap-2">
+                        <div>
+                            <span class="fs-3 fw-bolder" style="color: #0A2B1D;">₱0.00</span>
+                            <span class="text-muted small"> / 14 days</span>
+                        </div>
+                        <button type="button"
+                                class="btn @(isTrialUsed ? "btn-secondary" : (RegState.IsFreeTrial ? "btn-success" : "btn-trial-outline")) fw-bold px-4 py-2 rounded-3"
+                                @onclick="ChooseFreeTrial"
+                                disabled="@isTrialUsed">
+                            @if (isTrialUsed)
+                            {
+                                <span><i class="bi bi-lock-fill me-2"></i>Free Trial Ended</span>
+                            }
+                            else if (RegState.IsFreeTrial)
+                            {
+                                <span><i class="bi bi-check-circle-fill me-2"></i>Trial Selected — Continue</span>
+                            }
+                            else
+                            {
+                                <span>Start 14-Day Free Trial <i class="bi bi-arrow-right ms-1"></i></span>
+                            }
+                        </button>
+                    </div>
                 </div>
             </div>
+        </div>
+
+        <!-- DIVIDER LABEL -->
+        <div class="d-flex align-items-center gap-3 mb-4">
+            <hr class="flex-grow-1 opacity-25" />
+            <span class="text-uppercase fw-bold text-muted small" style="letter-spacing: 1px; font-size: 0.72rem;">
+                Or Choose a Full Subscription Plan
+            </span>
+            <hr class="flex-grow-1 opacity-25" />
+        </div>
+
+        <!-- IF NO ACTIVE PLANS IN DB -->
+        @if (!AvailablePlans.Any())
+        {
+            <div class="text-center py-5 bg-white rounded-4 shadow-sm">
+                <i class="bi bi-inbox fs-1 text-muted d-block mb-2"></i>
+                <h5 class="text-muted fw-bold">No paid subscription plans available at the moment.</h5>
+                <p class="text-muted small mb-0">You can still proceed with the 14-Day Free Trial above.</p>
+            </div>
         }
+
+        <!-- PAID PLANS GRID -->
+        <div class="row g-4 justify-content-center align-items-stretch">
+            @foreach (var plan in AvailablePlans)
+            {
+                bool isSelected = !RegState.IsFreeTrial && RegState.HasSelectedPlan && RegState.SelectedPlan?.PlanId == plan.PlanId;
+
+                <div class="col-12 col-md-6 col-lg-4">
+                    <div class="plan-card h-100 rounded-4 p-4 d-flex flex-column position-relative @(plan.Recommended ? "recommended" : "") @(isSelected ? "selected" : "")">
+
+                        @if (plan.Recommended)
+                        {
+                            <div class="recommended-ribbon">
+                                <i class="bi bi-stars me-1"></i> RECOMMENDED
+                            </div>
+                        }
+
+                        <!-- PLAN HEADER -->
+                        <div class="text-center pt-2 mb-3">
+                            <h4 class="fw-bolder mb-1" style="color: #0A2B1D;">@plan.Name</h4>
+                            <p class="text-muted small mb-3" style="min-height: 38px;">
+                                @(string.IsNullOrWhiteSpace(plan.Description) ? "Tailored for modern agricultural operations." : plan.Description)
+                            </p>
+
+                            <div class="price-display py-2">
+                                <span class="currency">₱</span>
+                                <span class="amount">@plan.Price.ToString("N2")</span>
+                                <span class="cycle">/@(plan.Cycle == "yearly" ? "yr" : "mo")</span>
+                            </div>
+                        </div>
+
+                        <hr class="opacity-15 my-3" />
+
+                        <!-- QUOTA PILLS -->
+                        <div class="d-flex justify-content-center gap-2 flex-wrap mb-3">
+                            <span class="quota-chip"><i class="bi bi-diagram-3 me-1"></i>@plan.BranchLimit @(plan.BranchLimit == 1 ? "Branch" : "Branches")</span>
+                            <span class="quota-chip"><i class="bi bi-people me-1"></i>@plan.StaffLimit Staff</span>
+                            <span class="quota-chip"><i class="bi bi-hdd me-1"></i>@plan.StorageGb GB</span>
+                        </div>
+
+                        <!-- FEATURES LIST -->
+                        <ul class="list-unstyled small mb-4 flex-grow-1 d-flex flex-column gap-2 mt-2">
+                            <li class="d-flex align-items-start gap-2">
+                                <i class="bi bi-check-circle-fill text-success mt-1"></i>
+                                <span>Up to <strong>@plan.BranchLimit @(plan.BranchLimit == 1 ? "Branch" : "Branches")</strong></span>
+                            </li>
+                            <li class="d-flex align-items-start gap-2">
+                                <i class="bi bi-check-circle-fill text-success mt-1"></i>
+                                <span>Up to <strong>@plan.StaffLimit Staff Accounts</strong></span>
+                            </li>
+                            <li class="d-flex align-items-start gap-2">
+                                <i class="bi bi-check-circle-fill text-success mt-1"></i>
+                                <span><strong>@plan.StorageGb GB</strong> Cloud Storage</span>
+                            </li>
+
+                            @if (!string.IsNullOrEmpty(plan.FeatureList))
+                            {
+                                var features = plan.FeatureList.Split(new[] { '\n', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                                @foreach (var feature in features)
+                                {
+                                    <li class="d-flex align-items-start gap-2">
+                                        <i class="bi bi-check-circle-fill text-success mt-1"></i>
+                                        <span>@feature.Trim()</span>
+                                    </li>
+                                }
+                            }
+                        </ul>
+
+                        <!-- ACTION BUTTON -->
+                        <button type="button"
+                                class="btn @(plan.Recommended || isSelected ? "btn-plan-primary" : "btn-plan-outline") w-100 py-3 fw-bold rounded-3 mt-auto"
+                                @onclick="() => ChoosePaidPlan(plan)">
+                            @if (isSelected)
+                            {
+                                <span><i class="bi bi-check-circle-fill me-2"></i>Paid & Selected</span>
+                            }
+                            else
+                            {
+                                <span>Select @plan.Name <i class="bi bi-arrow-right ms-1"></i></span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+
     </div>
 </div>
 
 @code {
-    // CHANGED: int to long
-    private long currentBusinessId = 0;
+    [SupplyParameterFromQuery(Name = "businessId")]
+    public long? UpgradeBusinessId { get; set; }
+
     private List<SubscriptionPlan> AvailablePlans = new();
-    private bool isProcessing = false;
-    private string errorMessage = ""; // Added for error display
+    private bool isTrialUsed = false;
 
     protected override async Task OnInitializedAsync()
     {
-        // 1. Manually parse the query string from the URL
-        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
-        var query = uri.Query;
-
-        if (!string.IsNullOrEmpty(query))
+        // Allow access if either registering a new account OR upgrading an expired trial business
+        if (string.IsNullOrWhiteSpace(RegState.Email) && (!UpgradeBusinessId.HasValue || UpgradeBusinessId.Value <= 0))
         {
-            var queryString = query.TrimStart('?');
-            var parameters = queryString.Split('&');
-
-            foreach (var param in parameters)
-            {
-                var keyValue = param.Split('=');
-                if (keyValue.Length == 2 && keyValue[0] == "businessId")
-                {
-                    // CHANGED: int.TryParse to long.TryParse
-                    if (long.TryParse(keyValue[1], out long bizId))
-                    {
-                        currentBusinessId = bizId;
-                    }
-                }
-            }
-        }
-
-        // 2. Fetch plans from the database
-        AvailablePlans = await DbContext.SubscriptionPlans.ToListAsync();
-
-        // Fallback if the DB is empty
-        if (!AvailablePlans.Any())
-        {
-            AvailablePlans = new List<SubscriptionPlan>
-            {
-                new() { PlanId = 1, Name = "Starter", Price = 1499, Description = "For small farms", BranchLimit = 1, StaffLimit = 5, StorageGb = 5, Recommended = false },
-                new() { PlanId = 2, Name = "Growth", Price = 3999, Description = "For growing businesses", BranchLimit = 3, StaffLimit = 25, StorageGb = 50, Recommended = true },
-                new() { PlanId = 3, Name = "Enterprise", Price = 9999, Description = "For large operations", BranchLimit = 15, StaffLimit = 150, StorageGb = 250, Recommended = false }
-            };
-        }
-    }
-
-    private async Task Subscribe(SubscriptionPlan selectedPlan)
-    {
-        errorMessage = "";
-
-        // I-check kung na-parse ba ang BusinessId
-        if (currentBusinessId == 0)
-        {
-            errorMessage = "System Error: Business ID not found in the URL. Please go back and register again.";
+            NavigationManager.NavigateTo("/register");
             return;
         }
 
-        if (isProcessing) return;
-        isProcessing = true;
-
-        try
+        // Check if this business already exists (came from expired trial login)
+        if (UpgradeBusinessId.HasValue && UpgradeBusinessId.Value > 0)
         {
-            // 1. Update the Business Record with the chosen plan
-            var business = await DbContext.Businesses.FindAsync(currentBusinessId);
-            if (business != null)
+            var existingBusiness = await DbContext.Businesses.FindAsync(UpgradeBusinessId.Value);
+            if (existingBusiness != null)
             {
-                business.PlanName = selectedPlan.Name;
+                isTrialUsed = true;
+                RegState.IsFreeTrial = false;
+                RegState.BusinessName = existingBusiness.BusinessName;
+                RegState.Email = existingBusiness.Email;
             }
-            else
-            {
-                errorMessage = "Business not found in the database.";
-                isProcessing = false;
-                return;
-            }
-
-            // 2. Create a Subscription Record
-            var subscription = new Subscription
-            {
-                BusinessId = currentBusinessId,
-                SubscriptionPlanId = selectedPlan.PlanId,
-                Amount = selectedPlan.Price,
-                Cycle = "monthly",
-                RenewalDate = DateTime.Today.AddDays(30),
-                PaymentStatus = "Pending",
-                Status = "Pending",
-                AutoRenew = true
-            };
-            DbContext.Subscriptions.Add(subscription);
-
-            await DbContext.SaveChangesAsync();
-
-            // 3. Redirect to login
-            NavigationManager.NavigateTo("/login?registered=true");
         }
-        catch (Exception ex)
+
+        AvailablePlans = await DbContext.SubscriptionPlans
+            .Where(p => p.Status == "active" && !p.IsArchived)
+            .OrderBy(p => p.Price)
+            .ToListAsync();
+    }
+
+    private void GoBack()
+    {
+        if (UpgradeBusinessId.HasValue && UpgradeBusinessId.Value > 0)
         {
-            errorMessage = "Database Error: " + ex.Message;
-            Console.WriteLine("Error: " + ex.Message);
+            NavigationManager.NavigateTo("/login");
         }
-        finally
+        else
         {
-            isProcessing = false;
+            NavigationManager.NavigateTo("/register");
+        }
+    }
+
+    private void ChooseFreeTrial()
+    {
+        if (isTrialUsed) return; // Extra guard so expired trial users cannot re-select Free Trial
+
+        RegState.IsFreeTrial = true;
+        RegState.SelectedPlan = null;
+        RegState.HasSelectedPlan = true;
+        NavigationManager.NavigateTo("/register");
+    }
+
+    private void ChoosePaidPlan(SubscriptionPlan plan)
+    {
+        RegState.IsFreeTrial = false;
+        RegState.SelectedPlan = plan;
+
+        if (UpgradeBusinessId.HasValue && UpgradeBusinessId.Value > 0)
+        {
+            NavigationManager.NavigateTo($"/payment-plan?businessId={UpgradeBusinessId.Value}");
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/payment-plan");
         }
     }
 }

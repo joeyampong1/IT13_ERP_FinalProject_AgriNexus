@@ -1,6 +1,6 @@
 /* CSS for AuditLogs component */
 .page-title {
-    font-weight: 700;
+    font-weight: 800;
     font-size: 2rem;
     letter-spacing: -0.5px;
     color: #0A2B1D;
@@ -37,42 +37,83 @@
     .search-box input {
         width: 100%;
         padding: .55rem .9rem .55rem 2.4rem;
-        border: 1px solid var(--border-color);
+        border: 1px solid #E2ECE6;
         border-radius: 12px;
-        background: #fff;
+        background: #FFFFFF;
+        color: #0A2B1D;
         font-size: .9rem;
         outline: none;
     }
 
         .search-box input:focus {
-            border-color: var(--primary-green);
+            border-color: #1B5E34;
+            box-shadow: 0 0 0 0.2rem rgba(27, 94, 52, 0.15);
         }
 
+    .search-box:focus-within i {
+        color: #1B5E34;
+    }
+
+.filter-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+    .filter-wrap i {
+        position: absolute;
+        left: 13px;
+        pointer-events: none;
+        font-size: 0.9rem;
+    }
+
 .filter-select {
-    padding: .55rem 2rem .55rem .9rem;
-    border: 1px solid var(--border-color);
+    padding: .55rem 2rem .55rem 2.2rem;
+    border: 1px solid #E2ECE6;
     border-radius: 12px;
-    background-color: #fff;
+    background-color: #FFFFFF;
+    color: #0A2B1D;
+    font-weight: 500;
     font-size: .9rem;
-    min-width: 175px;
+    min-width: 185px;
     outline: none;
     cursor: pointer;
 }
 
     .filter-select:focus {
-        border-color: var(--primary-green);
+        border-color: #1B5E34;
+        box-shadow: 0 0 0 0.2rem rgba(27, 94, 52, 0.15);
     }
 
 /* ---------- TABLE ---------- */
 .panel {
-    background: #fff;
-    border: 1px solid var(--border-color);
+    background: #FFFFFF;
+    border: 1px solid #E2ECE6;
     border-radius: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
+    overflow: hidden;
 }
 
 .table-wrap {
     overflow-x: auto;
+}
+
+.actor-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background-color: #E8F3EC;
+    color: #1B5E34;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.actor-system {
+    background-color: #F4EFEA;
+    color: #7A5230;
 }
 
 .log-table {
@@ -84,16 +125,17 @@
         font-size: .7rem;
         letter-spacing: .08em;
         text-transform: uppercase;
-        color: var(--text-muted);
-        font-weight: 600;
+        color: #64748B;
+        font-weight: 700;
         padding: 1rem;
-        border-bottom: 1px solid var(--border-color);
+        background-color: #F7FAF8;
+        border-bottom: 1px solid #E2ECE6;
         white-space: nowrap;
     }
 
     .log-table td {
-        padding: .85rem 1rem;
-        border-color: var(--border-color);
+        padding: .9rem 1rem;
+        border-color: #E2ECE6;
         vertical-align: middle;
     }
 
@@ -101,28 +143,48 @@
         border-bottom: 0;
     }
 
+    .log-table tbody tr {
+        transition: background-color 0.15s ease-in-out;
+    }
+
+        .log-table tbody tr:hover {
+            background-color: #F4F8F5;
+        }
+
     .log-table .when {
         white-space: nowrap;
     }
 
     .log-table .sub {
         font-size: .75rem;
-        color: var(--text-muted);
+        color: #64748B;
     }
 
     .log-table .record {
         white-space: nowrap;
     }
 
-    .log-table .details {
-        color: var(--text-muted);
-        min-width: 260px;
-    }
-
-/* ---------- PILLS ---------- */
-.pill {
+.record-badge {
     display: inline-block;
-    padding: 2px 12px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background-color: #F7FAF8;
+    border: 1px solid #DCE6E0;
+    color: #1B5E34;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.log-table .details {
+    color: #475569;
+    min-width: 260px;
+}
+
+/* ---------- AGRINEXUS LOGO-ALIGNED PILLS ---------- */
+.pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 12px;
     border-radius: 999px;
     font-size: .72rem;
     font-weight: 600;
@@ -130,32 +192,37 @@
     white-space: nowrap;
 }
 
-.pill-green {
-    background: #E6F0E9;
+/* Create: Deep Forest Green */
+.pill-forest {
+    background: #E8F3EC;
     color: #1B5E34;
-    border-color: #CFE0D4;
+    border-color: #C6DFCE;
 }
 
-.pill-blue {
-    background: #E0F2FE;
-    color: #0369A1;
-    border-color: #BAE6FD;
+/* Renew: Leaf Green */
+.pill-leaf {
+    background: #EEF6E8;
+    color: #3D7320;
+    border-color: #D2E5C3;
 }
 
-.pill-yellow {
-    background: #FEF3C7;
-    color: #B45309;
-    border-color: #FDE68A;
+/* Retire / Sync: Olive-Moss Green */
+.pill-moss {
+    background: #F1F5EC;
+    color: #4A6332;
+    border-color: #D7E0CC;
 }
 
-.pill-red {
-    background: #FEE2E2;
-    color: #B91C1C;
-    border-color: #FECACA;
+/* Suspend / Delete: Earth Soil Brown (from logo soil rows) */
+.pill-earth {
+    background: #F5EFEA;
+    color: #7A5230;
+    border-color: #E2D3C5;
 }
 
-.pill-gray {
-    background: #F1F5F9;
-    color: #64748B;
-    border-color: #E2E8F0;
+/* Login / Update: Neutral Sage */
+.pill-sage {
+    background: #F4F7F5;
+    color: #475569;
+    border-color: #DCE6E0;
 }

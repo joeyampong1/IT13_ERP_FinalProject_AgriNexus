@@ -1,6 +1,6 @@
 /* CSS for MySubscription component */
 .page-title {
-    font-weight: 700;
+    font-weight: 800;
     font-size: 2rem;
     letter-spacing: -0.5px;
     color: #0A2B1D;
@@ -11,78 +11,139 @@
     font-size: .95rem;
 }
 
-/* ---------- BUTTON ---------- */
+/* ---------- BUTTONS ---------- */
 .btn-outline-lg {
-    background: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: .55rem 1.1rem;
-    font-weight: 500;
-    font-size: .9rem;
-    color: var(--text-main);
+    background: #FFFFFF;
+    border: 1px solid #E2ECE6;
+    border-radius: 12px;
+    padding: .55rem 1.15rem;
+    font-weight: 600;
+    font-size: .88rem;
+    color: #0A2B1D;
     cursor: pointer;
+    transition: all 0.2s ease;
 }
 
     .btn-outline-lg:hover {
-        background: #F1F5F9;
-        border-color: #CBD5E1;
+        background: #F4F8F5;
+        border-color: #1B5E34;
+        color: #1B5E34;
     }
+
+.btn-upgrade {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: linear-gradient(135deg, #0A2B1D 0%, #1B5E34 100%);
+    color: #FFFFFF;
+    border: 0;
+    border-radius: 12px;
+    padding: .6rem 1.35rem;
+    font-weight: 600;
+    font-size: .88rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+    .btn-upgrade:hover:not(:disabled) {
+        background: linear-gradient(135deg, #0D3826 0%, #227340 100%);
+        transform: translateY(-1px);
+    }
+
+/* ---------- TRIAL BANNER ---------- */
+.trial-banner {
+    background: linear-gradient(135deg, #FBF8F5 0%, #F5EFEA 100%);
+    border: 1px solid #E2D3C5;
+    border-left: 5px solid #7A5230;
+    border-radius: 16px;
+    padding: 1.1rem 1.4rem;
+    box-shadow: 0 2px 8px rgba(122, 82, 48, 0.06);
+}
+
+.trial-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background-color: #EADCD0;
+    color: #7A5230;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
 
 /* ---------- STAT CARDS ---------- */
 .stat-card {
+    background-color: #FFFFFF;
+    border: 1px solid #E2ECE6;
     border-radius: 16px;
     padding: 20px 22px;
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(10, 43, 29, 0.07);
+    }
 
     .stat-card .card-title {
         font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #64748B;
         margin-bottom: 0;
         line-height: 1.3;
     }
 
     .stat-card .card-value {
         font-size: 1.7rem;
+        font-weight: 800;
+        color: #0A2B1D;
         letter-spacing: -0.5px;
     }
 
 .stat-icon {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     flex-shrink: 0;
     border-radius: 10px;
-    background: #E8EEEA;
-    color: #1B4D2E;
+    background: #E8F3EC;
+    color: #1B5E34;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    font-size: 1.05rem;
 }
 
-.stat-icon-plain {
-    background: transparent;
+.stat-icon-leaf {
+    background: #EEF6E8;
+    color: #4E8D2A;
 }
 
-.stat-icon-warn {
-    background: #FEF3C7;
-    color: #D97706;
+.stat-icon-earth {
+    background: #F5EFEA;
+    color: #7A5230;
 }
 
 /* ---------- PANELS ---------- */
 .panel-title {
-    font-weight: 700;
+    font-weight: 800;
     font-size: 1.05rem;
     color: #0A2B1D;
 }
 
 .panel-sub {
-    font-size: .8rem;
-    color: var(--text-muted);
+    font-size: .82rem;
+    color: #64748B;
     margin-bottom: .75rem;
 }
 
 /* ---------- PLAN USAGE ---------- */
 .usage {
-    margin-top: 1rem;
+    margin-top: 1.15rem;
 }
 
 .usage-row {
@@ -96,22 +157,18 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    color: var(--text-muted);
+    color: #475569;
+    font-weight: 500;
 }
 
-    .usage-label i {
-        font-size: 1rem;
-        line-height: 1;
-    }
-
 .usage-count {
-    font-weight: 600;
-    color: var(--text-main);
+    font-weight: 700;
+    color: #0A2B1D;
 }
 
 .bar-track {
-    height: 8px;
-    background: #DDE8E0;
+    height: 9px;
+    background: #E8F3EC;
     border-radius: 999px;
     overflow: hidden;
     margin-top: 8px;
@@ -119,17 +176,23 @@
 
 .bar-fill {
     height: 100%;
-    background: #1B5E34;
+    background: linear-gradient(90deg, #1B5E34 0%, #4E8D2A 100%);
     border-radius: 999px;
-    transition: width .3s;
+    transition: width .35s ease;
 }
+
+    .bar-fill.bar-warn {
+        background: #7A5230;
+    }
 
 .included-title {
     margin-top: 1.6rem;
-    margin-bottom: .6rem;
-    font-weight: 600;
-    font-size: .95rem;
-    color: var(--text-main);
+    margin-bottom: .75rem;
+    padding-top: 1rem;
+    border-top: 1px solid #E2ECE6;
+    font-weight: 700;
+    font-size: .92rem;
+    color: #0A2B1D;
 }
 
 .included-list {
@@ -138,29 +201,25 @@
     list-style: none;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    grid-auto-flow: column;
-    grid-template-rows: repeat(3, auto);
-    gap: .55rem 1.5rem;
-    color: var(--text-muted);
-    font-size: .92rem;
+    gap: .6rem 1.5rem;
+    color: #334155;
+    font-size: .88rem;
 }
 
-    .included-list li::before {
-        content: "•";
-        margin-right: 8px;
+    .included-list li {
+        display: flex;
+        align-items: center;
     }
 
 @media (max-width: 575.98px) {
     .included-list {
         grid-template-columns: 1fr;
-        grid-auto-flow: row;
-        grid-template-rows: none;
     }
 }
 
-/* ---------- SUBSCRIPTION STATUS ---------- */
+/* ---------- SUBSCRIPTION STATUS TABLE ---------- */
 .status-head {
-    padding: 1.2rem 1.4rem .9rem;
+    padding: 1.25rem 1.4rem .9rem;
 }
 
 .table-wrap {
@@ -168,19 +227,20 @@
 }
 
 .data-table {
-    font-size: .9rem;
+    font-size: .86rem;
     margin-bottom: 0;
 }
 
     .data-table thead th {
-        font-size: .7rem;
+        font-size: .68rem;
         letter-spacing: .08em;
         text-transform: uppercase;
-        color: var(--text-muted);
-        font-weight: 600;
-        padding: .9rem 1rem;
-        border-top: 1px solid var(--border-color);
-        border-bottom: 1px solid var(--border-color);
+        color: #64748B;
+        font-weight: 700;
+        padding: .85rem .9rem;
+        background-color: #F7FAF8;
+        border-top: 1px solid #E2ECE6;
+        border-bottom: 1px solid #E2ECE6;
         white-space: nowrap;
     }
 
@@ -190,18 +250,41 @@
         }
 
     .data-table td {
-        padding: .8rem 1rem;
-        border-color: var(--border-color);
+        padding: .85rem .9rem;
+        border-color: #E2ECE6;
     }
 
     .data-table tbody tr:last-child td {
         border-bottom: 0;
     }
 
+/* ---------- UPGRADE MODAL PLAN CARDS ---------- */
+.plan-option-card {
+    background: #FFFFFF;
+    border: 1.5px solid #E2ECE6;
+    border-radius: 16px;
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+    .plan-option-card:hover {
+        border-color: #4E8D2A;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(10, 43, 29, 0.08);
+    }
+
+    .plan-option-card.selected {
+        border: 2px solid #1B5E34;
+        background-color: #F4F9F6;
+        box-shadow: 0 10px 24px rgba(27, 94, 52, 0.12);
+    }
+
 /* ---------- PILLS ---------- */
 .pill {
-    display: inline-block;
-    padding: 2px 12px;
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 11px;
     border-radius: 999px;
     font-size: .72rem;
     font-weight: 600;
@@ -209,14 +292,33 @@
     white-space: nowrap;
 }
 
-.pill-green {
-    background: #E6F0E9;
+.pill-forest {
+    background: #E8F3EC;
     color: #1B5E34;
-    border-color: #CFE0D4;
+    border-color: #C6DFCE;
 }
 
-.pill-yellow {
-    background: #FEF3C7;
-    color: #B45309;
-    border-color: #FDE68A;
+.pill-earth {
+    background: #F5EFEA;
+    color: #7A5230;
+    border-color: #E2D3C5;
+}
+
+/* ---------- TOAST ---------- */
+.toast-note {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 420px;
+    background: #0A2B1D;
+    border: 1px solid #1B5E34;
+    color: #FFFFFF;
+    border-radius: 12px;
+    padding: .8rem 1.2rem;
+    font-size: .88rem;
+    font-weight: 500;
 }

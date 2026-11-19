@@ -5,11 +5,17 @@
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <h2 class="page-title">Business Dashboard</h2>
-        <p class="text-muted mb-0 page-sub">@BusinessName · @(branches.Count) branches · @(branches.Sum(b => b.Plots)) plots under management</p>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@BusinessName</strong> · @(branches.Count) branches · @(branches.Sum(b => b.Plots)) plots under management
+        </p>
     </div>
-    <div class="d-flex gap-2">
-        <button type="button" class="btn-outline-lg" @onclick="GoReports">Consolidated reports</button>
-        <button type="button" class="btn-solid" @onclick="GoStaff">Manage staff</button>
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn-outline-lg shadow-sm" @onclick="GoReports">
+            <i class="bi bi-file-earmark-bar-graph text-success"></i> Consolidated reports
+        </button>
+        <button type="button" class="btn-solid shadow-sm" @onclick="GoStaff">
+            <i class="bi bi-people-fill"></i> Manage staff
+        </button>
     </div>
 </div>
 
@@ -39,16 +45,28 @@
 <div class="row g-3 mb-4">
     <div class="col-12 col-lg-8">
         <div class="stat-card h-100">
-            <div class="panel-title">Revenue trend</div>
-            <div class="panel-sub">Total sales value over the last 6 months</div>
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <div class="panel-title">Revenue trend</div>
+                    <div class="panel-sub">Total sales value over the last 6 months</div>
+                </div>
+                <div class="stat-icon stat-icon-leaf"><i class="bi bi-bar-chart-fill"></i></div>
+            </div>
 
             <svg viewBox="0 0 640 300" class="w-100" style="max-height:340px" role="img" aria-label="Revenue trend">
+                <defs>
+                    <linearGradient id="leafBarGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#62A834" />
+                        <stop offset="100%" stop-color="#4E8D2A" />
+                    </linearGradient>
+                </defs>
+
                 @for (int i = 0; i <= 4; i++)
                 {
                     var y = 20 + i * 60;
                     var val = AxisMax / 4 * (4 - i);
                     <g>
-                        <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                        <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2ECE6" stroke-dasharray="3 4" />
                         <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
                     </g>
                 }
@@ -56,12 +74,17 @@
                 {
                     var r = revenue[i];
                     var slot = 568.0 / revenue.Count;
-                    var w = slot * 0.8;
+                    var w = slot * 0.76;
                     var x = 62 + i * slot + (slot - w) / 2;
                     var h = r.Amount / AxisMax * 240;
+                    var barY = 260 - h;
                     <g>
-                        <rect x="@F(x)" y="@F(260 - h)" width="@F(w)" height="@F(h)" rx="5" fill="#62A834" />
-                        <text x="@F(x + w / 2)" y="282" text-anchor="middle" font-size="11" fill="#475569">@r.Month</text>
+@if (h > 0)
+                        {
+                            <rect x="@F(x)" y="@F(barY)" width="@F(w)" height="@F(h)" rx="6" fill="url(#leafBarGrad)" />
+                            @((MarkupString)$"<text x=\"{F(x + w / 2)}\" y=\"{F(barY - 6)}\" text-anchor=\"middle\" font-size=\"10.5\" font-weight=\"700\" fill=\"#1B5E34\">₱{(r.Amount / 1000.0).ToString("0.#", Inv)}k</text>")
+                        }
+                        <text x="@F(x + w / 2)" y="282" text-anchor="middle" font-size="11" font-weight="600" fill="#475569">@r.Month</text>
                     </g>
                 }
             </svg>
@@ -70,10 +93,15 @@
 
     <div class="col-12 col-lg-4">
         <div class="stat-card h-100">
-            <div class="panel-title">Expense allocation</div>
-            <div class="panel-sub">Where branch spending goes</div>
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <div>
+                    <div class="panel-title">Expense allocation</div>
+                    <div class="panel-sub">Where branch spending goes</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-pie-chart-fill"></i></div>
+            </div>
 
-            <div class="d-flex justify-content-center my-3">
+            <div class="d-flex justify-content-center my-3 position-relative">
                 <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Expense allocation">
                     @{
                         double offset = 0;
@@ -82,19 +110,23 @@
                     {
                         var len = e.Amount / ExpenseTotal * Circ;
                         var dash = Math.Max(len - 2, 0.5);
-                        <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@e.Color" stroke-width="30"
+                        <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@e.Color" stroke-width="28"
                                 stroke-dasharray="@F(dash) @F(Circ - dash)"
                                 stroke-dashoffset="@F(-offset)"
                                 transform="rotate(-90 100 100)" />
                         offset += len;
                     }
                 </svg>
+                <div class="position-absolute top-50 start-50 translate-middle text-center">
+                    <div class="fw-bolder" style="font-size: 1.15rem; color: #0A2B1D;">₱@((ExpenseTotal / 1000.0).ToString("0.#", Inv))k</div>
+                    <div class="text-muted fw-semibold" style="font-size: 0.68rem;">TOTAL SPEND</div>
+                </div>
             </div>
 
             <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
                 @foreach (var e in LegendSlices)
                 {
-                    <span><span class="legend-dot" style="background:@e.Color"></span>@e.Label</span>
+                    <span class="fw-medium"><span class="legend-dot" style="background:@e.Color"></span>@e.Label</span>
                 }
             </div>
         </div>
@@ -103,15 +135,15 @@
 
 <!-- BRANCH PERFORMANCE -->
 <div class="panel mb-4">
-    <div class="panel-head d-flex justify-content-between align-items-start">
+    <div class="panel-head d-flex justify-content-between align-items-center">
         <div>
             <div class="panel-title">Branch performance</div>
             <div class="panel-sub mb-0">Sales and expenses per branch</div>
         </div>
-        <button type="button" class="btn-outline" @onclick="GoBranches"><i class="bi bi-shop"></i> Branches</button>
+        <button type="button" class="btn-outline" @onclick="GoBranches"><i class="bi bi-shop text-success"></i> Branches</button>
     </div>
     <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
+        <table class="table table-hover data-table align-middle mb-0">
             <thead>
                 <tr>
                     <th>Branch</th>
@@ -128,13 +160,18 @@
                 {
                     var margin = b.Sales - b.Expenses;
                     <tr>
-                        <td class="fw-semibold">@b.Name</td>
-                        <td>@b.Manager</td>
-                        <td>@b.Plots</td>
-                        <td>@b.Staff</td>
-                        <td class="fw-semibold text-nowrap">@Peso(b.Sales)</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="row-avatar"><i class="bi bi-shop"></i></div>
+                                <span class="fw-bold" style="color: #0A2B1D;">@b.Name</span>
+                            </div>
+                        </td>
+                        <td class="text-dark fw-medium"><i class="bi bi-person-badge text-success me-1"></i>@b.Manager</td>
+                        <td class="fw-medium">@b.Plots</td>
+                        <td class="fw-medium">@b.Staff</td>
+                        <td class="fw-bold text-nowrap" style="color: #0A2B1D;">@Peso(b.Sales)</td>
                         <td class="muted-amt text-nowrap">@Peso(b.Expenses)</td>
-                        <td class="text-nowrap @(margin < 0 ? "neg" : "")">@PesoSigned(margin)</td>
+                        <td class="fw-bold text-nowrap @(margin < 0 ? "neg" : "pos")">@PesoSigned(margin)</td>
                     </tr>
                 }
             </tbody>
@@ -144,12 +181,17 @@
 
 <!-- LATEST SALES -->
 <div class="panel mb-4">
-    <div class="panel-head">
-        <div class="panel-title">Latest sales</div>
-        <div class="panel-sub mb-0">Most recent transactions across all branches</div>
+    <div class="panel-head d-flex justify-content-between align-items-center">
+        <div>
+            <div class="panel-title">Latest sales</div>
+            <div class="panel-sub mb-0">Most recent transactions across all branches</div>
+        </div>
+        <span class="badge rounded-pill px-3 py-1 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE; font-size: 0.72rem;">
+            <i class="bi bi-receipt me-1"></i>Recent Orders
+        </span>
     </div>
     <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
+        <table class="table table-hover data-table align-middle mb-0">
             <thead>
                 <tr>
                     <th>Sale no.</th>
@@ -164,12 +206,16 @@
                 @foreach (var s in sales)
                 {
                     <tr>
-                        <td class="fw-medium">@s.No</td>
-                        <td>@s.Customer</td>
-                        <td class="text-nowrap">@s.Date.ToString("MMM d, yyyy", Inv)</td>
-                        <td class="text-nowrap">@Peso(s.Total)</td>
-                        <td class="text-nowrap">@Peso(s.Balance)</td>
-                        <td><span class="pill @(s.Balance == 0 ? "pill-green" : "pill-yellow")">@(s.Balance == 0 ? "Paid" : "Partial")</span></td>
+                        <td><span class="code-badge">@s.No</span></td>
+                        <td class="fw-semibold" style="color: #0A2B1D;">@s.Customer</td>
+                        <td class="text-nowrap text-muted small"><i class="bi bi-calendar3 text-success me-1"></i>@s.Date.ToString("MMM d, yyyy", Inv)</td>
+                        <td class="fw-bold text-nowrap" style="color: #0A2B1D;">@Peso(s.Total)</td>
+                        <td class="text-nowrap @(s.Balance > 0 ? "neg fw-semibold" : "text-muted")">@Peso(s.Balance)</td>
+                        <td>
+                            <span class="pill @(s.Balance == 0 ? "pill-forest" : "pill-earth")">
+                                <i class="bi @(s.Balance == 0 ? "bi-check-circle-fill" : "bi-hourglass-split") me-1"></i>@(s.Balance == 0 ? "Paid" : "Partial")
+                            </span>
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -212,8 +258,7 @@
     static readonly double Circ = 2 * Math.PI * Radius;
     const double AxisMax = 60000;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // TODO: kuhaa ang business name gikan sa naka-login nga tenant
+    // Temporary prototype data
     const string BusinessName = "Verdant Agri Ventures";
 
     readonly List<Branch> branches = new()
@@ -239,20 +284,20 @@
         new("Sep", 25000), new("Oct", 52500), new("Nov", 0),
     };
 
-    // Clockwise gikan sa taas
+    // Harmonized AgriNexus Logo Palette (Forest Green, Leaf Green, Sage, & Earth Soil Brown)
     readonly List<ExpenseSlice> expenseSlices = new()
     {
-        new("Labor", 24300, "#206A3B"),
-        new("Seeds", 2000, "#7BC043"),
-        new("Equipment", 8500, "#2F7D45"),
-        new("Transport", 1200, "#7FA9A3"),
-        new("Repairs", 3100, "#3B8EA5"),
-        new("Utilities", 7000, "#A86B4C"),
-        new("Fuel", 10200, "#92D050"),
-        new("Supplies", 40410, "#62A834"),
+        new("Labor", 24300, "#1B5E34"),     // Deep Forest Green
+        new("Seeds", 2000, "#7BC043"),      // Fresh Sprout Green
+        new("Equipment", 8500, "#2E7D43"),  // Woodland Green
+        new("Transport", 1200, "#8BA896"),  // Soft Sage
+        new("Repairs", 3100, "#5C7A67"),    // Muted Pine
+        new("Utilities", 7000, "#7A5230"),  // Earth Soil Brown
+        new("Fuel", 10200, "#9B6E46"),      // Warm Clay Brown
+        new("Supplies", 40410, "#62A834"),  // Vibrant Leaf Green
     };
 
-    // Temporary summary values (wala pa naay ubang tables para i-compute)
+    // Temporary summary values
     const decimal OutstandingCollections = 31160m;
     const int ActivePlantings = 4;
     const int HarvestRecords = 7;
@@ -263,7 +308,6 @@
     // ---------- COMPUTED ----------
     double ExpenseTotal => expenseSlices.Sum(e => e.Amount);
 
-    // Legend: ang unang upat ra, sama sa prototype
     IEnumerable<ExpenseSlice> LegendSlices => new[] { "Labor", "Supplies", "Fuel", "Utilities" }
         .Select(n => expenseSlices.First(e => e.Label == n));
 
@@ -276,9 +320,9 @@
             return new()
             {
                 new("SALES THIS MONTH", Peso(monthSales.Sum(s => s.Total)), monthSales.Count + " transactions", "bi-graph-up-arrow", ""),
-                new("EXPENSES THIS MONTH", Peso(0m), "0 entries", "bi-cash-coin", "stat-icon-plain"),
-                new("OUTSTANDING COLLECTIONS", Peso(OutstandingCollections), "Unpaid and partial payments", "bi-receipt", "stat-icon-warn"),
-                new("ACTIVE PLANTINGS", ActivePlantings.ToString(), HarvestRecords + " harvest records", "bi-flower1", "stat-icon-plain"),
+                new("EXPENSES THIS MONTH", Peso(0m), "0 entries", "bi-cash-coin", "stat-icon-moss"),
+                new("OUTSTANDING COLLECTIONS", Peso(OutstandingCollections), "Unpaid and partial payments", "bi-receipt-cutoff", "stat-icon-earth"),
+                new("ACTIVE PLANTINGS", ActivePlantings.ToString(), HarvestRecords + " harvest records", "bi-flower1", "stat-icon-leaf"),
             };
         }
     }
@@ -286,8 +330,8 @@
     List<Stat> BottomStats => new()
     {
         new("BRANCHES", branches.Count.ToString(), "", "bi-shop", ""),
-        new("STAFF ACCOUNTS", StaffAccounts.ToString(), ActiveStaff + " active", "bi-people", "stat-icon-blue"),
-        new("PLOT AREA (HA)", PlotAreaHa.ToString(), "", "bi-wallet2", "stat-icon-plain"),
+        new("STAFF ACCOUNTS", StaffAccounts.ToString(), ActiveStaff + " active", "bi-people-fill", "stat-icon-leaf"),
+        new("PLOT AREA (HA)", PlotAreaHa.ToString(), "", "bi-map-fill", "stat-icon-earth"),
     };
 
     // ---------- HELPERS ----------

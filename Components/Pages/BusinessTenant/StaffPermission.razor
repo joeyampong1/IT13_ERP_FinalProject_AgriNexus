@@ -1,198 +1,679 @@
 ﻿@page "/staff"
+@layout MainLayout
 @using System.Globalization
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Web
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@using AgriNexus.Services
+@inject AgriNexusDbContext DbContext
+@inject AuthService Auth
+@inject RolePermissionService PermissionService
+@inject IJSRuntime JS
 
-<div class="mb-4">
-    <h2 class="page-title">Staff Account Management</h2>
-    <p class="text-muted mb-0 page-sub">@BusinessName · create staff accounts, assign branch and role, and review what each role can access.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="page-title">Staff Account Management</h2>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@businessName</strong> · create staff accounts, assign branch and role, and customize module permissions.
+        </p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-people-fill me-1"></i> Team &amp; Access Control
+    </span>
 </div>
 
-<!-- TABS -->
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    @foreach (var s in Stats)
+    {
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <span class="card-title">@s.Title</span>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                </div>
+                <div class="mt-3">
+                    <div class="card-value">@s.Value</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- MAIN TABS -->
 <div class="tabs mb-4">
-    <button type="button" class="tab-btn @(activeTab == "staff" ? "active" : "")" @onclick='() => SetTab("staff")'>Staff accounts</button>
-    <button type="button" class="tab-btn @(activeTab == "roles" ? "active" : "")" @onclick='() => SetTab("roles")'>Roles &amp; permissions</button>
+    <button type="button" class="tab-btn @(activeTab == "staff" ? "active" : "")" @onclick='() => SetTab("staff")'>
+        <i class="bi bi-person-lines-fill"></i> Staff accounts
+    </button>
+    <button type="button" class="tab-btn @(activeTab == "roles" ? "active" : "")" @onclick='() => SetTab("roles")'>
+        <i class="bi bi-shield-lock-fill"></i> Roles &amp; permissions
+    </button>
 </div>
 
 @if (activeTab == "staff")
 {
-    <!-- TOOLBAR -->
-    <div class="toolbar mb-3">
+    <!-- TOOLBAR WITH ACTIVE/INACTIVE FILTER -->
+    <div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+
+        <!-- ACTIVE / SUSPENDED TABS -->
+        <div class="btn-group shadow-sm" role="group" aria-label="Status Tabs">
+            <input type="radio" class="btn-check" name="staffStatusTabs" id="tabStaffActive" autocomplete="off"
+                   checked="@(!showInactive)" @onchange="() => ToggleStatusTab(false)">
+            <label class="btn btn-outline-success fw-bold" for="tabStaffActive">
+                <i class="bi bi-check-circle-fill me-1"></i> Active
+            </label>
+
+            <input type="radio" class="btn-check" name="staffStatusTabs" id="tabStaffInactive" autocomplete="off"
+                   checked="@showInactive" @onchange="() => ToggleStatusTab(true)">
+            <label class="btn btn-outline-secondary fw-bold" for="tabStaffInactive">
+                <i class="bi bi-pause-circle-fill me-1"></i> Inactive
+            </label>
+        </div>
+
+        <!-- SEARCH BOX -->
         <div class="search-box">
             <i class="bi bi-search"></i>
-            <input type="text" placeholder="Search staff by name, email or role.." @bind="searchText" @bind:event="oninput" />
+            <input type="text" placeholder="Search staff by name, email or role..."
+                   @bind="searchText"
+                   @bind:event="oninput"
+                   @bind:after="ResetPagination" />
         </div>
-        <span class="text-muted small">@Filtered.Count staff @(Filtered.Count == 1 ? "account" : "accounts")</span>
-        <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+
+        <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+            <i class="bi bi-person-badge me-1 text-success"></i>@Filtered.Count @(Filtered.Count == 1 ? "account" : "accounts")
+        </span>
+
+        <!-- NEW BUTTON -->
+        <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNew">
             <i class="bi bi-plus-lg"></i> New staff account
         </button>
     </div>
 
     <!-- TABLE -->
-    <div class="panel">
-        <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
-                <thead>
+    <div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 300px); overflow: hidden;">
+        <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+            <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+                <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                     <tr>
-                        <th>Name</th>
-                        <th>Role</th>
-                        <th>Branch</th>
-                        <th>Contact</th>
-                        <th>Hired</th>
-                        <th>Status</th>
-                        <th></th>
+                        <th class="text-muted small fw-bold text-uppercase py-3 px-4">Staff Member</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Role</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Assigned Branch</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Contact</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Created</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Status</th>
+                        <th class="py-3"></th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var s in Filtered)
+                    @foreach (var s in PaginatedStaff)
                     {
-                        <tr>
-                            <td>
-                                <div class="fw-semibold">@s.Name</div>
-                                <div class="sub">@s.Email</div>
+                        <tr style="cursor: pointer;" @onclick="() => OpenDetails(s)">
+                            <td class="px-4">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="staff-avatar">
+                                        @GetInitials(s.FName, s.LName)
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold" style="color: #0A2B1D;">@s.FullName</div>
+                                        <div class="text-muted small mt-1"><i class="bi bi-envelope me-1"></i>@s.Email</div>
+                                    </div>
+                                </div>
                             </td>
-                            <td>@RoleName(s.Role)</td>
-                            <td>@(string.IsNullOrWhiteSpace(s.Branch) ? "Unassigned" : s.Branch)</td>
-                            <td class="text-nowrap">@(string.IsNullOrWhiteSpace(s.Contact) ? "—" : s.Contact)</td>
-                            <td class="text-nowrap">@(s.Hired.HasValue ? s.Hired.Value.ToString("MMM d, yyyy", Inv) : "—")</td>
-                            <td><span class="pill @(s.Status == "active" ? "pill-green" : "pill-red")">@Cap(s.Status)</span></td>
-                            <td class="text-end action-cell">
-                                <button type="button" class="btn-dots" @onclick="() => ToggleMenu(s.Id)" aria-label="Actions">
+                            <td>
+                                <span class="role-pill">
+                                    <i class="bi @RoleIcon(s.Role) me-1 text-success"></i>@RoleDisplayName(s.Role)
+                                </span>
+                            </td>
+                            <td class="fw-medium text-dark">
+                                @if (IsWideRole(s.Role))
+                                {
+                                    <span class="text-muted"><i class="bi bi-globe2 text-success me-1"></i>Business-wide</span>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(s.BranchName))
+                                {
+                                    <span><i class="bi bi-shop text-success me-1"></i>@s.BranchName</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted fst-italic">Unassigned</span>
+                                }
+                            </td>
+                            <td class="text-nowrap text-dark fw-medium">
+                                @(string.IsNullOrWhiteSpace(s.ContactNumber) ? "—" : s.ContactNumber)
+                            </td>
+                            <td class="text-nowrap text-muted small fw-medium">
+                                <i class="bi bi-calendar3 text-success me-1"></i>@s.CreatedAt.ToString("MMM d, yyyy", Inv)
+                            </td>
+                            <td>
+                                <span class="pill @(s.Status == "Active" ? "pill-forest" : "pill-earth")">
+                                    <i class="bi @(s.Status == "Active" ? "bi-check-circle-fill" : "bi-pause-circle-fill") me-1"></i>@s.Status
+                                </span>
+                            </td>
+                            <td class="text-end px-4 action-cell">
+                                <button type="button" class="btn-dots"
+                                        @onclick="(e) => ToggleMenuAsync(e, s.UserId)"
+                                        @onclick:stopPropagation="true" aria-label="Actions">
                                     <i class="bi bi-three-dots"></i>
                                 </button>
-                                @if (openMenuId == s.Id)
-                                {
-                                    <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                    <div class="row-menu">
-                                        <button type="button" class="row-menu-item" @onclick="() => OpenEdit(s)">
-                                            <i class="bi bi-pencil"></i> Edit
-                                        </button>
-                                        <button type="button" class="row-menu-item" @onclick="() => ToggleSuspend(s)">
-                                            <i class="bi"></i> @(s.Status == "active" ? "Suspend access" : "Restore access")
-                                        </button>
-                                        <div class="menu-sep"></div>
-                                        <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(s)">
-                                            <i class="bi bi-trash"></i> Delete
-                                        </button>
-                                    </div>
-                                }
                             </td>
                         </tr>
                     }
                     @if (Filtered.Count == 0)
                     {
-                        <tr><td colspan="7" class="text-center text-muted py-5">No staff accounts found.</td></tr>
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                                No staff accounts found.
+                            </td>
+                        </tr>
                     }
                 </tbody>
             </table>
         </div>
+
+        <!-- PAGINATION FOOTER -->
+        @if (Filtered.Count > 0)
+        {
+            <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+                <div class="text-muted small mb-2 mb-md-0">
+                    Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> staff accounts
+                </div>
+
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                        <i class="bi bi-chevron-left me-1"></i>Previous
+                    </button>
+
+                    @for (int i = 1; i <= TotalPages; i++)
+                    {
+                        var pageNumber = i;
+                        <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                                @onclick="() => GoToPage(pageNumber)">
+                            @pageNumber
+                        </button>
+                    }
+
+                    <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                        Next<i class="bi bi-chevron-right ms-1"></i>
+                    </button>
+                </div>
+            </div>
+        }
     </div>
 }
 else
 {
-    <!-- ======================= ROLES & PERMISSIONS ======================= -->
+    <!-- ======================= ROLES & PERMISSIONS (5 STAFF ROLES WITH ALL MODULES) ======================= -->
     <div class="info-banner mb-4">
-        <i class="bi bi-shield-check"></i>
-        <span>Seven user types are defined for this system. Modules below are the access level granted to each role — switching the role in the top bar changes the navigation, dashboards and records you can reach.</span>
+        <i class="bi bi-shield-check fs-5"></i>
+        <span>
+            Customize which modules each staff role can access in the sidebar. Checked modules are visible and accessible to staff assigned to that role.
+            Click <strong>Customize</strong> on any role card to modify permissions and save.
+        </span>
     </div>
 
-    <div class="row g-3">
-        @foreach (var r in roles)
+    <div class="row g-4">
+        @foreach (var r in StaffRoleCards)
         {
-            <div class="col-12 col-lg-6">
-                <div class="role-card h-100">
-                    <div class="d-flex justify-content-between align-items-start gap-2">
-                        <div class="role-name">@r.Name</div>
-                        <span class="module-badge">@r.Modules.Length modules</span>
+            var isEditingRole = customizingRoleKey == r.Key;
+            var activeSet = isEditingRole ? draftPermissions : PermissionService.GetAllowedModules(r.Key);
+
+            <div class="col-12 col-xl-6">
+                <div class="role-card h-100 d-flex flex-column @(isEditingRole ? "role-card-editing" : "")">
+                    <!-- Card Header -->
+                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="role-icon-box">
+                                <i class="bi @r.Icon"></i>
+                            </div>
+                            <div>
+                                <div class="role-name">@r.Name</div>
+                                <div class="role-access"><i class="bi bi-diagram-3 me-1 text-success"></i>@r.Access</div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="module-badge">@activeSet.Count / @RolePermissionService.AllBusinessModules.Count modules</span>
+
+                            @if (!isEditingRole)
+                            {
+                                <button type="button" class="btn-role-mini" @onclick="() => StartCustomizeRole(r.Key)">
+                                    <i class="bi bi-sliders"></i> Customize
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn-role-mini cancel" @onclick="CancelCustomizeRole">
+                                    Cancel
+                                </button>
+                                <button type="button" class="btn-role-mini save" @onclick="() => SaveCustomizeRole(r.Key)">
+                                    <i class="bi bi-check2"></i> Save
+                                </button>
+                            }
+                        </div>
                     </div>
-                    <div class="role-access">@r.Access</div>
+
                     <p class="role-desc">@r.Description</p>
-                    <ul class="module-list">
-                        @foreach (var m in r.Modules)
+
+                    <!-- All 22 Modules Checklist -->
+                    <div class="module-checklist flex-grow-1">
+                        @foreach (var mod in RolePermissionService.AllBusinessModules)
                         {
-                            <li><i class="bi bi-check-circle"></i> <span>@m</span></li>
+                            var isChecked = activeSet.Contains(mod.Key);
+
+                            @if (isEditingRole)
+                            {
+                                <label class="mod-item editable @(isChecked ? "checked" : "")">
+                                    <input type="checkbox"
+                                           checked="@isChecked"
+                                           @onchange="(e) => ToggleModulePermission(mod.Key, (bool)(e.Value ?? false))" />
+                                    <i class="bi @mod.Icon mod-icon"></i>
+                                    <span class="mod-text">@mod.Name</span>
+                                </label>
+                            }
+                            else
+                            {
+                                <div class="mod-item @(isChecked ? "checked" : "unchecked")">
+                                    <i class="bi @(isChecked ? "bi-check-square-fill text-success" : "bi-square text-muted opacity-50")"></i>
+                                    <i class="bi @mod.Icon mod-icon"></i>
+                                    <span class="mod-text">@mod.Name</span>
+                                </div>
+                            }
                         }
-                    </ul>
+                    </div>
                 </div>
             </div>
         }
     </div>
 }
 
-<!-- MODAL -->
+<!-- FLOATING ACTION MENU -->
+@if (openMenuId != null)
+{
+    var menuStaff = staffList.FirstOrDefault(x => x.UserId == openMenuId);
+    if (menuStaff != null)
+    {
+        <div class="menu-backdrop" @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
+
+        <div class="vertical-action-menu shadow-lg" style="top:@(menuTop)px; left:@(menuLeft)px;">
+            <button type="button" class="action-item"
+                    @onclick="() => OpenEdit(menuStaff)"
+                    @onclick:stopPropagation="true">
+                <i class="bi bi-pencil-square text-success"></i> Edit
+            </button>
+
+            @if (menuStaff.Role != "TenantAdmin")
+            {
+                @if (menuStaff.Status == "Active")
+                {
+                    <button type="button" class="action-item text-earth"
+                            @onclick="() => PromptStatusChange(menuStaff)"
+                            @onclick:stopPropagation="true">
+                        <i class="bi bi-pause-circle-fill"></i> Deactivate
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="action-item text-success"
+                            @onclick="() => ReactivateStaffAsync(menuStaff)"
+                            @onclick:stopPropagation="true">
+                        <i class="bi bi-arrow-counterclockwise"></i> Reactivate
+                    </button>
+                }
+            }
+        </div>
+    }
+}
+
+<!-- DETAILS MODAL -->
+@if (showDetailsModal && selectedStaff != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 50px; height: 50px; background-color: #1B5E34; color: #FFFFFF; font-size: 1.1rem;">
+                            @GetInitials(selectedStaff.FName, selectedStaff.LName)
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedStaff.FullName</h4>
+                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                <i class="bi @RoleIcon(selectedStaff.Role) me-1"></i>@RoleDisplayName(selectedStaff.Role)
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-person-vcard-fill me-2 text-success"></i>Account &amp; Contact Information
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Email Address</label>
+                                <p class="mb-0 fw-semibold text-dark">@selectedStaff.Email</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Contact Number</label>
+                                <p class="mb-0 fw-semibold text-dark">
+                                    @(string.IsNullOrWhiteSpace(selectedStaff.ContactNumber) ? "N/A" : selectedStaff.ContactNumber)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Assigned Branch</label>
+                                <p class="mb-0 fw-semibold text-dark">
+                                    @(IsWideRole(selectedStaff.Role) ? "Business-wide" : (string.IsNullOrWhiteSpace(selectedStaff.BranchName) ? "Unassigned" : selectedStaff.BranchName))
+                                </p>
+                            </div>
+<div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Account Password</label>
+                                <div class="mt-1">
+                                    @if (selectedStaff.Role == "TenantAdmin" || selectedStaff.FullName == Auth.CurrentUserName)
+                                    {
+                                        <div class="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-3" style="background-color: #F4F7F5; border: 1px solid #DCE6E0; color: #0A2B1D;">
+                                            <i class="bi bi-shield-lock-fill text-success"></i>
+                                            <span class="fw-bold" style="letter-spacing: @(showOwnPassword ? "0.5px" : "2px"); font-size: 0.9rem;">
+                                                @(showOwnPassword ? selectedStaff.PasswordHash : "••••••••••••")
+                                            </span>
+                                            <button type="button" class="btn btn-sm p-0 border-0 bg-transparent text-muted ms-1"
+                                                    @onclick="() => showOwnPassword = !showOwnPassword"
+                                                    title="@(showOwnPassword ? "Hide password" : "Show password")">
+                                                <i class="bi @(showOwnPassword ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                                            </button>
+                                        </div>
+                                        <div class="text-muted small mt-1"><i class="bi bi-person-check-fill text-success me-1"></i>Your account password</div>
+                                    }
+                                    else if (selectedStaff.IsTempPassword)
+                                    {
+                                        <span class="badge px-3 py-2 rounded-3 fs-6 shadow-sm" style="background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A;">
+                                            <i class="bi bi-key-fill me-2"></i>@selectedStaff.PasswordHash
+                                        </span>
+                                        <div class="text-muted small mt-1"><i class="bi bi-info-circle me-1"></i>Temporary password (not yet changed by staff)</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge px-3 py-2 rounded-3 fs-6" style="background-color: #F4F7F5; color: #0A2B1D; border: 1px solid #DCE6E0; letter-spacing: 2px;">
+                                            <i class="bi bi-shield-lock-fill text-success me-2"></i>••••••••••••
+                                        </span>
+                                        <div class="text-success small mt-1 fw-medium"><i class="bi bi-check-circle-fill me-1"></i>Updated by staff</div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Date Created</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-calendar-event-fill text-success me-2"></i>@selectedStaff.CreatedAt.ToString("MMMM d, yyyy", Inv)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Account Status</label>
+                                <span class="pill @(selectedStaff.Status == "Active" ? "pill-forest" : "pill-earth")">
+                                    <i class="bi @(selectedStaff.Status == "Active" ? "bi-check-circle-fill" : "bi-pause-circle-fill") me-1"></i>@selectedStaff.Status
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedStaff)">
+                        <i class="bi bi-pencil-square me-2"></i>Edit Staff
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ADD / EDIT STAFF MODAL -->
 @if (showModal)
 {
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New staff account" : "Edit staff account")</h5>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
-            </div>
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Full name <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
-                    {
-                        <div class="err">Full name is required.</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Email address</label>
-                    <input type="email" class="form-control @(showErrors && EmailTaken ? "is-invalid" : "")" @bind="form.Email" />
-                    @if (showErrors && EmailTaken)
-                    {
-                        <div class="err">This email is already used.</div>
-                    }
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(editingId == null ? "bi-person-plus-fill" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingId == null ? "Register New Staff Account" : "Edit Staff Account")
+                            </h4>
+                            <p class="text-muted small mb-0">Assign role, branch, and credentials for your team member.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
                 </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Contact number</label>
-                    <input class="form-control" @bind="form.Contact" />
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <!-- SECTION 1: Personal Name -->
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-person-fill me-2 text-success"></i>Staff Full Name
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">First Name <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.FName) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                                        <input class="form-control" placeholder="Juan"
+                                               @bind="form.FName"
+                                               @bind:after="() => form.FName = CapitalizeWords(form.FName)" />
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(form.FName))
+                                    {
+                                        <div class="err">First name is required.</div>
+                                    }
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">Middle Name</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                                        <input class="form-control" placeholder="Optional"
+                                               @bind="form.MName"
+                                               @bind:after="() => form.MName = CapitalizeWords(form.MName)" />
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">Last Name <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.LName) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                                        <input class="form-control" placeholder="Dela Cruz"
+                                               @bind="form.LName"
+                                               @bind:after="() => form.LName = CapitalizeWords(form.LName)" />
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(form.LName))
+                                    {
+                                        <div class="err">Last name is required.</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SECTION 2: Contact & Email -->
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-envelope-fill me-2 text-success"></i>Contact &amp; Login Credentials
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Email Address <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && (string.IsNullOrWhiteSpace(form.Email) || EmailTaken) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-envelope text-success"></i></span>
+                                        <input type="email" class="form-control" placeholder="staff@company.ph" @bind="form.Email" />
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(form.Email))
+                                    {
+                                        <div class="err">Email address is required.</div>
+                                    }
+                                    @if (showErrors && EmailTaken)
+                                    {
+                                        <div class="err">This email is already registered.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Contact Number</label>
+                                    <div class="input-group modern-input @(showErrors && !string.IsNullOrEmpty(contactError) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-telephone text-success"></i></span>
+                                        <input type="tel"
+                                               inputmode="numeric"
+                                               maxlength="13"
+                                               class="form-control"
+                                               @bind="form.ContactNumber"
+                                               @bind:event="oninput"
+                                               @bind:after="FormatContactNumber"
+                                               placeholder="09XX XXX XXXX"
+                                               spellcheck="false" />
+                                    </div>
+                                    @if (showErrors && !string.IsNullOrEmpty(contactError))
+                                    {
+                                        <div class="err">@contactError</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SECTION 3: Role, Branch & Status -->
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-shield-lock-fill me-2 text-success"></i>Role &amp; Branch Assignment
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Role</label>
+                                    <select class="form-select border-0 shadow-sm" value="@form.Role" @onchange="OnRoleChanged" disabled="@(form.Role == "TenantAdmin")">
+                                        @if (form.Role == "TenantAdmin")
+                                        {
+                                            <option value="TenantAdmin">Business Owner / Tenant Admin</option>
+                                        }
+                                        @foreach (var r in StaffRoleCards)
+                                        {
+                                            <option value="@r.Key">@r.Name</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Assigned Branch</label>
+                                    @if (IsWideRole(form.Role))
+                                    {
+                                        <input class="form-control border-0 shadow-sm bg-white text-muted fw-semibold" value="Business-wide" disabled />
+                                    }
+                                    else
+                                    {
+                                        <select class="form-select border-0 shadow-sm" @bind="form.BranchId">
+                                            <option value="">Select Branch...</option>
+                                            @foreach (var b in businessBranches)
+                                            {
+                                                <option value="@b.BranchId">@b.BranchName</option>
+                                            }
+                                        </select>
+                                    }
+                                </div>
+
+                                <div class="col-md-6 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Account Status</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="form.Status" disabled="@(form.Role == "TenantAdmin")">
+                                        <option value="Active">Active</option>
+                                        <option value="Inactive">Inactive</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">Role</label>
-                    <select class="form-select" value="@form.Role" @onchange="OnRoleChanged">
-                        @foreach (var r in AssignableRoles)
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="SaveAsync" disabled="@isSaving">
+                        @if (isSaving)
                         {
-                            <option value="@r.Key" selected="@(form.Role == r.Key)">@r.Name</option>
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Saving...</span>
                         }
-                    </select>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Assigned branch</label>
-                    @if (IsWide(form.Role))
-                    {
-                        <input class="form-control" value="Business-wide" disabled />
-                    }
-                    else
-                    {
-                        <select class="form-select" @bind="form.Branch">
-                            <option value="">Select...</option>
-                            @foreach (var b in branchNames)
-                            {
-                                <option value="@b">@b</option>
-                            }
-                        </select>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Date hired</label>
-                    <input type="date" class="form-control" @bind="form.Hired" />
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" @bind="form.Status">
-                        <option value="active">active</option>
-                        <option value="suspended">suspended</option>
-                    </select>
+                        else
+                        {
+                            <i class="bi bi-check2-circle me-2"></i>
+                            <span>@(editingId == null ? "Create Staff" : "Update Staff")</span>
+                        }
+                    </button>
                 </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
+<!-- SUCCESS CREDENTIALS MODAL -->
+@if (showSuccessModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #E8F3EC; color: #1B5E34;">
+                        <i class="bi bi-check-circle-fill" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h4 class="fw-bolder mb-1" style="color: #0A2B1D;">Staff Account Created!</h4>
+                    <p class="text-muted small mb-4">Share these temporary login credentials with your staff member.</p>
+
+                    <div class="text-start p-3 rounded-3 mb-4" style="background-color: #F7FAF8; border: 1px solid #E2ECE6;">
+                        <div class="mb-2">
+                            <label class="text-muted small fw-bold text-uppercase">Email Address</label>
+                            <div class="fw-bold text-dark">@generatedEmail</div>
+                        </div>
+                        <div>
+                            <label class="text-muted small fw-bold text-uppercase">Temporary Password</label>
+                            <div class="fw-bold" style="color: #1B5E34;">@generatedPassword</div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn-save w-100 py-2" @onclick="() => showSuccessModal = false">
+                        Got it, close this window
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- DEACTIVATE CONFIRMATION MODAL -->
+@if (showDeactivateModal && staffToDeactivate != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #F5EFEA; color: #7A5230;">
+                        <i class="bi bi-pause-circle-fill" style="font-size: 2.3rem;"></i>
+                    </div>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Deactivate Staff Access?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to deactivate <strong>@staffToDeactivate.FullName</strong>?<br />
+                        They will not be able to sign in until reactivated.
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CloseDeactivateModal">Cancel</button>
+                        <button type="button" class="btn-earth rounded-3 fw-bold px-4 shadow-sm" @onclick="ConfirmDeactivateAsync">
+                            <i class="bi bi-pause-circle-fill me-1"></i> Yes, Deactivate
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -200,146 +681,412 @@ else
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+    <div class="toast-note shadow-lg">
+        <i class="bi @(toastIsWarning ? "bi-exclamation-circle-fill" : "bi-check-circle-fill")"></i>
+        <span>@toast</span>
+    </div>
 }
 
 @code {
     // ---------- MODELS ----------
     class StaffRec
     {
-        public int Id { get; set; }
-        public string Name { get; set; } = "";
+        public long UserId { get; set; }
+        public long? BusinessId { get; set; }
+        public long? BranchId { get; set; }
+        public string BranchName { get; set; } = "";
+        public string Role { get; set; } = "BranchManager";
+        public string FName { get; set; } = "";
+        public string MName { get; set; } = "";
+        public string LName { get; set; } = "";
+        public string FullName => $"{FName} {MName} {LName}".Replace("  ", " ").Trim();
         public string Email { get; set; } = "";
-        public string Contact { get; set; } = "";
-        public string Role { get; set; } = "branch-manager";
-        public string Branch { get; set; } = "";
-        public DateTime? Hired { get; set; }
-        public string Status { get; set; } = "active";   // active | suspended
+        public string ContactNumber { get; set; } = "";
+        public string PasswordHash { get; set; } = "";
+        public string Status { get; set; } = "Active";
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public bool IsTempPassword { get; set; } = true;
 
         public StaffRec Clone() => (StaffRec)MemberwiseClone();
     }
 
-    record RoleDef(string Key, string Name, string Access, string Description, string[] Modules);
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record RoleCardDef(string Key, string Name, string Access, string Icon, string Description);
+
+    class Viewport
+    { 
+        public double W { get; set; }
+        public double H { get; set; }
+    }
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    // TODO: kuhaa ang business name ug branch list gikan sa naka-login nga tenant / Branches module
-    const string BusinessName = "Verdant Agri Ventures";
-    readonly string[] branchNames = { "North Field Branch", "South Valley Branch", "Central Packing Branch" };
+    // 5 Staff Roles (SuperAdmin and TenantAdmin excluded from customization)
+    static readonly RoleCardDef[] StaffRoleCards =
+    {
+        new("BranchManager", "Branch Manager", "Assigned branch access", "bi-shop",
+            "Supervises day-to-day operations of the assigned branch including farm plots, labor, harvest, inventory, and branch sales."),
+        new("InventoryOfficer", "Inventory Officer", "Assigned branch access", "bi-box-seam",
+            "Tracks seeds, fertilizers, tools, and farm supplies, as well as stock movements and supplier deliveries."),
+        new("LaborOfficer", "Labor & Harvest Officer", "Assigned branch access", "bi-person-badge",
+            "Manages worker records, work assignments, attendance logs, and harvest recording."),
+        new("SalesOfficer", "Sales & Cashier Officer", "Assigned branch access", "bi-cart-check",
+            "Handles customer orders, sales transactions, payment collections, receipts, and cash drawer sessions."),
+        new("Accountant", "Accountant / Finance Officer", "Business-wide access", "bi-calculator",
+            "Reviews expenses, production costing, collections, financial reports, and the financial audit trail.")
+    };
+
+    static readonly HashSet<string> WideRoles = new(StringComparer.OrdinalIgnoreCase) { "TenantAdmin", "Accountant" };
 
     // ---------- STATE ----------
+    long currentBusinessId;
+    string businessName = "AgriNexus Farm Operations";
+
     string activeTab = "staff";
+    bool showInactive = false;
     string searchText = "";
+    string contactError = "";
     string toast = "";
+    bool toastIsWarning = false;
+    bool showOwnPassword = false;
+
     bool showModal;
     bool showErrors;
-    int? editingId;
-    int? openMenuId;
+    bool isSaving;
+    long? editingId;
+    long? openMenuId;
     StaffRec form = new();
 
-    // ---------- ROLES (ang 7 ka user types sa system) ----------
-    static readonly RoleDef[] roles =
+    bool showDetailsModal;
+    StaffRec? selectedStaff;
+
+    bool showSuccessModal;
+    string generatedEmail = "";
+    string generatedPassword = "";
+
+    bool showDeactivateModal;
+    StaffRec? staffToDeactivate;
+
+    // Role Customization State
+    string? customizingRoleKey;
+    HashSet<string> draftPermissions = new(StringComparer.OrdinalIgnoreCase);
+
+    List<StaffRec> staffList = new();
+    List<Branch> businessBranches = new();
+
+    private int currentPage = 1;
+    private int pageSize = 5;
+    private double menuTop;
+    private double menuLeft;
+
+    protected override async Task OnInitializedAsync()
     {
-        new("super-admin", "Super Admin", "Platform-wide access",
-            "Manages all registered businesses, subscription plans and platform settings. Access to each business’s private financial records is not automatically granted.",
-            new[] { "Super Admin Dashboard", "Business / Tenant Management", "Subscription Plan Management", "Feature Management",
-                    "Subscription Monitoring and Renewal", "Platform Settings", "System-wide Audit Logs", "Synchronization Status Monitoring" }),
+        var currentUser = await DbContext.Users
+            .Include(u => u.Business)
+            .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                   || u.FName == Auth.CurrentUserName);
 
-        new("tenant-admin", "Business Owner / Tenant Admin", "Business-wide access",
-            "Manages the business, branches, staff accounts, permissions and overall business performance.",
-            new[] { "Business Dashboard", "Business Profile", "Branch Management", "Staff Account Management",
-                    "Role and Permission Management", "My Subscription", "Consolidated Business Reports", "Business Settings" }),
+        if (currentUser?.BusinessId != null)
+        {
+            currentBusinessId = currentUser.BusinessId.Value;
+            if (currentUser.Business != null)
+            {
+                businessName = currentUser.Business.BusinessName;
+            }
+        }
+        else
+        {
+            var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+            if (firstBiz != null)
+            {
+                currentBusinessId = firstBiz.BusinessId;
+                businessName = firstBiz.BusinessName;
+            }
+        }
 
-        new("branch-manager", "Branch Manager", "Assigned branch access",
-            "Supervises day-to-day operations of the assigned branch. Sensitive financial transactions may be restricted based on permissions.",
-            new[] { "Branch Dashboard", "Farm and Plot Management", "Crop Planning and Planting", "Inventory Monitoring",
-                    "Labor and Worker Monitoring", "Harvest Monitoring", "Sales Monitoring", "Branch Expense Monitoring",
-                    "Branch Operational Reports" }),
+        await LoadDataAsync();
+    }
 
-        new("inventory-officer", "Inventory Officer", "Assigned branch access",
-            "Tracks seeds, fertilizers, tools, and other farm supplies. Harvested produce is managed as a distinct inventory category.",
-            new[] { "Item and Supply Management", "Supplier Records", "Stock Receiving", "Stock Issuance",
-                    "Inventory Adjustments", "Stock Movement History", "Low-stock Monitoring", "Inventory Reports" }),
-
-        new("labor-officer", "Labor & Harvest Officer", "Assigned branch access",
-            "Manages labor records and harvesting activities, including recording quantities and updating produce inventory once a harvest is approved.",
-            new[] { "Worker Records", "Work Assignments", "Labor Attendance and Work Logs", "Labor Cost Records",
-                    "Worker Activity Reports", "Harvest Recording", "Harvest Lot Management", "Harvest Quality and Quantity",
-                    "Produce Stock Recording", "Harvest History and Reports" }),
-
-        new("sales-officer", "Sales & Cashier Officer", "Assigned branch access",
-            "Manages customers, sales transactions, payment collection and receipts. For partial payments the remaining balance stays outstanding.",
-            new[] { "Customer Management", "Produce Availability", "Sales Transactions", "Sale Items and Pricing",
-                    "Sales Order History", "Sales Reports", "Payment Collection", "Partial and Full Payments",
-                    "Receipt Generation", "Cash Session / Cash Drawer", "Cash Movements", "Payment History",
-                    "Daily Collection Reports" }),
-
-        new("accountant", "Accountant / Finance Officer", "Business-wide access",
-            "Reviews expenses, production costs, revenue and estimated profitability. Editing completed payments is restricted to protect cashier records.",
-            new[] { "Expense Management", "Production Costing", "Cost Allocation", "Labor and Supply Cost Review",
-                    "Sales and Collection Reports", "Revenue and Profit Estimation", "Financial Reports", "Financial Audit Trail" }),
-    };
-
-    // Ang Super Admin kay platform staff, dili ma-create sa tenant
-    static IEnumerable<RoleDef> AssignableRoles => roles.Where(r => r.Key != "super-admin");
-
-    static readonly HashSet<string> WideRoles = new() { "tenant-admin", "accountant" };
-
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    readonly List<StaffRec> staff = new()
+    private async Task LoadDataAsync()
     {
-        new() { Id = 1,  Name = "Maria L. Santos",     Email = "maria.santos@verdantagri.ph", Contact = "0917 555 0142", Role = "tenant-admin",      Branch = "Business-wide",         Hired = new(2024, 2, 14), Status = "active" },
-        new() { Id = 2,  Name = "Ramon Delos Santos",  Email = "ramon.ds@verdantagri.ph",     Contact = "0917 220 1145", Role = "branch-manager",    Branch = "North Field Branch",    Hired = new(2024, 3, 1),  Status = "active" },
-        new() { Id = 3,  Name = "Liza Fernandez",      Email = "liza.f@verdantagri.ph",       Contact = "0918 771 3320", Role = "branch-manager",    Branch = "South Valley Branch",   Hired = new(2024, 9, 15), Status = "active" },
-        new() { Id = 4,  Name = "Allan Mercado",       Email = "allan.m@verdantagri.ph",      Contact = "0917 889 4402", Role = "inventory-officer", Branch = "North Field Branch",    Hired = new(2024, 4, 11), Status = "suspended" },
-        new() { Id = 5,  Name = "Cristina Yabut",      Email = "cristina.y@verdantagri.ph",   Contact = "0920 331 7788", Role = "inventory-officer", Branch = "South Valley Branch",   Hired = new(2025, 1, 6),  Status = "active" },
-        new() { Id = 6,  Name = "Dante Villamor",      Email = "dante.v@verdantagri.ph",      Contact = "0919 445 2210", Role = "labor-officer",     Branch = "North Field Branch",    Hired = new(2024, 5, 2),  Status = "active" },
-        new() { Id = 7,  Name = "Marites Aquino",      Email = "marites.a@verdantagri.ph",    Contact = "0921 778 5567", Role = "labor-officer",     Branch = "South Valley Branch",   Hired = new(2025, 2, 18), Status = "active" },
-        new() { Id = 8,  Name = "Paolo Gutierrez",     Email = "paolo.g@verdantagri.ph",      Contact = "0922 614 9083", Role = "sales-officer",     Branch = "North Field Branch",    Hired = new(2024, 6, 10), Status = "active" },
-        new() { Id = 9,  Name = "Jenny Ramos",         Email = "jenny.r@verdantagri.ph",      Contact = "0923 105 7741", Role = "sales-officer",     Branch = "South Valley Branch",   Hired = new(2025, 3, 3),  Status = "active" },
-        new() { Id = 10, Name = "Noel Bautista",       Email = "noel.b@verdantagri.ph",       Contact = "0920 553 8891", Role = "branch-manager",    Branch = "Central Packing Branch",Hired = new(2025, 5, 20), Status = "active" },
-        new() { Id = 11, Name = "Bernardo Ocampo",     Email = "bernardo.o@verdantagri.ph",   Contact = "0925 880 3316", Role = "accountant",        Branch = "Business-wide",         Hired = new(2024, 7, 22), Status = "active" },
-    };
+        businessBranches = await DbContext.Branches
+            .Where(b => b.BusinessId == currentBusinessId && b.Status == "active")
+            .OrderBy(b => b.BranchName)
+            .ToListAsync();
+
+        var allBranchesDict = await DbContext.Branches
+            .Where(b => b.BusinessId == currentBusinessId)
+            .ToDictionaryAsync(b => b.BranchId, b => b.BranchName);
+
+        var users = await DbContext.Users
+            .Where(u => u.BusinessId == currentBusinessId && u.Role != "SuperAdmin")
+            .OrderBy(u => u.UserId)
+            .ToListAsync();
+
+        staffList = users.Select(u => new StaffRec
+        {
+            UserId = u.UserId,
+            BusinessId = u.BusinessId,
+            BranchId = u.BranchId,
+            BranchName = (u.BranchId != null && allBranchesDict.TryGetValue(u.BranchId.Value, out var bName)) ? bName : "",
+            Role = u.Role,
+            FName = u.FName,
+            MName = u.MName ?? "",
+            LName = u.LName,
+            Email = u.Email,
+            ContactNumber = u.ContactNumber ?? "",
+            PasswordHash = u.PasswordHash,
+            IsTempPassword = u.IsTempPassword,
+            Status = u.Status,
+            CreatedAt = u.CreatedAt
+        }).ToList();
+    }
 
     // ---------- COMPUTED ----------
-    List<StaffRec> Filtered => string.IsNullOrWhiteSpace(searchText)
-        ? staff
-        : staff.Where(s =>
-            s.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            s.Email.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            RoleName(s.Role).Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            s.Branch.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+    List<StaffRec> Filtered
+    {
+        get
+        {
+            var baseList = staffList
+                .Where(s => showInactive ? s.Status != "Active" : s.Status == "Active")
+                .ToList();
+
+            if (string.IsNullOrWhiteSpace(searchText))
+                return baseList;
+
+            return baseList.Where(s =>
+                s.FullName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                s.Email.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                RoleDisplayName(s.Role).Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                s.BranchName.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private int TotalPages => (int)Math.Ceiling((double)Filtered.Count / pageSize);
+    private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<StaffRec> PaginatedStaff => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    List<Stat> Stats
+    {
+        get
+        {
+            var activeCount = staffList.Count(s => s.Status == "Active");
+            var inactiveCount = staffList.Count(s => s.Status != "Active");
+            var branchAssigned = staffList.Count(s => s.Status == "Active" && !IsWideRole(s.Role));
+
+            return new()
+            {
+                new("TOTAL STAFF ACCOUNTS", staffList.Count.ToString(), activeCount + " active accounts", "bi-people-fill", ""),
+                new("BRANCH-ASSIGNED STAFF", branchAssigned.ToString(), "Across " + businessBranches.Count + " active branches", "bi-shop", "stat-icon-leaf"),
+                new("CONFIGURABLE ROLES", StaffRoleCards.Length.ToString(), "Custom module permissions", "bi-shield-lock-fill", ""),
+                new("INACTIVE ACCOUNTS", inactiveCount.ToString(), "Deactivated staff access", "bi-person-x-fill", "stat-icon-earth"),
+            };
+        }
+    }
 
     bool EmailTaken => !string.IsNullOrWhiteSpace(form.Email) &&
-        staff.Any(s => s.Id != (editingId ?? -1) &&
-                       string.Equals(s.Email, form.Email.Trim(), StringComparison.OrdinalIgnoreCase));
+        staffList.Any(s => s.UserId != (editingId ?? -1) &&
+                           string.Equals(s.Email, form.Email.Trim(), StringComparison.OrdinalIgnoreCase));
 
-    static string RoleName(string key) => roles.FirstOrDefault(r => r.Key == key)?.Name ?? key;
-    static bool IsWide(string key) => WideRoles.Contains(key);
-    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+    static bool IsWideRole(string role) => WideRoles.Contains(role);
 
-    // ---------- ACTIONS ----------
+    static string RoleDisplayName(string role) => role switch
+    {
+        "TenantAdmin" => "Business Owner / Admin",
+        "BranchManager" => "Branch Manager",
+        "InventoryOfficer" => "Inventory Officer",
+        "LaborOfficer" => "Labor & Harvest Officer",
+        "SalesOfficer" => "Sales & Cashier Officer",
+        "Accountant" => "Accountant / Finance Officer",
+        _ => role
+    };
+
+    static string RoleIcon(string role) => role switch
+    {
+        "TenantAdmin" => "bi-award-fill",
+        "BranchManager" => "bi-shop",
+        "InventoryOfficer" => "bi-box-seam",
+        "LaborOfficer" => "bi-person-badge",
+        "SalesOfficer" => "bi-cart-check",
+        "Accountant" => "bi-calculator",
+        _ => "bi-person"
+    };
+
+    static string GetInitials(string fName, string lName)
+    {
+        char f = !string.IsNullOrWhiteSpace(fName) ? char.ToUpper(fName[0]) : 'S';
+        char l = !string.IsNullOrWhiteSpace(lName) ? char.ToUpper(lName[0]) : ' ';
+        return $"{f}{l}".Trim();
+    }
+
+    // ---------- NAVIGATION & PAGINATION ----------
     void SetTab(string key)
     {
         activeTab = key;
         openMenuId = null;
+        customizingRoleKey = null;
     }
 
+    private async Task ToggleStatusTab(bool inactive)
+    {
+        showInactive = inactive;
+        currentPage = 1;
+        await Task.CompletedTask;
+    }
+
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
+
+    private async Task ToggleMenuAsync(MouseEventArgs e, long id)
+    {
+        if (openMenuId == id)
+        {
+            openMenuId = null;
+            return;
+        }
+
+        var target = staffList.FirstOrDefault(x => x.UserId == id);
+        int itemCount = (target?.Role == "TenantAdmin") ? 1 : 2;
+        const double itemHeight = 42;
+        const double padding = 16;
+        const double menuWidth = 175;
+        double menuHeight = (itemCount * itemHeight) + padding;
+
+        var viewport = await JS.InvokeAsync<Viewport>("eval", "({ w: window.innerWidth, h: window.innerHeight })");
+
+        menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewport.W - menuWidth - 10);
+        menuTop = (e.ClientY + menuHeight > viewport.H) ? e.ClientY - menuHeight - 5 : e.ClientY + 15;
+
+        openMenuId = id;
+    }
+
+    void CloseMenu() => openMenuId = null;
+
+    // ---------- ROLE CUSTOMIZATION ACTIONS ----------
+    void StartCustomizeRole(string roleKey)
+    {
+        customizingRoleKey = roleKey;
+        draftPermissions = PermissionService.GetAllowedModules(roleKey);
+    }
+
+    void CancelCustomizeRole()
+    {
+        customizingRoleKey = null;
+        draftPermissions.Clear();
+    }
+
+    void ToggleModulePermission(string moduleKey, bool isChecked)
+    {
+        if (isChecked) draftPermissions.Add(moduleKey);
+        else draftPermissions.Remove(moduleKey);
+    }
+
+    async Task SaveCustomizeRole(string roleKey)
+    {
+        PermissionService.SaveRolePermissions(roleKey, draftPermissions);
+        customizingRoleKey = null;
+        await ShowToast($"Permissions updated for {RoleDisplayName(roleKey)}.");
+    }
+
+    // ---------- FORMATTING HELPERS ----------
+    private string CapitalizeWords(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input;
+        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input.ToLower().Trim());
+    }
+
+    private void FormatContactNumber()
+    {
+        if (string.IsNullOrEmpty(form.ContactNumber)) return;
+
+        // 1. Extract digits only
+        var digits = new string(form.ContactNumber.Where(char.IsDigit).ToArray());
+
+        if (string.IsNullOrEmpty(digits))
+        {
+            form.ContactNumber = "";
+            return;
+        }
+
+        // 2. Smart prefix handling (+63 / 63 or 9 -> 09)
+        if (digits.StartsWith("63") && digits.Length > 2)
+        {
+            digits = "0" + digits.Substring(2);
+        }
+        else if (digits.StartsWith("9"))
+        {
+            digits = "0" + digits;
+        }
+
+        // 3. Limit to 11 digits
+        if (digits.Length > 11)
+        {
+            digits = digits.Substring(0, 11);
+        }
+
+        // 4. Auto-format to "09XX XXX XXXX"
+        if (digits.Length > 7)
+        {
+            form.ContactNumber = $"{digits.Substring(0, 4)} {digits.Substring(4, 3)} {digits.Substring(7)}";
+        }
+        else if (digits.Length > 4)
+        {
+            form.ContactNumber = $"{digits.Substring(0, 4)} {digits.Substring(4)}";
+        }
+        else
+        {
+            form.ContactNumber = digits;
+        }
+    }
+
+    private string GenerateTempPassword()
+    {
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+        var random = new Random();
+        return new string(Enumerable.Repeat(chars, 8)
+            .Select(s => s[random.Next(s.Length)]).ToArray());
+    }
+
+    // ---------- STAFF CRUD ACTIONS ----------
     void OpenNew()
     {
-        form = new StaffRec { Role = "branch-manager", Status = "active" };
+        form = new StaffRec
+        {
+            BusinessId = currentBusinessId,
+            Role = "BranchManager",
+            Status = "Active"
+        };
         editingId = null;
         showErrors = false;
+        contactError = "";
         showModal = true;
     }
 
     void OpenEdit(StaffRec s)
     {
+        showDetailsModal = false;
         form = s.Clone();
-        editingId = s.Id;
+        editingId = s.UserId;
         showErrors = false;
+        contactError = "";
         openMenuId = null;
         showModal = true;
+    }
+
+    void OpenDetails(StaffRec s)
+    {
+        selectedStaff = s;
+        showOwnPassword = false;
+        showDetailsModal = true;
+    }
+
+    void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedStaff = null;
     }
 
     void CloseModal() => showModal = false;
@@ -348,64 +1095,168 @@ else
     {
         var key = e.Value?.ToString() ?? form.Role;
         form.Role = key;
-        if (IsWide(key)) form.Branch = "Business-wide";
-        else if (form.Branch == "Business-wide") form.Branch = "";
+        if (IsWideRole(key))
+        {
+            form.BranchId = null;
+        }
     }
 
-    void Save()
+    async Task SaveAsync()
     {
         showErrors = true;
-        if (string.IsNullOrWhiteSpace(form.Name) || EmailTaken) return;
+        contactError = "";
 
-        form.Name = form.Name.Trim();
-        form.Email = (form.Email ?? "").Trim();
-        form.Hired ??= DateTime.Today;
-        if (IsWide(form.Role)) form.Branch = "Business-wide";
+        if (string.IsNullOrWhiteSpace(form.FName) || string.IsNullOrWhiteSpace(form.LName) || string.IsNullOrWhiteSpace(form.Email) || EmailTaken)
+            return;
 
-        if (editingId == null)
+        if (!string.IsNullOrWhiteSpace(form.ContactNumber))
         {
-            form.Id = staff.Count == 0 ? 1 : staff.Max(s => s.Id) + 1;
-            staff.Add(form);
+            var rawContact = new string(form.ContactNumber.Where(char.IsDigit).ToArray());
+            if (rawContact.Length != 11)
+            {
+                contactError = "Contact number must be 11 digits (e.g., 09XX XXX XXXX).";
+                return;
+            }
         }
-        else
+
+        isSaving = true;
+
+        try
         {
-            var idx = staff.FindIndex(s => s.Id == editingId);
-            if (idx >= 0) staff[idx] = form;
+            if (IsWideRole(form.Role))
+            {
+                form.BranchId = null;
+            }
+
+            if (editingId == null)
+            {
+                // Global duplicate email check in database
+                bool globalEmailExists = await DbContext.Users
+                    .AnyAsync(u => u.Email.ToLower() == form.Email.Trim().ToLower());
+
+                if (globalEmailExists)
+                {
+                    await ShowToast("This email is already registered in the system.", isWarning: true);
+                    return;
+                }
+
+                string tempPassword = GenerateTempPassword();
+
+                var newUser = new User
+                {
+                    BusinessId = currentBusinessId,
+                    BranchId = form.BranchId,
+                    Role = form.Role,
+                    FName = form.FName.Trim(),
+                    MName = (form.MName ?? "").Trim(),
+                    LName = form.LName.Trim(),
+                    Email = form.Email.Trim(),
+                    ContactNumber = (form.ContactNumber ?? "").Trim(),
+                    PasswordHash = tempPassword,
+                    IsTempPassword = true,
+                    Status = form.Status,
+                    CreatedAt = DateTime.Now
+                };
+
+                DbContext.Users.Add(newUser);
+                await DbContext.SaveChangesAsync();
+
+                generatedEmail = newUser.Email;
+                generatedPassword = tempPassword;
+
+                showModal = false;
+                showSuccessModal = true;
+            }
+            else
+            {
+                var existing = await DbContext.Users.FindAsync(editingId.Value);
+                if (existing != null)
+                {
+                    existing.FName = form.FName.Trim();
+                    existing.MName = (form.MName ?? "").Trim();
+                    existing.LName = form.LName.Trim();
+                    existing.Email = form.Email.Trim();
+                    existing.ContactNumber = (form.ContactNumber ?? "").Trim();
+                    existing.Role = form.Role;
+                    existing.BranchId = form.BranchId;
+                    existing.Status = form.Status;
+
+                    DbContext.Users.Update(existing);
+                    await DbContext.SaveChangesAsync();
+                    await ShowToast("Staff account updated successfully.");
+                }
+
+                showModal = false;
+            }
+
+            await LoadDataAsync();
         }
-        showModal = false;
+        catch (Exception ex)
+        {
+            await ShowToast("Failed to save staff account: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
-    async Task ToggleSuspend(StaffRec s)
+    void PromptStatusChange(StaffRec s)
     {
         openMenuId = null;
-        if (s.Role == "tenant-admin")
+        if (s.Role == "TenantAdmin")
         {
-            await ShowToast("The business owner account can’t be suspended.");
+            _ = ShowToast("The business owner account cannot be deactivated.", isWarning: true);
             return;
         }
-        s.Status = s.Status == "active" ? "suspended" : "active";
-        // TODO: i-log sa Audit Logs
+        staffToDeactivate = s;
+        showDeactivateModal = true;
     }
 
-    async Task Delete(StaffRec s)
+    void CloseDeactivateModal()
+    {
+        showDeactivateModal = false;
+        staffToDeactivate = null;
+    }
+
+    async Task ConfirmDeactivateAsync()
+    {
+        if (staffToDeactivate == null) return;
+
+        var existing = await DbContext.Users.FindAsync(staffToDeactivate.UserId);
+        if (existing != null)
+        {
+            existing.Status = "Inactive";
+            DbContext.Users.Update(existing);
+            await DbContext.SaveChangesAsync();
+            await ShowToast($"{staffToDeactivate.FullName} moved to Inactive.");
+        }
+
+        CloseDeactivateModal();
+        await LoadDataAsync();
+    }
+
+    async Task ReactivateStaffAsync(StaffRec s)
     {
         openMenuId = null;
-        if (s.Role == "tenant-admin")
+        var existing = await DbContext.Users.FindAsync(s.UserId);
+        if (existing != null)
         {
-            await ShowToast("The business owner account can’t be deleted.");
-            return;
+            existing.Status = "Active";
+            DbContext.Users.Update(existing);
+            await DbContext.SaveChangesAsync();
+            await ShowToast($"{s.FullName} reactivated.");
         }
-        staff.Remove(s);
+
+        await LoadDataAsync();
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
-    void CloseMenu() => openMenuId = null;
-
-    async Task ShowToast(string message)
+    async Task ShowToast(string message, bool isWarning = false)
     {
         toast = message;
+        toastIsWarning = isWarning;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3000);
+        await Task.Delay(3200);
         toast = "";
         await InvokeAsync(StateHasChanged);
     }

@@ -17,6 +17,9 @@ namespace AgriNexus.Services
 
     public class AuthService
     {
+        public long CurrentUserId { get; private set; }
+        public long? CurrentBusinessId { get; private set; }
+        public string CurrentUserEmail { get; private set; } = "";
         public UserRole CurrentRole { get; private set; } = UserRole.SuperAdmin;
         public string CurrentUserName { get; private set; } = "Super Admin";
         public string AccessLevel { get; private set; } = "Platform-wide access";
@@ -26,6 +29,9 @@ namespace AgriNexus.Services
 
         public void Logout()
         {
+            CurrentUserId = 0;
+            CurrentBusinessId = null;
+            CurrentUserEmail = "";
             CurrentRole = UserRole.SuperAdmin;
             CurrentUserName = "Guest";
             AccessLevel = "None";
@@ -35,37 +41,31 @@ namespace AgriNexus.Services
 
         public void Login(User user)
         {
-            // Safely combine name parts, ignoring empty middle names to prevent double spaces
+            CurrentUserId = user.UserId;
+            CurrentBusinessId = user.BusinessId;
+            CurrentUserEmail = user.Email ?? "";
+
             var nameParts = new[] { user.FName, user.MName, user.LName };
             CurrentUserName = string.Join(" ", nameParts.Where(part => !string.IsNullOrWhiteSpace(part)));
 
-            // Convert the string role from the database to the Enum
             if (Enum.TryParse<UserRole>(user.Role, true, out var parsedRole))
             {
                 CurrentRole = parsedRole;
             }
             else
             {
-                CurrentRole = UserRole.TenantAdmin; // Default fallback
+                CurrentRole = UserRole.TenantAdmin;
             }
 
-            // Explicitly assign access levels based on the multi-tenant hierarchy
             AccessLevel = CurrentRole switch
             {
-                // Level 1: Platform Level
                 UserRole.SuperAdmin => "Platform-wide access",
-
-                // Level 2: Tenant Level (Business-wide)
                 UserRole.TenantAdmin => "Business-wide access",
                 UserRole.Accountant => "Business-wide access",
-
-                // Level 3 & 4: Branch Level (Assigned branch access)
                 UserRole.BranchManager => "Assigned branch access",
                 UserRole.InventoryOfficer => "Assigned branch access",
                 UserRole.LaborOfficer => "Assigned branch access",
                 UserRole.SalesOfficer => "Assigned branch access",
-
-                // Fallback for any unhandled roles
                 _ => "Assigned branch access"
             };
 

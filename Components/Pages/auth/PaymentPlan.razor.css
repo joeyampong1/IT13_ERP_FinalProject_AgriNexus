@@ -1,0 +1,151 @@
+.checkout-wrapper {
+    background-color: #f4f7f5;
+    background-image: radial-gradient(#d8e6dd 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+.checkout-main-card {
+    box-shadow: 0 20px 45px rgba(10, 43, 29, 0.1) !important;
+}
+
+/* Top Navigation & Stepper */
+.btn-back-modern {
+    background: #ffffff;
+    border: 1px solid #dce5df;
+    color: #0A2B1D;
+    transition: all 0.2s ease;
+}
+
+    .btn-back-modern:hover {
+        background: #0A2B1D;
+        color: #ffffff;
+        border-color: #0A2B1D;
+    }
+
+.step-pill {
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+}
+
+    .step-pill.completed {
+        background-color: rgba(27, 94, 32, 0.12);
+        color: #1B5E20;
+    }
+
+    .step-pill.active {
+        background-color: #0A2B1D;
+        color: #ffffff;
+    }
+
+/* Left Column: AgriNexus Dark Forest Gradient Panel */
+.summary-panel {
+    background: linear-gradient(155deg, #0A2B1D 0%, #14452F 55%, #1B5E20 100%);
+}
+
+.blob-top {
+    position: absolute;
+    top: -60px;
+    right: -60px;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    pointer-events: none;
+}
+
+.blob-bottom {
+    position: absolute;
+    bottom: -80px;
+    left: -50px;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    background: rgba(129, 199, 132, 0.08);
+    pointer-events: none;
+}
+
+.text-success-light {
+    color: #81c784;
+}
+
+.quota-box {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(6px);
+}
+
+/* Right Column: Payment Method Tiles */
+.method-tile {
+    border: 2px solid #e6ece8;
+    background-color: #ffffff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+    .method-tile:hover {
+        border-color: #2e7d32;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(10, 43, 29, 0.06);
+    }
+
+    .method-tile.active {
+        border-color: #1B5E20;
+        background-color: #f2faf4;
+        box-shadow: 0 8px 20px rgba(27, 94, 32, 0.12);
+    }
+
+.method-icon-wrap {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background-color: rgba(27, 94, 32, 0.1);
+    color: #1B5E20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.method-tile.active .method-icon-wrap {
+    background-color: #1B5E20;
+    color: #ffffff;
+}
+
+/* Merchant Box */
+.merchant-box {
+    background-color: #f8fbf9;
+    border: 1px dashed #b7d4c0;
+}
+
+/* Modern Inputs */
+.modern-checkout-input .input-group-text {
+    background-color: #f8faf9;
+    border-color: #dce5df;
+    color: #1B5E20;
+}
+
+.modern-checkout-input .form-control {
+    border-color: #dce5df;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.9rem;
+}
+
+    .modern-checkout-input .form-control:focus {
+        border-color: #1B5E20;
+        box-shadow: 0 0 0 0.2rem rgba(27, 94, 32, 0.15);
+    }
+
+/* Primary Submit Button */
+.btn-checkout-submit {
+    background: linear-gradient(135deg, #1B5E20 0%, #0A2B1D 100%);
+    color: #ffffff;
+    border: none;
+    transition: all 0.25s ease;
+}
+
+    .btn-checkout-submit:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 24px rgba(10, 43, 29, 0.25) !important;
+        color: #ffffff;
+    }

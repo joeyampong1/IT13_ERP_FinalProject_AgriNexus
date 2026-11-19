@@ -6,13 +6,13 @@
     --sidebar-text: #8ba395;
     --sidebar-active-bg: #143726;
     --sidebar-active-text: #FFFFFF;
-    --bg-main: #F8F9FA;
+    --bg-main: #F4F7F5;
     --card-bg: #FFFFFF;
-    --text-main: #1E293B;
+    --text-main: #0A2B1D;
     --text-muted: #64748B;
-    --primary-green: #388E3C;
-    --primary-green-hover: #2E7D32;
-    --border-color: #E2E8F0;
+    --primary-green: #1B5E34;
+    --primary-green-hover: #0A2B1D;
+    --border-color: #E2ECE6;
 }
 
 html, body {
@@ -264,21 +264,21 @@ html, body {
     }
 
 /* =========================================
-   4. LANDING PAGE & NAVBAR (Home.razor)
+4. LANDING PAGE & NAVBAR (Home.razor)
    ========================================= */
 .landing-page {
     height: 100vh;
     width: 100vw;
     overflow-y: auto;
     overflow-x: hidden;
-    background-color: var(--bg-main);
+    background-color: #F4F7F5;
     scroll-behavior: smooth;
 }
 
 .landing-navbar {
-    background: rgba(255, 255, 255, 0.85) !important;
+    background: rgba(255, 255, 255, 0.9) !important;
     backdrop-filter: blur(15px);
-    border-bottom: 1px solid rgba(0,0,0,0.05);
+    border-bottom: 1px solid #E2ECE6;
     position: fixed;
     top: 0;
     width: 100%;
@@ -287,28 +287,54 @@ html, body {
 }
 
 .nav-link-custom {
-    color: var(--text-main);
+    color: #0A2B1D;
     font-weight: 600;
     text-decoration: none;
     transition: color 0.2s;
 }
 
     .nav-link-custom:hover, .hover-green:hover {
-        color: var(--primary-green) !important;
+        color: #1B5E34 !important;
+    }
+
+/* Signature AgriNexus Forest Button */
+.btn-agrinexus-primary {
+    background: linear-gradient(135deg, #0A2B1D 0%, #1B5E34 100%) !important;
+    border: none !important;
+    color: #FFFFFF !important;
+    transition: all 0.3s ease;
+}
+
+    .btn-agrinexus-primary:hover {
+        background: linear-gradient(135deg, #0D3826 0%, #227340 100%) !important;
+        color: #FFFFFF !important;
+    }
+
+.btn-white-forest {
+    background-color: #FFFFFF;
+    color: #0A2B1D;
+    border: 1.5px solid #D5E6DC;
+    transition: all 0.25s ease;
+}
+
+    .btn-white-forest:hover {
+        background-color: #F0F7F3;
+        color: #1B5E34;
+        border-color: #1B5E34;
     }
 
 /* =========================================
-   5. HERO SECTION & MOCKUP
+5. HERO SECTION & MOCKUP
    ========================================= */
 .hero-section {
-    background: linear-gradient(135deg, #F8F9FA 0%, #E8F5E9 100%);
+    background: linear-gradient(145deg, #F8FAF9 0%, #F0F6F2 55%, #E3EFE8 100%);
     padding-top: 100px;
     position: relative;
     overflow: hidden;
 }
 
 .text-gradient-green {
-    background: linear-gradient(135deg, #0A2B1D 0%, #10B981 100%);
+    background: linear-gradient(135deg, #0A2B1D 0%, #1B5E34 60%, #2E8B57 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -325,7 +351,7 @@ html, body {
 .bg-grid {
     position: absolute;
     inset: 0;
-    background-image: linear-gradient(to right, rgba(0, 0, 0, 0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+    background-image: linear-gradient(to right, rgba(10, 43, 29, 0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(10, 43, 29, 0.04) 1px, transparent 1px);
     background-size: 40px 40px;
     z-index: 1;
     mask-image: linear-gradient(to bottom, black, transparent);
@@ -341,7 +367,7 @@ html, body {
 .glow-green {
     width: 600px;
     height: 600px;
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(27, 94, 52, 0.14);
     top: -100px;
     right: -100px;
 }
@@ -358,7 +384,7 @@ html, body {
     background: #fff;
     border-radius: 16px;
     overflow: hidden;
-    border: 1px solid rgba(0,0,0,0.1);
+    border: 1px solid #D5E6DC;
     max-width: 550px;
     margin: 0 auto;
     position: relative;
@@ -372,11 +398,11 @@ html, body {
     }
 
 .shadow-2xl {
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 25px 50px -12px rgba(10, 43, 29, 0.22);
 }
 
 .mockup-header {
-    background: #F8F9FA;
+    background: #F4F7F5;
 }
 
 .mockup-dot {
@@ -412,7 +438,7 @@ html, body {
 }
 
 /* =========================================
-   6. BENTO GRID & FEATURES
+6. BENTO GRID & FEATURES
    ========================================= */
 .bento-grid {
     display: grid;
@@ -428,7 +454,7 @@ html, body {
 
     .bento-item:hover {
         transform: translateY(-5px);
-        box-shadow: 0 15px 30px rgba(0,0,0,0.08) !important;
+        box-shadow: 0 15px 30px rgba(10, 43, 29, 0.08) !important;
     }
 
 .bento-large {
@@ -442,7 +468,7 @@ html, body {
 
 .bento-bg-decor i {
     font-size: 10rem;
-    color: rgba(16, 185, 129, 0.05);
+    color: rgba(27, 94, 52, 0.06);
     position: absolute;
     bottom: -20px;
     right: -20px;
@@ -488,7 +514,7 @@ html, body {
 
     .btn-hover-effect:hover {
         transform: translateY(-2px);
-        box-shadow: 0 10px 25px rgba(56, 142, 60, 0.4) !important;
+        box-shadow: 0 10px 25px rgba(27, 94, 52, 0.35) !important;
     }
 
 /* =========================================

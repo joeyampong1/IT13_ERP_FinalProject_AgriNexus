@@ -11,87 +11,113 @@
 
         <!-- LEFT SIDE: Visual Branding (60% width) -->
         <div class="col-lg-7 d-none d-lg-flex flex-column justify-content-between p-5 position-relative login-visual-panel h-100">
+            <div class="login-grid-overlay"></div>
             <div class="login-blob-1"></div>
             <div class="login-blob-2"></div>
 
+            <!-- Top Navigation & Brand -->
             <div class="position-relative" style="z-index: 2;">
-                <a href="/" class="d-inline-flex align-items-center gap-2 text-decoration-none text-white hover-opacity mb-5">
-                    <i class="bi bi-arrow-left fs-5"></i> Back to Home
+                <a href="/" class="d-inline-flex align-items-center gap-2 text-decoration-none text-white-50 hover-white mb-4 small fw-semibold">
+                    <i class="bi bi-arrow-left fs-6"></i> Back to Home
                 </a>
-                <div class="d-flex align-items-center gap-3">
-                    <img src="images/AgriNexus_finalogo.png" alt="AgriNexus" style="height: 50px; background: white; border-radius: 12px; padding: 5px;" />
-                    <h3 class="text-white fw-bold mb-0">AgriNexus</h3>
+                <div class="d-flex align-items-center gap-3 mt-2">
+                    <div class="brand-logo-box shadow-sm">
+                        <img src="images/AgriNexus_finalogo.png" alt="AgriNexus" style="height: 42px; object-fit: contain;" />
+                    </div>
+                    <div>
+                        <h3 class="text-white fw-bolder mb-0" style="letter-spacing: -0.5px;">AgriNexus</h3>
+                        <span class="text-uppercase fw-bold" style="color: #6EE7B7; font-size: 0.65rem; letter-spacing: 1.5px;">Enterprise Resource Planning</span>
+                    </div>
                 </div>
             </div>
 
-            <div class="position-relative" style="z-index: 2; max-width: 80%;">
-                <h2 class="text-white fw-bold mb-3 display-5" style="line-height: 1.3;">"Empowering agricultural businesses with data-driven decisions."</h2>
-                <p class="text-white text-opacity-75 fs-4">Manage your farms, track inventory, and sync seamlessly—whether you're online or offline.</p>
+            <!-- Center Value Proposition -->
+            <div class="position-relative my-auto" style="z-index: 2; max-width: 85%;">
+                <span class="badge rounded-pill px-3 py-2 mb-3 fw-bold small" style="background: rgba(16, 185, 129, 0.15); color: #6EE7B7; border: 1px solid rgba(110, 231, 183, 0.25);">
+                    <i class="bi bi-sprout me-1"></i> SMART AGRIBUSINESS SUITE
+                </span>
+                <h1 class="text-white fw-bolder mb-3 display-5" style="line-height: 1.25; letter-spacing: -0.8px;">
+                    Empowering agricultural businesses with data-driven decisions.
+                </h1>
+                <p class="text-white text-opacity-75 fs-5 mb-4" style="line-height: 1.6;">
+                    Manage multiple farms, monitor real-time inventory, and sync seamlessly—whether you're in the field or in the office.
+                </p>
+
+                <!-- Feature Pills -->
+                <div class="d-flex flex-wrap gap-2 pt-2">
+                    <span class="glass-pill"><i class="bi bi-diagram-3 me-2 text-warning"></i>Multi-Branch Control</span>
+                    <span class="glass-pill"><i class="bi bi-box-seam me-2 text-info"></i>Live Inventory Sync</span>
+                    <span class="glass-pill"><i class="bi bi-shield-check me-2" style="color: #6EE7B7;"></i>Role-Based Access</span>
+                </div>
             </div>
 
-            <div class="position-relative text-white text-opacity-50 small" style="z-index: 2;">
-                © 2026 AgriNexus ERP. All rights reserved.
+            <!-- Footer -->
+            <div class="position-relative d-flex justify-content-between align-items-center text-white text-opacity-50 small" style="z-index: 2;">
+                <span>© 2026 AgriNexus ERP. All rights reserved.</span>
+                <span>Agri-Tech Operations Platform</span>
             </div>
         </div>
 
         <!-- RIGHT SIDE: Login Form Card (40% width) -->
-        <div class="col-12 col-lg-5 d-flex align-items-center justify-content-center bg-light p-3 p-md-4 h-100">
+        <div class="col-12 col-lg-5 d-flex align-items-center justify-content-center login-right-surface p-3 p-md-4 h-100">
 
             <!-- Scrollable Card -->
-            <div class="card border-0 shadow-lg rounded-4 w-100" style="max-height: 95vh; overflow-y: auto;">
+            <div class="card login-form-card rounded-4 w-100" style="max-width: 470px; max-height: 95vh; overflow-y: auto;">
                 <div class="card-body p-4 p-md-5">
 
-                    <a href="/" class="d-lg-none text-decoration-none text-muted mb-4 d-inline-block fw-bold">
-                        <i class="bi bi-arrow-left me-2"></i> Back to Home
+                    <a href="/" class="d-lg-none text-decoration-none text-muted mb-3 d-inline-flex align-items-center gap-1 small fw-bold">
+                        <i class="bi bi-arrow-left"></i> Back to Home
                     </a>
 
-                    <div class="text-center mb-4 mt-3">
-                        <img src="images/AgriNexus_finalogo.png" alt="AgriNexus Logo" style="height: 80px; object-fit: contain;" />
+                    <div class="text-center mb-3 mt-1">
+                        <div class="d-inline-flex align-items-center justify-content-center p-2 rounded-4" style="background: #F0F7F3; border: 1px solid #D8E8DF;">
+                            <img src="images/AgriNexus_finalogo.png" alt="AgriNexus Logo" style="height: 68px; object-fit: contain;" />
+                        </div>
                     </div>
 
                     <!-- BRANDED TEXT HEADER (CENTERED) -->
-                    <div class="text-center mb-4 mt-2">
-                        <h2 class="fw-bolder mb-2" style="letter-spacing: -0.5px; font-size: 1.8rem;">
+                    <div class="text-center mb-4">
+                        <h2 class="fw-bolder mb-1" style="letter-spacing: -0.6px; font-size: 1.85rem;">
                             <span style="color: #0A2B1D;">Welcome</span>
-                            <span style="color: var(--primary-green);">Back</span>
+                            <span style="color: #1B5E34;">Back</span>
                         </h2>
-                        <p class="text-muted small mb-3" style="letter-spacing: 0.3px; font-size: 0.9rem; line-height: 1.5;">
+                        <p class="text-muted small mb-3" style="font-size: 0.9rem;">
                             Sign in to manage your farm operations.
                         </p>
 
                         <!-- Tagline with Lines (Centered) -->
-                        <div class="d-flex align-items-center justify-content-center gap-2 mt-4">
-                            <hr class="m-0" style="width: 25px; border-top: 2px solid var(--primary-green); opacity: 1;">
-                            <span class="text-uppercase fw-bold" style="color: var(--primary-green); font-size: 0.6rem; letter-spacing: 1.2px;">
+                        <div class="d-flex align-items-center justify-content-center gap-2 mt-3">
+                            <hr class="m-0" style="width: 24px; border-top: 2px solid #1B5E34; opacity: 0.6;">
+                            <span class="text-uppercase fw-bold" style="color: #1B5E34; font-size: 0.6rem; letter-spacing: 1.2px;">
                                 One Platform. Multiple Farms. Smarter Operations.
                             </span>
-                            <hr class="m-0" style="width: 25px; border-top: 2px solid var(--primary-green); opacity: 1;">
+                            <hr class="m-0" style="width: 24px; border-top: 2px solid #1B5E34; opacity: 0.6;">
                         </div>
                     </div>
 
                     @if (NavigationManager.Uri.Contains("registered=true"))
                     {
-                        <div class="alert alert-success p-3 small rounded-3 mb-4 text-center">
-                            <i class="bi bi-check-circle-fill me-2 fs-5 align-middle"></i>
-                            <strong>Application Submitted!</strong><br />
-                            Please wait for the Super Admin to approve your account before logging in.
+                        <div class="alert border-0 p-3 small rounded-3 mb-4 text-center" style="background-color: #ECFDF5; color: #065F46; border-left: 4px solid #10B981 !important;">
+                            <i class="bi bi-check-circle-fill me-2 fs-5 align-middle text-success"></i>
+                            <strong>Account Created Successfully!</strong><br />
+                            You can now sign in to access your AgriNexus dashboard.
                         </div>
                     }
 
                     @if (!string.IsNullOrEmpty(errorMessage))
                     {
-                        <div class="alert alert-danger p-2 small rounded-3">
+                        <div class="alert alert-danger border-0 p-3 small rounded-3 mb-3" style="background-color: #FEF2F2; color: #991B1B;">
                             <i class="bi bi-exclamation-triangle-fill me-2"></i> @errorMessage
                         </div>
                     }
 
                     <form>
                         <!-- Section: Account Details -->
-                        <div class="d-flex align-items-center gap-2 mb-3 mt-4">
-                            <div class="bg-success bg-opacity-10 text-success rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 30px; height: 30px;">
-                                <i class="bi bi-shield-lock"></i>
+                        <div class="d-flex align-items-center gap-2 mb-3 mt-2">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 28px; height: 28px; background-color: #E8F3EC; color: #1B5E34;">
+                                <i class="bi bi-shield-lock-fill small"></i>
                             </div>
-                            <h6 class="fw-bold text-dark mb-0 text-uppercase" style="font-size: 0.75rem; letter-spacing: 1px;">Account Details</h6>
+                            <h6 class="fw-bold mb-0 text-uppercase" style="color: #0A2B1D; font-size: 0.72rem; letter-spacing: 1px;">Account Credentials</h6>
                         </div>
 
                         <div class="mb-3">
@@ -102,10 +128,10 @@
                             </div>
                         </div>
 
-                        <div class="mb-4">
+                        <div class="mb-3">
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <label class="form-label fw-bold small text-muted mb-0">Password</label>
-                                <a href="/forgot-password" class="text-success text-decoration-none small fw-bold hover-green">Forgot password?</a>
+                                <a href="/forgot-password" class="text-decoration-none small fw-bold hover-green" style="color: #1B5E34;">Forgot password?</a>
                             </div>
                             <div class="input-group modern-input">
                                 <span class="input-group-text"><i class="bi bi-lock"></i></span>
@@ -113,7 +139,7 @@
                                 <!-- Password Input with Toggle Logic -->
                                 <input type="@(showPassword ? "text" : "password")" class="form-control" placeholder="••••••••" @bind="password" />
 
-                                <span class="input-group-text" style="cursor: pointer; border-left: none;" @onclick="TogglePassword">
+                                <span class="input-group-text password-toggle" @onclick="TogglePassword">
                                     <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")"></i>
                                 </span>
                             </div>
@@ -127,7 +153,7 @@
                         </div>
 
                         <!-- Sign In Button -->
-                        <button type="button" @onclick="LoginUser" disabled="@isProcessing" class="btn btn-primary btn-lg w-100 py-3 fw-bold rounded-3 shadow-sm btn-hover-effect mb-3">
+                        <button type="button" @onclick="LoginUser" disabled="@isProcessing" class="btn btn-agrinexus-primary btn-lg w-100 py-3 fw-bold rounded-3 shadow-sm mb-3">
                             @if (isProcessing)
                             {
                                 <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -135,14 +161,14 @@
                             }
                             else
                             {
-                                <span>Sign In to Dashboard</span>
+                                <span>Sign In to Dashboard <i class="bi bi-arrow-right ms-1"></i></span>
                             }
                         </button>
 
-                        <div class="text-center mt-4">
+                        <div class="text-center mt-4 pt-2 border-top" style="border-color: #EDF2EF !important;">
                             <p class="text-muted small mb-0">
                                 Don't have an account?
-                                <a href="/register" class="text-success text-decoration-none fw-bold hover-green">Register your business</a>
+                                <a href="/register" class="text-decoration-none fw-bold hover-green" style="color: #1B5E34;">Register your business</a>
                             </p>
                         </div>
                     </form>
@@ -152,12 +178,52 @@
     </div>
 </div>
 
+@if (showTrialExpiredModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1055;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="p-4 text-white text-center" style="background: linear-gradient(135deg, #0A2B1D 0%, #1B5E34 100%);">
+                    <div class="bg-white bg-opacity-15 rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 56px; height: 56px;">
+                        <i class="bi bi-hourglass-bottom fs-3 text-warning"></i>
+                    </div>
+                    <h4 class="fw-bolder mb-1">14-Day Free Trial Ended</h4>
+                    <p class="small text-white text-opacity-75 mb-0">Your trial period for AgriNexus ERP has expired.</p>
+                </div>
+
+                <div class="modal-body p-4 text-center bg-white">
+                    <p class="text-muted small mb-4">
+                        All your farm records, branches, and settings are safely preserved. Select a subscription plan now to restore full access to your dashboard.
+                    </p>
+
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-agrinexus-primary btn-lg fw-bold rounded-3 shadow-sm" @onclick="GoToUpgradePlan">
+                            <i class="bi bi-rocket-takeoff me-2"></i> Upgrade Subscription Plan
+                        </button>
+                        <button type="button" class="btn btn-light text-muted fw-semibold rounded-3" @onclick="() => showTrialExpiredModal = false">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private string email = "";
     private string password = "";
     private string errorMessage = "";
     private bool showPassword = false;
     private bool isProcessing = false;
+    private bool showTrialExpiredModal = false;
+    private long expiredBusinessId = 0;
+
+    private void GoToUpgradePlan()
+    {
+        showTrialExpiredModal = false;
+        NavigationManager.NavigateTo($"/select-plan?businessId={expiredBusinessId}");
+    }
 
     private void TogglePassword()
     {
@@ -178,38 +244,39 @@
 
         try
         {
-            // 1. Query the database and INCLUDE the Business para makita ang status
+            // 1. Query the database and include the Business record to check its status
             var user = await DbContext.Users
                 .Include(u => u.Business)
                 .FirstOrDefaultAsync(u => u.Email == email);
 
-            // 2. Check if user exists and password matches
+            // 2. Validate user existence, password, and account status
             if (user == null || user.PasswordHash != password)
             {
                 errorMessage = "Invalid email or password.";
-                isProcessing = false;
                 return;
             }
 
             if (user.Status != "Active")
             {
                 errorMessage = "Your account is inactive.";
-                isProcessing = false;
                 return;
             }
 
-            // 3. IMPORTANTE: I-check kung Trial pa ang Business sa Tenant Admin
+            // 3. Check if the TenantAdmin's 14-day free trial has expired
             if (user.Role == "TenantAdmin" && user.Business != null && user.Business.Status == "Trial")
             {
-                errorMessage = "Your business application is still pending approval by the Super Admin.";
-                isProcessing = false;
-                return;
+                if (DateTime.Today > user.Business.RegisteredAt.AddDays(14))
+                {
+                    expiredBusinessId = user.Business.BusinessId;
+                    showTrialExpiredModal = true;
+                    return;
+                }
             }
 
-            // 4. Pass the actual User object to AuthService
+            // 4. Pass the authenticated User object to AuthService
             Auth.Login(user);
 
-            // 5. Redirect based on the actual role from the database
+            // 5. Redirect based on the user's role
             if (user.Role == "TenantAdmin")
             {
                 NavigationManager.NavigateTo("/business-dashboard");

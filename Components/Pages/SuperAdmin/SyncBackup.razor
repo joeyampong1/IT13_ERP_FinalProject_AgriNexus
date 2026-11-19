@@ -5,8 +5,8 @@
         <h2 class="page-title">Synchronization &amp; Backup</h2>
         <p class="text-muted mb-0 page-sub">Monitor push/pull sync, online backups, and compare device data against the server.</p>
     </div>
-    <button type="button" class="btn-outline" @onclick="TestConnectionAsync" disabled="@testing">
-        <i class="bi bi-hdd-network"></i> @(testing ? "Testing…" : "Test connection")
+    <button type="button" class="btn-outline shadow-sm" @onclick="TestConnectionAsync" disabled="@testing">
+        <i class="bi bi-hdd-network-fill text-success"></i> @(testing ? "Testing…" : "Test connection")
     </button>
 </div>
 
@@ -45,7 +45,6 @@
 <!-- ======================= SYNCHRONIZATION ======================= -->
 @if (activeTab == "sync")
 {
-
     <div class="toolbar mb-3">
         <div class="search-box">
             <i class="bi bi-search"></i>
@@ -57,25 +56,27 @@
             <option>Pending</option>
             <option>Offline</option>
         </select>
-        <span class="text-muted small">@FilteredTenants.Count @(FilteredTenants.Count == 1 ? "tenant" : "tenants")</span>
-        <button type="button" class="btn-new ms-auto" @onclick="SyncAllAsync" disabled="@busyAll">
+        <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+            <i class="bi bi-buildings me-1 text-success"></i>@FilteredTenants.Count @(FilteredTenants.Count == 1 ? "tenant" : "tenants")
+        </span>
+        <button type="button" class="btn-new ms-auto shadow-sm" @onclick="SyncAllAsync" disabled="@busyAll">
             <i class="bi bi-arrow-repeat @(busyAll ? "spin" : "")"></i> Sync all pending
         </button>
     </div>
 
     <div class="panel">
         <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
+            <table class="table table-hover data-table align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>Business</th>
+                        <th class="px-4">Business</th>
                         <th>Status</th>
                         <th>Last push</th>
                         <th>Last pull</th>
                         <th class="text-end">To push</th>
                         <th class="text-end">To pull</th>
                         <th class="text-end">Conflicts</th>
-                        <th></th>
+                        <th class="px-4"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -85,37 +86,59 @@
                         var pull = PullCount(t.Code);
                         var conf = ConflictCount(t.Code);
                         <tr>
-                            <td>
-                                <div class="fw-semibold">@t.Business</div>
-                                <div class="sub">@t.Code</div>
+                            <td class="px-4">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="sync-avatar">
+                                        <i class="bi bi-building"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold" style="color: #0A2B1D;">@t.Business</div>
+                                        <div class="sub fw-semibold" style="color: #1B5E34;">@t.Code</div>
+                                    </div>
+                                </div>
                             </td>
                             <td>
                                 @if (t.Syncing)
                                 {
-                                    <span class="pill pill-blue"><i class="bi bi-arrow-repeat spin"></i> Syncing…</span>
+                                    <span class="pill pill-leaf"><i class="bi bi-arrow-repeat spin me-1"></i> Syncing…</span>
                                 }
                                 else
                                 {
-                                    <span class="pill @StatusClass(t.Status)">@t.Status</span>
+                                    <span class="pill @StatusClass(t.Status)">
+                                        <i class="bi @StatusIcon(t.Status) me-1"></i>@t.Status
+                                    </span>
                                 }
                             </td>
-                            <td class="text-nowrap">@t.LastPush.ToString("MMM d, h:mm tt")</td>
-                            <td class="text-nowrap">@t.LastPull.ToString("MMM d, h:mm tt")</td>
+                            <td class="text-nowrap text-muted small">
+                                <i class="bi bi-cloud-arrow-up text-success me-1"></i>@t.LastPush.ToString("MMM d, h:mm tt")
+                            </td>
+                            <td class="text-nowrap text-muted small">
+                                <i class="bi bi-cloud-arrow-down text-success me-1"></i>@t.LastPull.ToString("MMM d, h:mm tt")
+                            </td>
                             <td class="text-end @NumClass(push)">@push</td>
                             <td class="text-end @NumClass(pull)">@pull</td>
                             <td class="text-end @NumClass(conf)">@conf</td>
-                            <td class="text-end text-nowrap">
+                            <td class="text-end text-nowrap px-4">
                                 @if (t.Status != "Synced")
                                 {
-                                    <button type="button" class="btn-outline me-2" @onclick="() => RetrySyncAsync(t, false)" disabled="@t.Syncing">Retry sync</button>
+                                    <button type="button" class="btn-outline me-2" @onclick="() => RetrySyncAsync(t, false)" disabled="@t.Syncing">
+                                        <i class="bi bi-arrow-clockwise text-success"></i> Retry sync
+                                    </button>
                                 }
-                                <button type="button" class="btn-outline" @onclick="() => OpenCompare(t)">Compare</button>
+                                <button type="button" class="btn-outline" @onclick="() => OpenCompare(t)">
+                                    <i class="bi bi-arrow-left-right text-success"></i> Compare
+                                </button>
                             </td>
                         </tr>
                     }
                     @if (FilteredTenants.Count == 0)
                     {
-                        <tr><td colspan="8" class="text-center text-muted py-5">No tenants found.</td></tr>
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                                No tenants found.
+                            </td>
+                        </tr>
                     }
                 </tbody>
             </table>
@@ -129,12 +152,12 @@
     <div class="row g-3 mb-4">
         <div class="col-12 col-lg-7">
             <div class="card-box h-100">
-                <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="d-flex justify-content-between align-items-start mb-3 gap-2 flex-wrap">
                     <div>
                         <div class="panel-title">Backup schedule</div>
                         <div class="panel-sub mb-0">Automatic online backups of the platform database.</div>
                     </div>
-                    <button type="button" class="btn-new" @onclick="RunBackupAsync" disabled="@backupRunning">
+                    <button type="button" class="btn-new shadow-sm" @onclick="RunBackupAsync" disabled="@backupRunning">
                         <i class="bi bi-cloud-arrow-up @(backupRunning ? "spin" : "")"></i> @(backupRunning ? "Running…" : "Run backup now")
                     </button>
                 </div>
@@ -159,14 +182,14 @@
 
                 <div class="toggle-row mt-2">
                     <div>
-                        <div class="fw-medium">Notify me when a backup fails</div>
+                        <div class="fw-semibold" style="color: #0A2B1D;">Notify me when a backup fails</div>
                         <div class="sub">Shows a warning on the Dashboard and in Audit Logs.</div>
                     </div>
                     <label class="switch"><input type="checkbox" @bind="notifyOnFail" /><span class="slider"></span></label>
                 </div>
 
                 <div class="d-flex justify-content-end mt-3">
-                    <button type="button" class="btn-new" @onclick="SaveSchedule">
+                    <button type="button" class="btn-new shadow-sm" @onclick="SaveSchedule">
                         <i class="bi bi-check2-circle"></i> Save schedule
                     </button>
                 </div>
@@ -175,26 +198,31 @@
 
         <div class="col-12 col-lg-5">
             <div class="card-box h-100">
-                <div class="panel-title">Server storage</div>
-                <div class="panel-sub">Usage on the hosting server (sample values).</div>
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div>
+                        <div class="panel-title">Server storage</div>
+                        <div class="panel-sub">Usage on the hosting server (sample values).</div>
+                    </div>
+                    <div class="stat-icon"><i class="bi bi-hdd-rack-fill"></i></div>
+                </div>
 
                 <div class="usage">
-                    <div class="d-flex justify-content-between small">
-                        <span>Database</span>
+                    <div class="d-flex justify-content-between small fw-medium">
+                        <span style="color: #0A2B1D;"><i class="bi bi-database-fill text-success me-1"></i>Database</span>
                         <span class="text-muted">@Size(dbUsedMb) of @Size(dbQuotaMb)</span>
                     </div>
                     <div class="bar-track"><div class="bar-fill" style="width:@Pct(dbUsedMb, dbQuotaMb)%"></div></div>
                 </div>
 
                 <div class="usage">
-                    <div class="d-flex justify-content-between small">
-                        <span>Backup files</span>
+                    <div class="d-flex justify-content-between small fw-medium">
+                        <span style="color: #0A2B1D;"><i class="bi bi-archive-fill text-success me-1"></i>Backup files</span>
                         <span class="text-muted">@Size(backupUsedMb) of @Size(backupQuotaMb)</span>
                     </div>
-                    <div class="bar-track"><div class="bar-fill @(Pct(backupUsedMb, backupQuotaMb) >= 80 ? "warn" : "")" style="width:@Pct(backupUsedMb, backupQuotaMb)%"></div></div>
+                    <div class="bar-track"><div class="bar-fill @(Pct(backupUsedMb, backupQuotaMb) >= 80 ? "earth" : "")" style="width:@Pct(backupUsedMb, backupQuotaMb)%"></div></div>
                 </div>
 
-                <div class="sub mt-3">Old backups beyond the retention period are removed automatically.</div>
+                <div class="sub mt-3"><i class="bi bi-info-circle text-success me-1"></i>Old backups beyond the retention period are removed automatically.</div>
             </div>
         </div>
     </div>
@@ -205,36 +233,40 @@
             <div class="panel-sub mb-0">Latest platform and tenant backups</div>
         </div>
         <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
+            <table class="table table-hover data-table align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th class="px-4">ID</th>
                         <th>Scope</th>
                         <th>Type</th>
                         <th>Started</th>
                         <th>Size</th>
                         <th>Duration</th>
-                        <th>Status</th>
+                        <th class="px-4">Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var b in SortedBackups)
                     {
                         <tr>
-                            <td class="fw-medium">@b.Id</td>
-                            <td>@b.Scope</td>
-                            <td><span class="pill pill-gray">@b.Type</span></td>
-                            <td class="text-nowrap">@b.Started.ToString("MMM d, yyyy, h:mm tt")</td>
-                            <td>@Size(b.SizeMb)</td>
-                            <td>@(b.Status == "Running" ? "—" : Dur(b.DurationSec))</td>
-                            <td>
+                            <td class="fw-bold px-4" style="color: #1B5E34;">@b.Id</td>
+                            <td class="fw-medium" style="color: #0A2B1D;">@b.Scope</td>
+                            <td><span class="pill pill-sage">@b.Type</span></td>
+                            <td class="text-nowrap text-muted small">
+                                <i class="bi bi-clock text-success me-1"></i>@b.Started.ToString("MMM d, yyyy, h:mm tt")
+                            </td>
+                            <td class="fw-medium">@Size(b.SizeMb)</td>
+                            <td class="text-muted">@(b.Status == "Running" ? "—" : Dur(b.DurationSec))</td>
+                            <td class="px-4">
                                 @if (b.Status == "Running")
                                 {
-                                    <span class="pill pill-blue"><i class="bi bi-arrow-repeat spin"></i> Running</span>
+                                    <span class="pill pill-leaf"><i class="bi bi-arrow-repeat spin me-1"></i> Running</span>
                                 }
                                 else
                                 {
-                                    <span class="pill @(b.Status == "Success" ? "pill-green" : "pill-red")">@b.Status</span>
+                                    <span class="pill @(b.Status == "Success" ? "pill-forest" : "pill-earth")">
+                                        <i class="bi @(b.Status == "Success" ? "bi-check-circle-fill" : "bi-exclamation-circle-fill") me-1"></i>@b.Status
+                                    </span>
                                 }
                             </td>
                         </tr>
@@ -250,40 +282,53 @@
             <div class="panel-sub mb-0">Tenants asking to roll back to a backup point</div>
         </div>
         <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
+            <table class="table table-hover data-table align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>Business</th>
+                        <th class="px-4">Business</th>
                         <th>Requested by</th>
                         <th>Backup point</th>
                         <th>Reason</th>
                         <th>Requested</th>
                         <th>Status</th>
-                        <th></th>
+                        <th class="px-4"></th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var r in restores)
                     {
                         <tr>
-                            <td class="fw-semibold">@r.Business</td>
-                            <td>@r.RequestedBy</td>
-                            <td class="text-nowrap">@r.BackupId</td>
+                            <td class="fw-bold px-4" style="color: #0A2B1D;">@r.Business</td>
+                            <td class="text-dark">@r.RequestedBy</td>
+                            <td class="text-nowrap fw-semibold" style="color: #1B5E34;">@r.BackupId</td>
                             <td class="reason">@r.Reason</td>
-                            <td class="text-nowrap">@r.Requested.ToString("MMM d, yyyy")</td>
-                            <td><span class="pill @RestoreClass(r.Status)">@r.Status</span></td>
-                            <td class="text-end text-nowrap">
+                            <td class="text-nowrap text-muted small">@r.Requested.ToString("MMM d, yyyy")</td>
+                            <td>
+                                <span class="pill @RestoreClass(r.Status)">
+                                    <i class="bi @(r.Status == "Approved" ? "bi-check-circle-fill" : r.Status == "Pending" ? "bi-hourglass-split" : "bi-x-circle-fill") me-1"></i>@r.Status
+                                </span>
+                            </td>
+                            <td class="text-end text-nowrap px-4">
                                 @if (r.Status == "Pending")
                                 {
-                                    <button type="button" class="btn-outline me-2" @onclick="() => DecideRestore(r, true)">Approve</button>
-                                    <button type="button" class="btn-outline danger" @onclick="() => DecideRestore(r, false)">Decline</button>
+                                    <button type="button" class="btn-outline me-2" @onclick="() => DecideRestore(r, true)">
+                                        <i class="bi bi-check2 text-success"></i> Approve
+                                    </button>
+                                    <button type="button" class="btn-outline earth" @onclick="() => DecideRestore(r, false)">
+                                        <i class="bi bi-x-lg"></i> Decline
+                                    </button>
                                 }
                             </td>
                         </tr>
                     }
                     @if (restores.Count == 0)
                     {
-                        <tr><td colspan="7" class="text-center text-muted py-5">No restore requests.</td></tr>
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                                No restore requests.
+                            </td>
+                        </tr>
                     }
                 </tbody>
             </table>
@@ -301,14 +346,14 @@
                 <option value="@t.Code">@t.Business (@t.Code)</option>
             }
         </select>
-        <span class="text-muted small">Last compared: @lastCompared.ToString("MMM d, h:mm tt")</span>
-        <button type="button" class="btn-new ms-auto" @onclick="RunComparisonAsync" disabled="@comparing">
+        <span class="text-muted small"><i class="bi bi-clock-history text-success me-1"></i>Last compared: @lastCompared.ToString("MMM d, h:mm tt")</span>
+        <button type="button" class="btn-new ms-auto shadow-sm" @onclick="RunComparisonAsync" disabled="@comparing">
             <i class="bi bi-arrow-left-right @(comparing ? "spin" : "")"></i> @(comparing ? "Comparing…" : "Run comparison")
         </button>
     </div>
 
     <div class="note-banner mb-3">
-        <i class="bi bi-shield-lock"></i>
+        <i class="bi bi-shield-lock-fill text-success fs-5"></i>
         <span>Only record counts, checksums, and timestamps are compared. Tenant business data is never shown to the Super Admin.</span>
     </div>
 
@@ -328,24 +373,24 @@
         <div class="col-6 col-lg-3">
             <div class="mini-stat">
                 <div class="mini-label">Tables out of sync</div>
-                <div class="mini-value @(OutOfSync > 0 ? "text-danger" : "")">@OutOfSync <span class="of">of @Rows.Count</span></div>
+                <div class="mini-value @(OutOfSync > 0 ? "text-earth" : "")">@OutOfSync <span class="of">of @Rows.Count</span></div>
             </div>
         </div>
         <div class="col-6 col-lg-3">
             <div class="mini-stat">
                 <div class="mini-label">Match rate</div>
                 <div class="mini-value">@MatchRate%</div>
-                <div class="bar-track slim"><div class="bar-fill @(MatchRate < 100 ? "warn" : "")" style="width:@MatchRate%"></div></div>
+                <div class="bar-track slim"><div class="bar-fill @(MatchRate < 100 ? "earth" : "")" style="width:@MatchRate%"></div></div>
             </div>
         </div>
     </div>
 
     <div class="panel">
         <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
+            <table class="table table-hover data-table align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>Table</th>
+                        <th class="px-4">Table</th>
                         <th class="text-end">On device</th>
                         <th class="text-end">On server</th>
                         <th class="text-end">Difference</th>
@@ -353,7 +398,7 @@
                         <th>Server modified</th>
                         <th>Checksum</th>
                         <th>Status</th>
-                        <th></th>
+                        <th class="px-4"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -362,12 +407,14 @@
                         var status = RowStatus(r);
                         var diff = r.Local - r.Server;
                         <tr>
-                            <td class="fw-semibold">@r.Entity</td>
-                            <td class="text-end">@r.Local.ToString("N0")</td>
-                            <td class="text-end">@r.Server.ToString("N0")</td>
-                            <td class="text-end fw-semibold @DiffClass(diff)">@DiffText(diff)</td>
-                            <td class="text-nowrap">@r.LocalMod.ToString("MMM d, h:mm tt")</td>
-                            <td class="text-nowrap">@r.ServerMod.ToString("MMM d, h:mm tt")</td>
+                            <td class="fw-bold px-4" style="color: #0A2B1D;">
+                                <i class="bi bi-table text-success me-2"></i>@r.Entity
+                            </td>
+                            <td class="text-end fw-medium">@r.Local.ToString("N0")</td>
+                            <td class="text-end fw-medium">@r.Server.ToString("N0")</td>
+                            <td class="text-end fw-bold @DiffClass(diff)">@DiffText(diff)</td>
+                            <td class="text-nowrap text-muted small">@r.LocalMod.ToString("MMM d, h:mm tt")</td>
+                            <td class="text-nowrap text-muted small">@r.ServerMod.ToString("MMM d, h:mm tt")</td>
                             <td>
                                 @if (ChecksumOk(r))
                                 {
@@ -379,10 +426,12 @@
                                 }
                             </td>
                             <td><span class="pill @RowClass(status)">@status</span></td>
-                            <td class="text-end text-nowrap">
+                            <td class="text-end text-nowrap px-4">
                                 @if (status != "Match" && status != "Queued")
                                 {
-                                    <button type="button" class="btn-outline" @onclick="() => QueueResync(r)">Request re-sync</button>
+                                    <button type="button" class="btn-outline" @onclick="() => QueueResync(r)">
+                                        <i class="bi bi-arrow-repeat text-success"></i> Request re-sync
+                                    </button>
                                 }
                             </td>
                         </tr>
@@ -390,10 +439,10 @@
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td class="fw-semibold">Total</td>
-                        <td class="text-end fw-semibold">@TotalLocal.ToString("N0")</td>
-                        <td class="text-end fw-semibold">@TotalServer.ToString("N0")</td>
-                        <td class="text-end fw-semibold @DiffClass(TotalLocal - TotalServer)">@DiffText(TotalLocal - TotalServer)</td>
+                        <td class="fw-bold px-4" style="color: #0A2B1D;">Total</td>
+                        <td class="text-end fw-bold" style="color: #0A2B1D;">@TotalLocal.ToString("N0")</td>
+                        <td class="text-end fw-bold" style="color: #0A2B1D;">@TotalServer.ToString("N0")</td>
+                        <td class="text-end fw-bold @DiffClass(TotalLocal - TotalServer)">@DiffText(TotalLocal - TotalServer)</td>
                         <td colspan="5"></td>
                     </tr>
                 </tfoot>
@@ -402,15 +451,15 @@
     </div>
 
     <div class="legend mt-3">
-        <span><span class="pill pill-yellow">Pending push</span> device has records the server doesn’t</span>
-        <span><span class="pill pill-blue">Pending pull</span> server has records the device doesn’t</span>
-        <span><span class="pill pill-red">Conflict</span> same count, different content</span>
+        <span><span class="pill pill-moss me-1">Pending push</span> device has records the server doesn’t</span>
+        <span><span class="pill pill-leaf me-1">Pending pull</span> server has records the device doesn’t</span>
+        <span><span class="pill pill-earth me-1">Conflict</span> same count, different content</span>
     </div>
 }
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+    <div class="toast-note shadow-lg"><i class="bi bi-check-circle-fill"></i> @toast</div>
 }
 
 @code {
@@ -520,10 +569,10 @@
     };
 
     List<Stat> Stats => new() {
-        new("Server Status", serverOnline ? "Online" : "Offline", $"Latency: {latencyMs}ms", serverOnline ? "bi-check-circle" : "bi-x-circle", serverOnline ? "text-success" : "text-danger"),
-        new("Pending Syncs", tenants.Count(t => t.Status != "Synced").ToString(), "Tenants not yet synced", "bi-arrow-repeat", ""),
-        new("Last Backup", "BKP-118", "1 hour ago", "bi-clock-history", ""),
-        new("Storage Used", Size(backupUsedMb), $"of {Size(backupQuotaMb)}", "bi-hdd", "")
+        new("SERVER STATUS", serverOnline ? "Online" : "Offline", $"Latency: {latencyMs}ms", serverOnline ? "bi-check-circle-fill" : "bi-x-circle-fill", serverOnline ? "" : "stat-icon-earth"),
+        new("PENDING SYNCS", tenants.Count(t => t.Status != "Synced").ToString(), "Tenants not yet synced", "bi-arrow-repeat", "stat-icon-moss"),
+        new("LAST BACKUP", "BKP-118", "1 hour ago", "bi-clock-history", ""),
+        new("STORAGE USED", Size(backupUsedMb), $"of {Size(backupQuotaMb)}", "bi-hdd-fill", "")
     };
 
     List<SyncTenant> FilteredTenants => tenants
@@ -544,7 +593,7 @@
     async Task TestConnectionAsync()
     {
         testing = true;
-        await Task.Delay(1500); // Simulate API call
+        await Task.Delay(1500);
         testing = false;
         Toast("Connection successful. Server is online.");
     }
@@ -609,26 +658,34 @@
         Toast($"Re-sync requested for {r.Entity}.");
     }
 
-    // ---------- HELPERS ----------
+    // ---------- HELPERS (AgriNexus Logo Palette: Forest, Leaf, Moss, Soil Brown) ----------
     int PushCount(string code) => code == "SRF-003" ? 15 : 0;
     int PullCount(string code) => code == "GRN-004" ? 8 : 0;
     int ConflictCount(string code) => code == "SRF-003" ? 2 : 0;
 
     string StatusClass(string status) => status switch
     {
-        "Synced" => "pill-green",
-        "Pending" => "pill-yellow",
-        "Offline" => "pill-red",
-        _ => "pill-gray"
+        "Synced" => "pill-forest",
+        "Pending" => "pill-moss",
+        "Offline" => "pill-earth",
+        _ => "pill-sage"
     };
 
-    string NumClass(int num) => num > 0 ? "text-danger fw-bold" : "";
+    string StatusIcon(string status) => status switch
+    {
+        "Synced" => "bi-cloud-check-fill",
+        "Pending" => "bi-hourglass-split",
+        "Offline" => "bi-wifi-off",
+        _ => "bi-dot"
+    };
+
+    string NumClass(int num) => num > 0 ? "text-earth fw-bold" : "text-muted";
     string RestoreClass(string status) => status switch
     {
-        "Pending" => "pill-yellow",
-        "Approved" => "pill-green",
-        "Declined" => "pill-red",
-        _ => "pill-gray"
+        "Pending" => "pill-moss",
+        "Approved" => "pill-forest",
+        "Declined" => "pill-earth",
+        _ => "pill-sage"
     };
 
     string RowStatus(CompareRow r)
@@ -642,23 +699,20 @@
 
     string RowClass(string status) => status switch
     {
-        "Match" => "pill-green",
-        "Pending push" => "pill-yellow",
-        "Pending pull" => "pill-blue",
-        "Conflict" => "pill-red",
-        "Queued" => "pill-gray",
-        _ => "pill-gray"
+        "Match" => "pill-forest",
+        "Pending push" => "pill-moss",
+        "Pending pull" => "pill-leaf",
+        "Conflict" => "pill-earth",
+        "Queued" => "pill-sage",
+        _ => "pill-sage"
     };
 
-    string DiffClass(int diff) => diff != 0 ? "text-danger" : "";
+    string DiffClass(int diff) => diff != 0 ? "text-earth" : "text-muted";
     string DiffText(int diff) => diff > 0 ? $"+{diff}" : diff.ToString();
     bool ChecksumOk(CompareRow r) => r.ContentOk;
 
     int Pct(double used, double quota) => (int)Math.Min(100, (used / quota) * 100);
-
-    // Gi-ayo ang Size method para dili mag-error
     string Size(double mb) => mb >= 1024 ? $"{mb / 1024:0.0} GB" : $"{mb:0} MB";
-
     string Dur(int sec) => $"{sec}s";
 
     async void Toast(string message)

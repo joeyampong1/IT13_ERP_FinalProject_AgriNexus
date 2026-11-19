@@ -1,6 +1,6 @@
-/* CSS for BusinessSetting component */
+/* CSS for BusinessSettings component */
 .page-title {
-    font-weight: 700;
+    font-weight: 800;
     font-size: 2rem;
     letter-spacing: -0.5px;
     color: #0A2B1D;
@@ -11,106 +11,191 @@
     font-size: .95rem;
 }
 
+/* ---------- BUTTONS ---------- */
+.btn-outline-lg {
+    background: #FFFFFF;
+    border: 1px solid #E2ECE6;
+    border-radius: 12px;
+    padding: .55rem 1.15rem;
+    font-weight: 600;
+    font-size: .88rem;
+    color: #0A2B1D;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+    .btn-outline-lg:hover {
+        background: #F4F8F5;
+        border-color: #1B5E34;
+        color: #1B5E34;
+    }
+
+.btn-save {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #0A2B1D 0%, #1B5E34 100%);
+    color: #FFFFFF;
+    border: 0;
+    border-radius: 12px;
+    padding: .6rem 1.35rem;
+    font-weight: 600;
+    font-size: .9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+    .btn-save:hover:not(:disabled) {
+        background: linear-gradient(135deg, #0D3826 0%, #227340 100%);
+        transform: translateY(-1px);
+    }
+
 /* ---------- STAT CARDS ---------- */
 .stat-card {
+    background-color: #FFFFFF;
+    border: 1px solid #E2ECE6;
     border-radius: 16px;
     padding: 20px 22px;
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(10, 43, 29, 0.07);
+    }
 
     .stat-card .card-title {
         font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #64748B;
         margin-bottom: 0;
         line-height: 1.3;
     }
 
     .stat-card .card-value {
         font-size: 1.7rem;
+        font-weight: 800;
+        color: #0A2B1D;
         letter-spacing: -0.5px;
     }
 
 .stat-icon {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     flex-shrink: 0;
     border-radius: 10px;
-    background: #E8EEEA;
-    color: #1B4D2E;
+    background: #E8F3EC;
+    color: #1B5E34;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    font-size: 1.05rem;
 }
 
-.stat-icon-plain {
-    background: transparent;
+.stat-icon-leaf {
+    background: #EEF6E8;
+    color: #4E8D2A;
+}
+
+.stat-icon-earth {
+    background: #F5EFEA;
+    color: #7A5230;
 }
 
 /* ---------- PROFILE CARD ---------- */
 .card-box {
-    background: #fff;
-    border: 1px solid var(--border-color);
+    background: #FFFFFF;
+    border: 1px solid #E2ECE6;
     border-radius: 16px;
-    padding: 1.5rem 1.5rem 1.6rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    padding: 1.5rem 1.6rem;
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
 }
 
 .panel-title {
-    font-weight: 700;
-    font-size: 1.05rem;
+    font-weight: 800;
+    font-size: 1.08rem;
     color: #0A2B1D;
 }
 
 .panel-sub {
-    font-size: .8rem;
-    color: var(--text-muted);
+    font-size: .82rem;
+    color: #64748B;
     margin-bottom: 1rem;
 }
 
-/* ---------- FORM ---------- */
+/* ---------- FORM & INPUTS ---------- */
 .card-box .form-label {
-    font-size: .9rem;
-    font-weight: 500;
+    font-size: .86rem;
+    font-weight: 600;
+    color: #0A2B1D;
     margin-bottom: .35rem;
 }
 
-.card-box .form-control,
-.card-box .form-select {
-    border-radius: 10px;
-    border: 1px solid var(--border-color);
+.modern-input .input-group-text {
+    background-color: #F7FAF8;
+    border: 1px solid #DCE6E0;
+    border-right: 0;
+    border-radius: 10px 0 0 10px;
+    color: #1B5E34;
+}
+
+.modern-input .form-control,
+.modern-input .form-select {
+    border-radius: 0 10px 10px 0;
+    border: 1px solid #DCE6E0;
     padding: .55rem .8rem;
     font-size: .9rem;
 }
 
-    .card-box .form-control:focus,
-    .card-box .form-select:focus {
-        border-color: var(--primary-green);
-        box-shadow: 0 0 0 .15rem rgba(56, 142, 60, .15);
+.card-box textarea.form-control {
+    border-radius: 10px;
+    border: 1px solid #DCE6E0;
+    padding: .6rem .85rem;
+    font-size: .9rem;
+}
+
+    .modern-input .form-control:focus,
+    .modern-input .form-select:focus,
+    .card-box textarea.form-control:focus {
+        border-color: #1B5E34;
+        box-shadow: 0 0 0 .18rem rgba(27, 94, 52, .14);
     }
 
 .req {
-    color: #DC2626;
+    color: #7A5230;
 }
 
 .err {
-    color: #DC2626;
-    font-size: .75rem;
+    color: #7A5230;
+    font-size: .78rem;
+    font-weight: 500;
     margin-top: 4px;
 }
 
-.btn-save {
-    background: #1B5E34;
-    color: #fff;
-    border: 0;
-    border-radius: 10px;
-    padding: .55rem 1.1rem;
-    font-weight: 600;
-    font-size: .9rem;
-    cursor: pointer;
+/* ---------- PILLS ---------- */
+.pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    border: 1px solid transparent;
 }
 
-    .btn-save:hover {
-        background: #144A29;
-    }
+.pill-forest {
+    background: #E8F3EC;
+    color: #1B5E34;
+    border-color: #C6DFCE;
+}
+
+.pill-earth {
+    background: #F5EFEA;
+    color: #7A5230;
+    border-color: #E2D3C5;
+}
 
 /* ---------- TOAST ---------- */
 .toast-note {
@@ -121,14 +206,13 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    max-width: 380px;
-    background: #fff;
-    border: 1px solid #CFE0D4;
-    border-left: 4px solid #1B5E34;
-    color: #1B4D2E;
+    max-width: 400px;
+    background: #0A2B1D;
+    border: 1px solid #1B5E34;
+    color: #FFFFFF;
     border-radius: 12px;
-    padding: .75rem 1.1rem;
+    padding: .8rem 1.15rem;
     font-size: .88rem;
     font-weight: 500;
-    box-shadow: 0 10px 25px rgba(0,0,0,.15);
+    box-shadow: 0 10px 25px rgba(10, 43, 29, 0.2);
 }

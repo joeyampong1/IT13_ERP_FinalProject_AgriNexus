@@ -1,25 +1,27 @@
 ﻿@inject AgriNexus.Services.AuthService Auth
+@inject AgriNexus.Services.RolePermissionService PermissionService
+@implements IDisposable
 
 <!-- Brand / Logo -->
 <div class="navbar-brand">
     <img src="images/AgriNexus_finalogo.png" alt="AgriNexus" class="brand-logo" />
     <div class="d-flex flex-column w-100 justify-content-center">
         <span class="brand-title">
-            <span style="color: #FFFFFF;">Agri</span><span style="color: #84CC16;">Nexus</span>
+            <span style="color: #FFFFFF;">Agri</span><span style="color: #A7F3D0;">Nexus</span>
         </span>
         <span class="brand-subtitle">Enterprise Resource Planning</span>
     </div>
 </div>
 
-<!-- User Profile Box -->
-<div class="user-profile-box">
+<!-- User Profile Box (Clickable to /profile) -->
+<NavLink href="/profile" class="user-profile-box text-decoration-none d-block" title="View & Edit Profile">
     <div class="profile-label">SIGNED IN AS</div>
     <div class="profile-name">@Auth.CurrentUserName</div>
     <div class="profile-role">
-        <i class="bi bi-shield-lock"></i>
+        <i class="bi bi-shield-lock-fill"></i>
         <span>@Auth.AccessLevel</span>
     </div>
-</div>
+</NavLink>
 
 <!-- Scrollable Navigation Area -->
 <div class="nav-scrollable">
@@ -28,41 +30,46 @@
         <!-- ========================================== -->
         <!-- OVERVIEW (Dynamic Dashboard per Role)      -->
         <!-- ========================================== -->
-        <div class="nav-section-title">OVERVIEW</div>
-        <div class="nav-item">
-            @if (Auth.CurrentRole == AgriNexus.Services.UserRole.SuperAdmin)
-            {
-                <NavLink class="nav-link" href="/dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
-            }
-            else if (Auth.CurrentRole == AgriNexus.Services.UserRole.TenantAdmin)
-            {
-                <NavLink class="nav-link" href="/business-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
-            }
-            else if (Auth.CurrentRole == AgriNexus.Services.UserRole.BranchManager)
-            {
-                <NavLink class="nav-link" href="/branch-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
-            }
-            else if (Auth.CurrentRole == AgriNexus.Services.UserRole.InventoryOfficer)
-            {
-                <NavLink class="nav-link" href="/inventory-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
-            }
-            else if (Auth.CurrentRole == AgriNexus.Services.UserRole.LaborOfficer)
-            {
-                <NavLink class="nav-link" href="/labor-harvest-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
-            }
-            else if (Auth.CurrentRole == AgriNexus.Services.UserRole.SalesOfficer)
-            {
-                <NavLink class="nav-link" href="/sales-cashier-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
-            }
-            else if (Auth.CurrentRole == AgriNexus.Services.UserRole.Accountant)
-            {
-                <NavLink class="nav-link" href="/finance-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
-            }
-            else
-            {
-                <NavLink class="nav-link" href="/dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
-            }
-        </div>
+        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.SuperAdmin
+          || Auth.CurrentRole == AgriNexus.Services.UserRole.TenantAdmin
+          || CanAccess("dashboard"))
+        {
+            <div class="nav-section-title">OVERVIEW</div>
+            <div class="nav-item">
+                @if (Auth.CurrentRole == AgriNexus.Services.UserRole.SuperAdmin)
+                {
+                    <NavLink class="nav-link" href="/dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.TenantAdmin)
+                {
+                    <NavLink class="nav-link" href="/business-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.BranchManager)
+                {
+                    <NavLink class="nav-link" href="/branch-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.InventoryOfficer)
+                {
+                    <NavLink class="nav-link" href="/inventory-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.LaborOfficer)
+                {
+                    <NavLink class="nav-link" href="/labor-harvest-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.SalesOfficer)
+                {
+                    <NavLink class="nav-link" href="/sales-cashier-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+                }
+                else if (Auth.CurrentRole == AgriNexus.Services.UserRole.Accountant)
+                {
+                    <NavLink class="nav-link" href="/finance-dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+                }
+                else
+                {
+                    <NavLink class="nav-link" href="/dashboard" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> <span>Dashboard</span></NavLink>
+                }
+            </div>
+        }
 
         <!-- ========================================== -->
         <!-- 1. SUPER ADMIN                             -->
@@ -78,7 +85,9 @@
             <div class="nav-item"><NavLink class="nav-link" href="/reports"><i class="bi bi-bar-chart-line"></i> <span>Reports & Analytics</span></NavLink></div>
         }
 
-        <!-- TENANT ADMIN -->
+        <!-- ========================================== -->
+        <!-- 2. TENANT ADMIN (Full Business Access)     -->
+        <!-- ========================================== -->
         @if (Auth.CurrentRole == AgriNexus.Services.UserRole.TenantAdmin)
         {
             <div class="nav-section-title">BUSINESS</div>
@@ -119,97 +128,140 @@
         }
 
         <!-- ========================================== -->
-        <!-- 3. BRANCH MANAGER                          -->
+        <!-- 3. STAFF ROLES (Dynamic Permissions)       -->
         <!-- ========================================== -->
-        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.BranchManager)
+        @if (IsStaffRole)
         {
-            <div class="nav-section-title">BUSINESS</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/tenant-reports"><i class="bi bi-bar-chart"></i> <span>Consolidated Reports</span></NavLink></div>
+            <!-- BUSINESS -->
+            @if (CanAccessAny("branches", "staff", "subscription", "consolidated-reports", "business-settings"))
+            {
+                <div class="nav-section-title">BUSINESS</div>
+                @if (CanAccess("branches"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/branches"><i class="bi bi-shop"></i> <span>Branches</span></NavLink></div>
+                }
+                @if (CanAccess("staff"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/staff"><i class="bi bi-people"></i> <span>Staff & Permissions</span></NavLink></div>
+                }
+                @if (CanAccess("subscription"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/my-subscription"><i class="bi bi-credit-card"></i> <span>My Subscription</span></NavLink></div>
+                }
+                @if (CanAccess("consolidated-reports"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/tenant-reports"><i class="bi bi-bar-chart"></i> <span>Consolidated Reports</span></NavLink></div>
+                }
+                @if (CanAccess("business-settings"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/business-settings"><i class="bi bi-gear"></i> <span>Business Settings</span></NavLink></div>
+                }
+            }
 
-            <div class="nav-section-title">FARM OPERATIONS</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/farms"><i class="bi bi-map"></i> <span>Farms & Plots</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/crops"><i class="bi bi-flower1"></i> <span>Crop Planning</span></NavLink></div>
+            <!-- FARM OPERATIONS -->
+            @if (CanAccessAny("farms-plots", "crop-planning"))
+            {
+                <div class="nav-section-title">FARM OPERATIONS</div>
+                @if (CanAccess("farms-plots"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/farms"><i class="bi bi-map"></i> <span>Farms & Plots</span></NavLink></div>
+                }
+                @if (CanAccess("crop-planning"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/crops"><i class="bi bi-flower1"></i> <span>Crop Planning</span></NavLink></div>
+                }
+            }
 
-            <div class="nav-section-title">INVENTORY</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/inventory"><i class="bi bi-box-seam"></i> <span>Inventory</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/stock"><i class="bi bi-arrow-left-right"></i> <span>Stock Movements</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/suppliers"><i class="bi bi-truck"></i> <span>Suppliers</span></NavLink></div>
+            <!-- INVENTORY -->
+            @if (CanAccessAny("inventory", "stock-movements", "suppliers"))
+            {
+                <div class="nav-section-title">INVENTORY</div>
+                @if (CanAccess("inventory"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/inventory"><i class="bi bi-box-seam"></i> <span>Inventory</span></NavLink></div>
+                }
+                @if (CanAccess("stock-movements"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/stock"><i class="bi bi-arrow-left-right"></i> <span>Stock Movements</span></NavLink></div>
+                }
+                @if (CanAccess("suppliers"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/suppliers"><i class="bi bi-truck"></i> <span>Suppliers</span></NavLink></div>
+                }
+            }
 
-            <div class="nav-section-title">LABOR & HARVEST</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/workers"><i class="bi bi-person-badge"></i> <span>Workers</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/assignments"><i class="bi bi-clipboard-check"></i> <span>Work Assignments</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/attendance"><i class="bi bi-clock-history"></i> <span>Attendance & Logs</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/harvest"><i class="bi bi-basket"></i> <span>Harvest Recording</span></NavLink></div>
+            <!-- LABOR & HARVEST -->
+            @if (CanAccessAny("workers", "work-assignments", "attendance-logs", "harvest-recording"))
+            {
+                <div class="nav-section-title">LABOR & HARVEST</div>
+                @if (CanAccess("workers"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/workers"><i class="bi bi-person-badge"></i> <span>Workers</span></NavLink></div>
+                }
+                @if (CanAccess("work-assignments"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/assignments"><i class="bi bi-clipboard-check"></i> <span>Work Assignments</span></NavLink></div>
+                }
+                @if (CanAccess("attendance-logs"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/attendance"><i class="bi bi-clock-history"></i> <span>Attendance & Logs</span></NavLink></div>
+                }
+                @if (CanAccess("harvest-recording"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/harvest"><i class="bi bi-basket"></i> <span>Harvest Recording</span></NavLink></div>
+                }
+            }
 
-            <div class="nav-section-title">SALES & CASHIER</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/new-sale"><i class="bi bi-cart-plus"></i> <span>New Sale</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/sales"><i class="bi bi-receipt"></i> <span>Sales Transactions</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/customers"><i class="bi bi-person"></i> <span>Customers</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/payments"><i class="bi bi-cash-coin"></i> <span>Payments & Collections</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/cash-drawer"><i class="bi bi-cash-stack"></i> <span>Cash Drawer</span></NavLink></div>
+            <!-- SALES & CASHIER -->
+            @if (CanAccessAny("new-sale", "sales-transactions", "customers", "payments-collections", "cash-drawer"))
+            {
+                <div class="nav-section-title">SALES & CASHIER</div>
+                @if (CanAccess("new-sale"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/new-sale"><i class="bi bi-cart-plus"></i> <span>New Sale</span></NavLink></div>
+                }
+                @if (CanAccess("sales-transactions"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/sales"><i class="bi bi-receipt"></i> <span>Sales Transactions</span></NavLink></div>
+                }
+                @if (CanAccess("customers"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/customers"><i class="bi bi-person"></i> <span>Customers</span></NavLink></div>
+                }
+                @if (CanAccess("payments-collections"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/payments"><i class="bi bi-cash-coin"></i> <span>Payments & Collections</span></NavLink></div>
+                }
+                @if (CanAccess("cash-drawer"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/cash-drawer"><i class="bi bi-cash-stack"></i> <span>Cash Drawer</span></NavLink></div>
+                }
+            }
 
-            <div class="nav-section-title">FINANCE</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/expenses"><i class="bi bi-wallet"></i> <span>Expenses</span></NavLink></div>
-        }
+            <!-- FINANCE -->
+            @if (CanAccessAny("expenses", "production-costing", "financial-audit-trail"))
+            {
+                <div class="nav-section-title">FINANCE</div>
+                @if (CanAccess("expenses"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/expenses"><i class="bi bi-wallet"></i> <span>Expenses</span></NavLink></div>
+                }
+                @if (CanAccess("production-costing"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/costing"><i class="bi bi-layers"></i> <span>Production Costing</span></NavLink></div>
+                }
+                @if (CanAccess("financial-audit-trail"))
+                {
+                    <div class="nav-item"><NavLink class="nav-link" href="/audit"><i class="bi bi-shield-check"></i> <span>Financial Audit Trail</span></NavLink></div>
+                }
+            }
 
-        <!-- ========================================== -->
-        <!-- 4. INVENTORY OFFICER                       -->
-        <!-- ========================================== -->
-        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.InventoryOfficer)
-        {
-            <div class="nav-section-title">INVENTORY</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/inventory"><i class="bi bi-box-seam"></i> <span>Inventory</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/stock"><i class="bi bi-arrow-left-right"></i> <span>Stock Movements</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/suppliers"><i class="bi bi-truck"></i> <span>Suppliers</span></NavLink></div>
-        }
-
-        <!-- ========================================== -->
-        <!-- 5. LABOR & HARVEST OFFICER                 -->
-        <!-- ========================================== -->
-        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.LaborOfficer)
-        {
-            <div class="nav-section-title">LABOR & HARVEST</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/workers"><i class="bi bi-person-badge"></i> <span>Workers</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/assignments"><i class="bi bi-clipboard-check"></i> <span>Work Assignments</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/attendance"><i class="bi bi-clock-history"></i> <span>Attendance & Logs</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/harvest"><i class="bi bi-basket"></i> <span>Harvest Recording</span></NavLink></div>
-        }
-
-        <!-- ========================================== -->
-        <!-- 6. SALES & CASHIER OFFICER                 -->
-        <!-- ========================================== -->
-        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.SalesOfficer)
-        {
-            <div class="nav-section-title">SALES & CASHIER</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/new-sale"><i class="bi bi-cart-plus"></i> <span>New Sale</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/sales"><i class="bi bi-receipt"></i> <span>Sales Transactions</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/customers"><i class="bi bi-person"></i> <span>Customers</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/payments"><i class="bi bi-cash-coin"></i> <span>Payments & Collections</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/cash-drawer"><i class="bi bi-cash-stack"></i> <span>Cash Drawer</span></NavLink></div>
-        }
-
-        <!-- ========================================== -->
-        <!-- 7. ACCOUNTANT / FINANCE OFFICER            -->
-        <!-- ========================================== -->
-        @if (Auth.CurrentRole == AgriNexus.Services.UserRole.Accountant)
-        {
-            <div class="nav-section-title">INVENTORY</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/stock"><i class="bi bi-arrow-left-right"></i> <span>Stock Movements</span></NavLink></div>
-
-            <div class="nav-section-title">LABOR & HARVEST</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/attendance"><i class="bi bi-clock-history"></i> <span>Attendance & Logs</span></NavLink></div>
-
-            <div class="nav-section-title">SALES & CASHIER</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/sales"><i class="bi bi-receipt"></i> <span>Sales Transactions</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/payments"><i class="bi bi-cash-coin"></i> <span>Payments & Collections</span></NavLink></div>
-
-            <div class="nav-section-title">FINANCE</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/expenses"><i class="bi bi-wallet"></i> <span>Expenses</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/costing"><i class="bi bi-layers"></i> <span>Production Costing</span></NavLink></div>
-            <div class="nav-item"><NavLink class="nav-link" href="/audit"><i class="bi bi-shield-check"></i> <span>Financial Audit Trail</span></NavLink></div>
-
-            <div class="nav-section-title">REPORTS & ANALYTICS</div>
-            <div class="nav-item"><NavLink class="nav-link" href="/finance-analytics"><i class="bi bi-graph-up"></i> <span>Reports & Analytics</span></NavLink></div>
+            <!-- REPORTS & ANALYTICS -->
+            @if (CanAccess("financial-reports"))
+            {
+                <div class="nav-section-title">REPORTS & ANALYTICS</div>
+                <div class="nav-item"><NavLink class="nav-link" href="/finance-analytics"><i class="bi bi-graph-up"></i> <span>Reports & Analytics</span></NavLink></div>
+            }
         }
 
     </nav>
@@ -217,6 +269,33 @@
 
 <!-- Sidebar Footer -->
 <div class="sidebar-footer">
-    <p class="mb-1">ERP System - IT13 </p>
+    <p class="mb-1 fw-semibold text-white-50">AgriNexus ERP v2.0</p>
     <p class="mb-0">Agribusiness Management System</p>
 </div>
+
+@code {
+    private bool IsStaffRole =>
+        Auth.CurrentRole != AgriNexus.Services.UserRole.SuperAdmin &&
+        Auth.CurrentRole != AgriNexus.Services.UserRole.TenantAdmin;
+
+    private bool CanAccess(string moduleKey) =>
+        PermissionService.HasAccess(Auth.CurrentRole.ToString(), moduleKey);
+
+    private bool CanAccessAny(params string[] moduleKeys) =>
+        moduleKeys.Any(k => PermissionService.HasAccess(Auth.CurrentRole.ToString(), k));
+
+    protected override void OnInitialized()
+    {
+        PermissionService.OnPermissionsChanged += HandlePermissionsChanged;
+    }
+
+    private void HandlePermissionsChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        PermissionService.OnPermissionsChanged -= HandlePermissionsChanged;
+    }
+}

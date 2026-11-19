@@ -1,8 +1,13 @@
 ﻿@page "/dashboard"
 
-<div class="mb-4">
-    <h2 class="dash-title">Dashboard</h2>
-    <p class="text-muted mb-0 dash-sub">Platform-wide view of registered businesses, subscription revenue, synchronization, and system activity.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="dash-title">Dashboard</h2>
+        <p class="text-muted mb-0 dash-sub">Platform-wide view of registered businesses, subscription revenue, synchronization, and system activity.</p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-broadcast me-1"></i> Platform Overview
+    </span>
 </div>
 
 <!-- STAT CARDS -->
@@ -17,7 +22,10 @@
                 </div>
                 <div class="mt-3">
                     <div class="card-value">@s.Value</div>
-                    <div class="text-muted small mt-1">@s.Note</div>
+                    <div class="text-muted small mt-1 d-flex align-items-center gap-1">
+                        <i class="bi @s.NoteIcon" style="color: #1B5E34;"></i>
+                        <span>@s.Note</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -28,15 +36,27 @@
 <div class="row g-3 mb-4">
     <div class="col-12 col-lg-8">
         <div class="stat-card h-100">
-            <div class="panel-title">Recurring revenue by plan</div>
-            <div class="panel-sub">Monthly amount per subscription plan</div>
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <div class="panel-title">Recurring revenue by plan</div>
+                    <div class="panel-sub">Monthly amount per subscription plan</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-bar-chart-fill"></i></div>
+            </div>
 
             <svg viewBox="0 0 640 300" class="w-100" style="max-height:320px" role="img" aria-label="Recurring revenue by plan">
+                <defs>
+                    <linearGradient id="agriBarGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#1B5E34" />
+                        <stop offset="100%" stop-color="#0A2B1D" />
+                    </linearGradient>
+                </defs>
+
                 @for (int i = 0; i <= 4; i++)
                 {
                     var y = 20 + i * 60;
                     <g>
-                        <line x1="50" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                        <line x1="50" x2="630" y1="@y" y2="@y" stroke="#E2ECE6" stroke-dasharray="3 4" />
                         <text x="40" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@((16 - i * 4))k</text>
                     </g>
                 }
@@ -45,9 +65,11 @@
                     var r = revenue[i];
                     var h = r.Amount / 16000.0 * 240;
                     var x = 70 + i * 140;
+                    var barY = 260 - h;
                     <g>
-                        <rect x="@x" y="@((260 - h).ToString("0.##"))" width="110" height="@h.ToString("0.##")" rx="6" fill="#206A3B" />
-                        <text x="@(x + 55)" y="282" text-anchor="middle" font-size="11" fill="#475569">@r.Plan</text>
+                        <rect x="@x" y="@barY.ToString("0.##")" width="110" height="@h.ToString("0.##")" rx="8" fill="url(#agriBarGrad)" />
+                        <text x="@(x + 55)" y="@((barY - 6).ToString("0.##"))" text-anchor="middle" font-size="11" font-weight="700" fill="#0A2B1D">₱@((r.Amount / 1000.0).ToString("0.#"))k</text>
+                        <text x="@(x + 55)" y="282" text-anchor="middle" font-size="11" font-weight="600" fill="#475569">@r.Plan</text>
                     </g>
                 }
             </svg>
@@ -56,8 +78,13 @@
 
     <div class="col-12 col-lg-4">
         <div class="stat-card h-100">
-            <div class="panel-title">Tenant status</div>
-            <div class="panel-sub">Distribution of registered businesses</div>
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <div>
+                    <div class="panel-title">Tenant status</div>
+                    <div class="panel-sub">Distribution of registered businesses</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-pie-chart-fill"></i></div>
+            </div>
 
             <div class="d-flex justify-content-center my-3">
                 <svg viewBox="0 0 200 200" width="210" height="210" role="img" aria-label="Tenant status">
@@ -65,19 +92,21 @@
                     @foreach (var t in tenantStatus)
                     {
                         var len = t.Count / (double)tenantTotal * circ;
-                        <circle cx="100" cy="100" r="@radius" fill="none" stroke="@t.Color" stroke-width="30"
+                        <circle cx="100" cy="100" r="@radius" fill="none" stroke="@t.Color" stroke-width="28"
                                 stroke-dasharray="@((len - 3).ToString("0.##")) @((circ - len + 3).ToString("0.##"))"
                                 stroke-dashoffset="@((-offset).ToString("0.##"))"
                                 transform="rotate(-90 100 100)" />
                         offset += len;
                     }
+                    <text x="100" y="96" text-anchor="middle" font-size="24" font-weight="800" fill="#0A2B1D">@tenantTotal</text>
+                    <text x="100" y="114" text-anchor="middle" font-size="10" font-weight="600" fill="#64748B">TOTAL TENANTS</text>
                 </svg>
             </div>
 
             <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
                 @foreach (var t in tenantStatus)
                 {
-                    <span><span class="legend-dot" style="background:@t.Color"></span>@t.Label · @t.Count</span>
+                    <span class="fw-medium"><span class="legend-dot" style="background:@t.Color"></span>@t.Label · <strong class="text-dark">@t.Count</strong></span>
                 }
             </div>
         </div>
@@ -88,8 +117,13 @@
 <div class="row g-3">
     <div class="col-12 col-lg-5">
         <div class="stat-card h-100">
-            <div class="panel-title">Synchronization status monitoring</div>
-            <div class="panel-sub">Tenants flagged as pending or offline</div>
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <div class="panel-title">Synchronization status monitoring</div>
+                    <div class="panel-sub">Tenants flagged as pending or offline</div>
+                </div>
+                <div class="stat-icon stat-icon-warn"><i class="bi bi-cloud-slash-fill"></i></div>
+            </div>
             <div class="table-responsive">
                 <table class="table dash-table align-middle mb-0">
                     <thead><tr><th>Business</th><th>Sync</th><th>Last sync</th></tr></thead>
@@ -97,9 +131,15 @@
                     @foreach (var s in syncRows)
                     {
                         <tr>
-                            <td>@s.Business</td>
-                            <td><span class="pill @(s.Status == "Pending" ? "pill-warn" : "pill-danger")">@s.Status</span></td>
-                            <td>@s.LastSync</td>
+                            <td class="fw-semibold text-dark">
+                                <i class="bi bi-building text-success me-2"></i>@s.Business
+                            </td>
+                            <td>
+                                <span class="pill @(s.Status == "Pending" ? "pill-warn" : "pill-danger")">
+                                    <i class="bi @(s.Status == "Pending" ? "bi-hourglass-split" : "bi-wifi-off") me-1"></i>@s.Status
+                                </span>
+                            </td>
+                            <td class="text-muted small">@s.LastSync</td>
                         </tr>
                     }
                     </tbody>
@@ -110,12 +150,12 @@
 
     <div class="col-12 col-lg-7">
         <div class="stat-card h-100">
-            <div class="d-flex justify-content-between align-items-start">
+            <div class="d-flex justify-content-between align-items-start mb-2">
                 <div>
                     <div class="panel-title">System-wide audit logs</div>
                     <div class="panel-sub">Latest platform activity</div>
                 </div>
-                <i class="bi bi-shield-check text-muted"></i>
+                <div class="stat-icon"><i class="bi bi-shield-check"></i></div>
             </div>
             <div class="table-responsive">
                 <table class="table dash-table align-middle mb-0">
@@ -124,10 +164,16 @@
                     @foreach (var a in auditRows)
                     {
                         <tr>
-                            <td>@a.Actor</td>
-                            <td><span class="pill pill-muted">@a.Action</span></td>
-                            <td>@a.Module</td>
-                            <td class="text-nowrap">@a.When</td>
+                            <td class="fw-semibold text-dark">
+                                <i class="bi bi-person-circle text-muted me-2"></i>@a.Actor
+                            </td>
+                            <td>
+                                <span class="pill @GetActionPillClass(a.Action)">
+                                    <i class="bi @GetActionIcon(a.Action) me-1"></i>@a.Action
+                                </span>
+                            </td>
+                            <td class="text-dark">@a.Module</td>
+                            <td class="text-nowrap text-muted small">@a.When</td>
                         </tr>
                     }
                     </tbody>
@@ -138,30 +184,35 @@
 </div>
 
 @code {
-    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass, string NoteIcon);
     record Rev(string Plan, int Amount);
     record TenantSlice(string Label, int Count, string Color);
     record SyncRow(string Business, string Status, string LastSync);
     record AuditRow(string Actor, string Action, string Module, string When);
 
-    // ---- TEMPORARY DATA (ilisi sa database later) ----
+    // Temporary prototype data
     readonly List<Stat> stats = new()
     {
-        new("REGISTERED BUSINESSES", "5", "3 active · 1 on trial", "bi-buildings", ""),
-        new("ACTIVE SUBSCRIPTIONS", "3", "5 total records", "bi-credit-card", ""),
-        new("MONTHLY RECURRING REVENUE", "₱31,995.00", "Across all subscribed tenants", "bi-graph-up-arrow", ""),
-        new("SYNC ATTENTION", "3", "Tenants not fully synchronized", "bi-arrow-repeat", "stat-icon-warn"),
+        new("REGISTERED BUSINESSES", "5", "3 active · 1 on trial", "bi-buildings-fill", "", "bi-check-circle-fill"),
+        new("ACTIVE SUBSCRIPTIONS", "3", "5 total records", "bi-credit-card-2-front-fill", "", "bi-layers-fill"),
+        new("MONTHLY RECURRING REVENUE", "₱31,995.00", "Across all subscribed tenants", "bi-cash-stack", "", "bi-arrow-up-right-circle-fill"),
+        new("SYNC ATTENTION", "3", "Tenants not fully synchronized", "bi-arrow-repeat", "stat-icon-warn", "bi-exclamation-circle-fill"),
     };
 
     readonly List<Rev> revenue = new()
     {
-        new("Growth", 4000), new("Cooperative Custom", 15000),
-        new("Enterprise", 10000), new("Starter", 3000),
+        new("Growth", 4000),
+        new("Cooperative Custom", 15000),
+        new("Enterprise", 10000),
+        new("Starter", 3000),
     };
 
+    // Harmonized Deep Forest, Emerald, and Sage Donut Palette
     readonly List<TenantSlice> tenantStatus = new()
     {
-        new("Active", 3, "#206A3B"), new("Trial", 1, "#5FAA33"), new("Suspended", 1, "#92D050"),
+        new("Active", 3, "#1B5E34"),
+        new("Trial", 1, "#2E8B57"),
+        new("Suspended", 1, "#94A89C"),
     };
 
     readonly List<SyncRow> syncRows = new()
@@ -179,6 +230,23 @@
         new("Andres B. Cruz", "Login", "Platform", "Oct 21, 2026"),
         new("Marilou Pangan", "Create", "Harvest Recording", "Oct 20, 2026"),
         new("Cristina Yabut", "Create", "Stock Receiving", "Oct 20, 2026"),
+    };
+
+    private string GetActionPillClass(string action) => action switch
+    {
+        "Payment" => "pill-emerald",
+        "Create" => "pill-sage",
+        "Update" => "pill-warn",
+        _ => "pill-muted"
+    };
+
+    private string GetActionIcon(string action) => action switch
+    {
+        "Payment" => "bi-cash-coin",
+        "Create" => "bi-plus-circle",
+        "Update" => "bi-pencil-square",
+        "Login" => "bi-box-arrow-in-right",
+        _ => "bi-dot"
     };
 
     const double radius = 70;

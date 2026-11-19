@@ -6,7 +6,7 @@
 
 <div class="page">
     <!-- Sidebar Container -->
-    <div class="sidebar" style="background-color: #0A1F14 !important; background-image: none !important;">
+    <div class="sidebar">
         <NavMenu />
     </div>
 
@@ -20,24 +20,24 @@
                 <!-- 1. Dynamic Welcome Greeting -->
                 <div class="d-flex flex-column lh-sm d-none d-lg-block">
                     <span class="text-muted" style="font-size: 0.75rem; font-weight: 500;">Welcome back,</span>
-                    <span class="fw-bold text-dark" style="font-size: 1rem; letter-spacing: -0.3px;">
+                    <span class="fw-bold" style="color: #0A2B1D; font-size: 1rem; letter-spacing: -0.3px;">
                         @Auth.CurrentUserName
                     </span>
                 </div>
 
-                <div class="vr d-none d-lg-block text-secondary opacity-25"></div>
+                <div class="vr d-none d-lg-block opacity-25" style="color: #94A3B8;"></div>
 
-                <!-- 2. Sync Status Indicator (BAG-ONG DUNGAG) -->
+                <!-- 2. Sync Status Indicator -->
                 <div class="sync-pill @GetSyncClass()">
                     <i class="bi @GetSyncIcon() @(syncStatus == SyncStatus.Syncing ? "spin" : "")"></i>
                     <span class="d-none d-sm-inline">@GetSyncText()</span>
                 </div>
 
-                <div class="vr d-none d-sm-block text-secondary opacity-25"></div>
+                <div class="vr d-none d-sm-block opacity-25" style="color: #94A3B8;"></div>
 
-                <!-- 3. Current Date (Imbes nga Role Badge) -->
-                <span class="text-muted small d-none d-md-flex align-items-center gap-2">
-                    <i class="bi bi-calendar3 text-success"></i> @DateTime.Now.ToString("MMMM dd, yyyy")
+                <!-- 3. Current Date -->
+                <span class="text-muted small fw-medium d-none d-md-flex align-items-center gap-2">
+                    <i class="bi bi-calendar3" style="color: #1B5E34;"></i> @DateTime.Now.ToString("MMMM dd, yyyy")
                 </span>
 
             </div>
@@ -46,8 +46,8 @@
             <div class="user-menu">
                 <!-- Dropdown Button -->
                 <button class="user-menu-btn shadow-sm" @onclick="ToggleDropdown">
-                    <i class="bi bi-person-circle text-success fs-5"></i>
-                    <span class="fw-semibold text-dark d-none d-sm-inline">@Auth.CurrentUserName</span>
+                    <i class="bi bi-person-circle fs-5" style="color: #1B5E34;"></i>
+                    <span class="fw-semibold d-none d-sm-inline" style="color: #0A2B1D;">@Auth.CurrentUserName</span>
                     <i class="bi bi-chevron-down small text-muted ms-auto @(showDropdown ? "rot" : "")"></i>
                 </button>
 
@@ -57,8 +57,13 @@
                     <div class="user-menu-backdrop" @onclick="CloseDropdown"></div>
 
                     <div class="user-menu-list">
+                        <button class="user-menu-item" @onclick="GoToProfile">
+                            <i class="bi bi-person-circle" style="color: #1B5E34;"></i>
+                            <span>My Profile</span>
+                        </button>
+
                         <button class="user-menu-item" @onclick="GoToSettings">
-                            <i class="bi bi-gear text-success"></i>
+                            <i class="bi bi-gear" style="color: #1B5E34;"></i>
                             <span>Settings</span>
                         </button>
 
@@ -100,26 +105,29 @@
         NavManager.NavigateTo("/settings");
     }
 
-    // --- SYNC STATUS LOGIC (Mock para sa Prototype) ---
+    private void GoToProfile()
+    {
+        CloseDropdown();
+        NavManager.NavigateTo("/profile");
+    }
+
+    // --- SYNC STATUS LOGIC ---
     public enum SyncStatus { Synced, Syncing, Offline }
     private SyncStatus syncStatus = SyncStatus.Synced;
     private System.Threading.Timer? _syncTimer;
 
     protected override void OnInitialized()
     {
-        // Simulate periodic background sync para makit-an sa panelista nga "buhay" ang system
         _syncTimer = new System.Threading.Timer(async _ =>
         {
-            // 1. Mag-syncing state
             syncStatus = SyncStatus.Syncing;
             await InvokeAsync(StateHasChanged);
 
-            // 2. Human sa 3 seconds, mobalik sa Synced
             await Task.Delay(3000);
             syncStatus = SyncStatus.Synced;
             await InvokeAsync(StateHasChanged);
 
-        }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20)); // Mo-trigger kada 20 seconds
+        }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20));
     }
 
     private string GetSyncClass() => syncStatus switch

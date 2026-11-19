@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using AgriNexus.Services;
 using Microsoft.EntityFrameworkCore;
-using AgriNexus.DataLayer; 
+using AgriNexus.DataLayer;
 
 namespace AgriNexus
 {
@@ -20,6 +20,8 @@ namespace AgriNexus
             builder.Services.AddMauiBlazorWebView();
 
             builder.Services.AddScoped<AuthService>();
+            builder.Services.AddScoped<RegistrationStateService>();
+            builder.Services.AddSingleton<AgriNexus.Services.RolePermissionService>();
 
             // Register the Database Context with the connection string
             builder.Services.AddDbContext<AgriNexusDbContext>(options =>

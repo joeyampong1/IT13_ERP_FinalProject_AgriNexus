@@ -1,11 +1,11 @@
 /* =========================================
-   SUPER ADMIN REPORTS - PREMIUM STYLES
+   SUPER ADMIN REPORTS - AGRINEXUS THEME
    ========================================= */
 
 /* Page Headers */
 .page-title {
     font-weight: 800;
-    font-size: 1.85rem;
+    font-size: 2rem;
     letter-spacing: -0.5px;
     color: #0A2B1D;
     margin-bottom: 0.25rem;
@@ -13,89 +13,217 @@
 
 .page-sub {
     font-size: 0.95rem;
-    color: var(--text-muted);
+    color: #64748B;
 }
 
 /* =========================================
-   FORM INPUTS & DROPDOWNS
+   STAT CARDS & ICON BADGES
    ========================================= */
-.form-control, .form-select, .filter-select {
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 0.6rem 1rem;
-    font-size: 0.9rem;
-    color: var(--text-main);
-    box-shadow: none;
-    transition: all 0.2s ease;
-    background-color: #ffffff;
-}
-
-    .form-control:focus, .form-select:focus {
-        border-color: var(--primary-green);
-        box-shadow: 0 0 0 3px rgba(56, 142, 60, 0.15);
-    }
-
-/* Custom Filter Select Arrow */
-.filter-select {
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23388E3C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right center;
-    background-size: 1rem;
-    outline: none;
-}
-
-/* Green Checkboxes */
-input[type="checkbox"] {
-    accent-color: var(--primary-green);
-    width: 1rem;
-    height: 1rem;
-    cursor: pointer;
-}
-
-/* Dropdown Menu */
-.dropdown-menu {
-    border-radius: 10px;
-    border: 1px solid var(--border-color);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-    padding: 0.5rem;
-}
-
-.dropdown-item {
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.9rem;
-    font-weight: 500;
-    transition: background 0.2s;
-}
-
-    .dropdown-item:hover {
-        background-color: #F1F5F9;
-    }
-
-/* =========================================
-   CARDS & HOVER EFFECTS
-   ========================================= */
-.stat-card, .card-box {
+.stat-card {
+    background-color: #FFFFFF;
+    border: 1px solid #E2ECE6;
+    border-radius: 16px;
+    padding: 20px 22px;
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
     .stat-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 12px 25px rgba(0,0,0,0.06) !important;
+        box-shadow: 0 10px 22px rgba(10, 43, 29, 0.07);
     }
 
-    /* Mini KPI Cards (Ang gagmay sa ilawom sa main stats) */
+    .stat-card .card-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #64748B;
+        margin-bottom: 0;
+        line-height: 1.3;
+    }
+
+    .stat-card .card-value {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: #0A2B1D;
+        letter-spacing: -0.5px;
+    }
+
+.stat-icon {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: #E8F3EC;
+    color: #1B5E34;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+}
+
+.stat-icon-leaf {
+    background: #EEF6E8;
+    color: #3D7320;
+}
+
+.panel-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #0A2B1D;
+}
+
+.panel-sub {
+    font-size: 0.8rem;
+    color: #64748B;
+    margin-bottom: 0.75rem;
+}
+
+.text-forest {
+    color: #1B5E34 !important;
+}
+
+.text-leaf {
+    color: #4E8D2A !important;
+}
+
+.text-earth {
+    color: #7A5230 !important;
+}
+
+/* =========================================
+   FORM INPUTS, BUTTONS & DROPDOWNS
+   ========================================= */
+.form-control, .form-select, .filter-select {
+    border: 1.5px solid #DCE6E0;
+    border-radius: 10px;
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+    color: #0A2B1D;
+    box-shadow: none;
+    transition: all 0.2s ease;
+    background-color: #FFFFFF;
+}
+
+    .form-control:focus, .form-select:focus {
+        border-color: #1B5E34;
+        box-shadow: 0 0 0 3px rgba(27, 94, 52, 0.15);
+    }
+
+.filter-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231B5E34' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: 1rem;
+    outline: none;
+    color: #0A2B1D;
+}
+
+.btn-agrinexus {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #0A2B1D 0%, #1B5E34 100%);
+    color: #FFFFFF;
+    border: 0;
+    border-radius: 10px;
+    padding: 0.62rem 1.25rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+    .btn-agrinexus:hover:not(:disabled) {
+        background: linear-gradient(135deg, #0D3826 0%, #227340 100%);
+        transform: translateY(-1px);
+    }
+
+    .btn-agrinexus:disabled {
+        opacity: 0.75;
+        cursor: default;
+    }
+
+.report-control {
+    height: 44px;
+    border-radius: 10px;
+    padding: 0.55rem 1rem;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+}
+
+.btn-outline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #FFFFFF;
+    border: 1px solid #D5E6DC;
+    border-radius: 10px;
+    padding: 0.45rem 0.95rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #0A2B1D;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+    .btn-outline:hover {
+        background: #E8F3EC;
+        border-color: #1B5E34;
+        color: #1B5E34;
+    }
+
+input[type="checkbox"] {
+    accent-color: #1B5E34;
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+}
+
+.dropdown-menu {
+    border-radius: 12px;
+    border: 1px solid #E2ECE6;
+    box-shadow: 0 10px 25px rgba(10, 43, 29, 0.08);
+    padding: 0.5rem;
+}
+
+.dropdown-item {
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #0A2B1D;
+    transition: background 0.2s;
+}
+
+    .dropdown-item:hover {
+        background-color: #F4F8F5;
+    }
+
+/* =========================================
+   CARDS & MINI KPI BAR
+   ========================================= */
+.card-box {
+    background: #FFFFFF;
+    border: 1px solid #E2ECE6;
+    border-radius: 16px;
+    padding: 1.4rem 1.5rem;
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
     .card-box.py-2 {
-        background: #ffffff;
-        border: 1px solid var(--border-color);
+        background: #FFFFFF;
+        border: 1px solid #E2ECE6;
         transition: all 0.2s ease;
     }
 
         .card-box.py-2:hover {
-            background: #F8FAFC;
-            border-color: #CBD5E1;
+            background: #F7FAF8;
+            border-color: #C6DFCE;
             transform: translateY(-1px);
         }
 
@@ -106,13 +234,12 @@ svg text {
     font-family: 'Inter', sans-serif;
 }
 
-/* Hover effect sa mga bars ug points sa chart */
 svg rect, svg circle, svg polyline {
     transition: opacity 0.2s ease;
 }
 
     svg rect:hover, svg circle:hover {
-        opacity: 0.8;
+        opacity: 0.85;
         cursor: pointer;
     }
 
@@ -129,10 +256,9 @@ svg rect, svg circle, svg polyline {
    PROGRESS BARS (System Health)
    ========================================= */
 .progress {
-    background-color: #F1F5F9;
+    background-color: #E8F3EC;
     border-radius: 10px;
     overflow: hidden;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .progress-bar {
@@ -143,28 +269,53 @@ svg rect, svg circle, svg polyline {
 /* =========================================
    TABLES
    ========================================= */
+.panel {
+    background: #FFFFFF;
+    border: 1px solid #E2ECE6;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
+    overflow: hidden;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.tenant-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background-color: #E8F3EC;
+    color: #1B5E34;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
 .data-table {
     margin-bottom: 0;
     width: 100%;
 }
 
     .data-table thead th {
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         text-transform: uppercase;
-        color: var(--text-muted);
+        color: #64748B;
         font-weight: 700;
         letter-spacing: 0.5px;
         padding: 1rem;
-        background-color: #F8FAFC;
-        border-bottom: 1px solid var(--border-color);
+        background-color: #F7FAF8;
+        border-bottom: 1px solid #E2ECE6;
         white-space: nowrap;
     }
 
     .data-table tbody td {
         padding: 1rem;
         font-size: 0.9rem;
-        color: var(--text-main);
-        border-bottom: 1px solid var(--border-color);
+        color: #0A2B1D;
+        border-bottom: 1px solid #E2ECE6;
         vertical-align: middle;
     }
 
@@ -173,7 +324,7 @@ svg rect, svg circle, svg polyline {
     }
 
         .data-table tbody tr:hover {
-            background-color: #F8FAFC;
+            background-color: #F4F8F5;
         }
 
         .data-table tbody tr:last-child td {
@@ -182,16 +333,17 @@ svg rect, svg circle, svg polyline {
 
 /* Badges / Pills */
 .pill {
-    padding: 0.25rem 0.75rem;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 700;
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
     display: inline-block;
 }
 
-.pill-gray {
-    background-color: #F1F5F9;
-    color: #475569;
+.pill-forest {
+    background-color: #E8F3EC;
+    color: #1B5E34;
+    border: 1px solid #C6DFCE;
 }
 
 /* =========================================

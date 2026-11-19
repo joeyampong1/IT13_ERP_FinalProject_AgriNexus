@@ -2,12 +2,12 @@
 
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
-        <h2 class="page-title">Reports & Analytics</h2>
+        <h2 class="page-title">Reports &amp; Analytics</h2>
         <p class="text-muted mb-0 page-sub">Platform-wide overview of SaaS revenue, tenant growth, and system health.</p>
     </div>
 
     <!-- Quick Filter -->
-    <div class="d-flex align-items-center gap-2 bg-white border shadow-sm rounded-3 px-3 py-1" style="border-color: var(--border-color) !important;">
+    <div class="d-flex align-items-center gap-2 bg-white border shadow-sm rounded-3 px-3 py-1" style="border-color: #E2ECE6 !important;">
         <i class="bi bi-calendar3 text-success"></i>
         <select class="filter-select border-0 shadow-none bg-transparent fw-bold p-0 pe-4" style="min-width: 140px; font-size: 0.9rem; cursor: pointer;">
             <option>This Month</option>
@@ -18,24 +18,28 @@
     </div>
 </div>
 
-<!-- REPORT GENERATOR PANEL -->
-<div class="card-box mb-4" style="background: linear-gradient(to right, #ffffff, #f8fafc); border-left: 4px solid var(--primary-green);">
-    <div class="panel-title mb-3"><i class="bi bi-file-earmark-bar-graph text-success me-2"></i>Generate Custom Report</div>
-    <div class="row g-3 align-items-end">
+<!-- REPORT GENERATOR PANEL (DIRECT PDF) -->
+<div class="card-box mb-4" style="background: linear-gradient(to right, #FFFFFF, #F7FAF8); border-left: 4px solid #1B5E34;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="panel-title mb-0"><i class="bi bi-file-earmark-pdf-fill text-success me-2"></i>Generate Custom PDF Report</div>
+        <span class="badge rounded-pill px-2 py-1" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE; font-size: 0.72rem;">
+            <i class="bi bi-filetype-pdf me-1"></i>PDF Export
+        </span>
+    </div>
+<div class="row g-3 align-items-end">
         <div class="col-md-3">
-            <label class="form-label fw-semibold text-muted" style="font-size: 0.8rem;">Start Date</label>
-            <input type="date" class="form-control" @bind="startDate" />
+            <label class="form-label fw-semibold text-muted mb-1" style="font-size: 0.8rem;">Start Date</label>
+            <input type="date" class="form-control report-control" @bind="startDate" />
         </div>
         <div class="col-md-3">
-            <label class="form-label fw-semibold text-muted" style="font-size: 0.8rem;">End Date</label>
-            <input type="date" class="form-control" @bind="endDate" />
+            <label class="form-label fw-semibold text-muted mb-1" style="font-size: 0.8rem;">End Date</label>
+            <input type="date" class="form-control report-control" @bind="endDate" />
         </div>
         <div class="col-md-3">
-            <label class="form-label fw-semibold text-muted" style="font-size: 0.8rem;">Include Metrics</label>
+            <label class="form-label fw-semibold text-muted mb-1" style="font-size: 0.8rem;">Include Metrics</label>
             <div class="dropdown">
-                <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.9rem;">
-                    <span>Select metrics...</span>
-                    <i class="bi bi-chevron-down"></i>
+                <button class="form-select report-control text-start d-flex justify-content-between align-items-center" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="text-truncate">Select metrics...</span>
                 </button>
                 <ul class="dropdown-menu w-100 shadow-sm border-0" style="padding: 0.5rem;">
                     <li><label class="dropdown-item d-flex gap-2 rounded" style="cursor:pointer;"><input type="checkbox" @bind="includeRevenue" /> SaaS Revenue</label></li>
@@ -46,24 +50,19 @@
             </div>
         </div>
         <div class="col-md-3">
-            <label class="form-label fw-semibold text-muted" style="font-size: 0.8rem;">Format</label>
-            <div class="d-flex gap-2">
-                <select class="form-select" style="width: 100px;">
-                    <option>PDF</option>
-                    <option>Excel</option>
-                </select>
-                <button class="btn btn-primary fw-bold flex-grow-1" @onclick="GenerateReport" disabled="@isGenerating">
-                    @if (isGenerating)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                        <span>Wait...</span>
-                    }
-                    else
-                    {
-                        <i class="bi bi-download me-1"></i> <span>Generate</span>
-                    }
-                </button>
-            </div>
+            <label class="form-label d-none d-md-block mb-1" style="font-size: 0.8rem; visibility: hidden;">Action</label>
+            <button type="button" class="btn-agrinexus report-control w-100 fw-bold" @onclick="GenerateReport" disabled="@isGenerating">
+                @if (isGenerating)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                    <span>Generating PDF...</span>
+                }
+                else
+                {
+                    <i class="bi bi-file-earmark-arrow-down-fill me-1"></i>
+                    <span>Generate PDF</span>
+                }
+            </button>
         </div>
     </div>
 </div>
@@ -81,7 +80,7 @@
                 <div class="mt-3">
                     <div class="card-value">@s.Value</div>
                     <div class="text-muted small mt-1">
-                        <span class="@(s.Trend.StartsWith("+") ? "text-success" : "text-danger") fw-bold">
+                        <span class="@(s.Trend.StartsWith("+") ? "text-forest" : "text-earth") fw-bold">
                             <i class="bi @(s.Trend.StartsWith("+") ? "bi-arrow-up-right" : "bi-arrow-down-right")"></i> @s.Trend
                         </span> vs last month
                     </div>
@@ -95,26 +94,26 @@
 <div class="row g-2 mb-4">
     <div class="col-6 col-md-3">
         <div class="card-box py-2 px-3 d-flex justify-content-between align-items-center" style="border-radius: 12px;">
-            <span class="text-muted small fw-bold">ARPU</span>
-            <span class="fw-bold text-dark">₱7,725</span>
+            <span class="text-muted small fw-bold"><i class="bi bi-person-badge text-success me-1"></i>ARPU</span>
+            <span class="fw-bold" style="color: #0A2B1D;">₱7,725</span>
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="card-box py-2 px-3 d-flex justify-content-between align-items-center" style="border-radius: 12px;">
-            <span class="text-muted small fw-bold">Churn Rate</span>
-            <span class="fw-bold text-danger">1.2%</span>
+            <span class="text-muted small fw-bold"><i class="bi bi-arrow-down-circle text-earth me-1"></i>Churn Rate</span>
+            <span class="fw-bold text-earth">1.2%</span>
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="card-box py-2 px-3 d-flex justify-content-between align-items-center" style="border-radius: 12px;">
-            <span class="text-muted small fw-bold">New Signups</span>
-            <span class="fw-bold text-success">5</span>
+            <span class="text-muted small fw-bold"><i class="bi bi-person-plus-fill text-success me-1"></i>New Signups</span>
+            <span class="fw-bold text-forest">5</span>
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="card-box py-2 px-3 d-flex justify-content-between align-items-center" style="border-radius: 12px;">
-            <span class="text-muted small fw-bold">System Uptime</span>
-            <span class="fw-bold text-success">99.9%</span>
+            <span class="text-muted small fw-bold"><i class="bi bi-activity text-success me-1"></i>System Uptime</span>
+            <span class="fw-bold text-forest">99.9%</span>
         </div>
     </div>
 </div>
@@ -129,33 +128,45 @@
                     <div class="panel-title">Platform Revenue Growth</div>
                     <div class="panel-sub">Monthly recurring revenue (MRR) trend</div>
                 </div>
-                <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2 fw-bold">+18.5%</span>
+                <span class="badge rounded-pill px-3 py-2 fw-bold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+                    <i class="bi bi-graph-up-arrow me-1"></i>+18.5%
+                </span>
             </div>
             <svg viewBox="0 0 800 300" class="w-100" style="max-height: 280px;">
                 <defs>
                     <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="#388E3C" stop-opacity="0.3" />
-                        <stop offset="100%" stop-color="#388E3C" stop-opacity="0" />
+                        <stop offset="0%" stop-color="#1B5E34" stop-opacity="0.32" />
+                        <stop offset="100%" stop-color="#4E8D2A" stop-opacity="0" />
                     </linearGradient>
                 </defs>
                 @for (int i = 0; i <= 4; i++)
                 {
                     var y = 20 + i * 60;
                     <g>
-                        <line x1="50" x2="780" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="4 4" />
+                        <line x1="50" x2="780" y1="@y" y2="@y" stroke="#E2ECE6" stroke-dasharray="4 4" />
                         <text x="40" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@(200 - (i * 50))k</text>
                     </g>
                 }
                 <path d="M 50,240 L 160,210 L 280,170 L 400,180 L 520,120 L 640,80 L 780,30 L 780,280 L 50,280 Z" fill="url(#areaGradient)" />
-                <polyline points="50,240 160,210 280,170 400,180 520,120 640,80 780,30" fill="none" stroke="#388E3C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                <polyline points="50,240 160,210 280,170 400,180 520,120 640,80 780,30" fill="none" stroke="#1B5E34" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+
+                <!-- Data Point Markers -->
+                <circle cx="50" cy="240" r="4.5" fill="#0A2B1D" stroke="#FFFFFF" stroke-width="2" />
+                <circle cx="160" cy="210" r="4.5" fill="#0A2B1D" stroke="#FFFFFF" stroke-width="2" />
+                <circle cx="280" cy="170" r="4.5" fill="#0A2B1D" stroke="#FFFFFF" stroke-width="2" />
+                <circle cx="400" cy="180" r="4.5" fill="#0A2B1D" stroke="#FFFFFF" stroke-width="2" />
+                <circle cx="520" cy="120" r="4.5" fill="#0A2B1D" stroke="#FFFFFF" stroke-width="2" />
+                <circle cx="640" cy="80" r="4.5" fill="#0A2B1D" stroke="#FFFFFF" stroke-width="2" />
+                <circle cx="780" cy="30" r="5" fill="#4E8D2A" stroke="#FFFFFF" stroke-width="2" />
+
                 <g>
-                    <text x="50" y="295" text-anchor="middle" font-size="11" fill="#64748B">Jan</text>
-                    <text x="160" y="295" text-anchor="middle" font-size="11" fill="#64748B">Feb</text>
-                    <text x="280" y="295" text-anchor="middle" font-size="11" fill="#64748B">Mar</text>
-                    <text x="400" y="295" text-anchor="middle" font-size="11" fill="#64748B">Apr</text>
-                    <text x="520" y="295" text-anchor="middle" font-size="11" fill="#64748B">May</text>
-                    <text x="640" y="295" text-anchor="middle" font-size="11" fill="#64748B">Jun</text>
-                    <text x="780" y="295" text-anchor="middle" font-size="11" fill="#64748B">Jul</text>
+                    <text x="50" y="295" text-anchor="middle" font-size="11" font-weight="600" fill="#64748B">Jan</text>
+                    <text x="160" y="295" text-anchor="middle" font-size="11" font-weight="600" fill="#64748B">Feb</text>
+                    <text x="280" y="295" text-anchor="middle" font-size="11" font-weight="600" fill="#64748B">Mar</text>
+                    <text x="400" y="295" text-anchor="middle" font-size="11" font-weight="600" fill="#64748B">Apr</text>
+                    <text x="520" y="295" text-anchor="middle" font-size="11" font-weight="600" fill="#64748B">May</text>
+                    <text x="640" y="295" text-anchor="middle" font-size="11" font-weight="600" fill="#64748B">Jun</text>
+                    <text x="780" y="295" text-anchor="middle" font-size="11" font-weight="600" fill="#64748B">Jul</text>
                 </g>
             </svg>
         </div>
@@ -164,10 +175,15 @@
     <!-- Revenue by Plan (Donut Chart) -->
     <div class="col-12 col-lg-5">
         <div class="stat-card h-100">
-            <div class="panel-title">Revenue by Subscription Plan</div>
-            <div class="panel-sub">Distribution of MRR</div>
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <div>
+                    <div class="panel-title">Revenue by Subscription Plan</div>
+                    <div class="panel-sub">Distribution of MRR</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-pie-chart-fill"></i></div>
+            </div>
             <div class="d-flex justify-content-center my-3 position-relative">
-                <svg viewBox="0 0 200 200" width="170" height="170">
+                <svg viewBox="0 0 200 200" width="175" height="175">
                     @{
                         double offsetPlan = 0;
                     }
@@ -183,8 +199,8 @@
                     }
                 </svg>
                 <div class="position-absolute top-50 start-50 translate-middle text-center">
-                    <h4 class="fw-bold mb-0 text-dark">₱185k</h4>
-                    <span class="text-muted" style="font-size: 0.75rem;">Total MRR</span>
+                    <h4 class="fw-bolder mb-0" style="color: #0A2B1D;">₱185k</h4>
+                    <span class="text-muted fw-semibold" style="font-size: 0.72rem;">TOTAL MRR</span>
                 </div>
             </div>
             <div class="d-flex justify-content-center gap-3 small fw-semibold text-muted flex-wrap mt-3">
@@ -199,47 +215,63 @@
 
 <!-- CHARTS ROW 2 -->
 <div class="row g-4 mb-4">
-    <!-- System Health & Sync Status (Progress Bars) -->
+    <!-- System Health & Sync Status (Progress Bars - AgriNexus Palette) -->
     <div class="col-12 col-lg-5">
         <div class="stat-card h-100">
-            <div class="panel-title mb-3">System Health & Sync Status</div>
-            <div class="panel-sub mb-4">Tenant data synchronization overview</div>
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <div class="panel-title mb-1">System Health &amp; Sync Status</div>
+                    <div class="panel-sub mb-0">Tenant data synchronization overview</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-hdd-network-fill"></i></div>
+            </div>
 
-            <div class="d-flex flex-column gap-4">
+            <div class="d-flex flex-column gap-4 mt-4">
                 <div>
                     <div class="d-flex justify-content-between small fw-bold mb-1">
-                        <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Synced Tenants</span>
-                        <span>22 of 24 (91.6%)</span>
+                        <span class="text-forest"><i class="bi bi-check-circle-fill me-1"></i>Synced Tenants</span>
+                        <span style="color: #0A2B1D;">22 of 24 (91.6%)</span>
                     </div>
-                    <div class="progress" style="height: 10px;"><div class="progress-bar bg-success" style="width: 91.6%;"></div></div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar" style="width: 91.6%; background-color: #1B5E34;"></div>
+                    </div>
                 </div>
                 <div>
                     <div class="d-flex justify-content-between small fw-bold mb-1">
-                        <span class="text-warning"><i class="bi bi-arrow-repeat me-1"></i>Pending Sync</span>
-                        <span>1 of 24 (4.2%)</span>
+                        <span class="text-leaf"><i class="bi bi-arrow-repeat me-1"></i>Pending Sync</span>
+                        <span style="color: #0A2B1D;">1 of 24 (4.2%)</span>
                     </div>
-                    <div class="progress" style="height: 10px;"><div class="progress-bar bg-warning" style="width: 4.2%;"></div></div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar" style="width: 4.2%; background-color: #4E8D2A;"></div>
+                    </div>
                 </div>
                 <div>
                     <div class="d-flex justify-content-between small fw-bold mb-1">
-                        <span class="text-danger"><i class="bi bi-wifi-off me-1"></i>Offline Tenants</span>
-                        <span>1 of 24 (4.2%)</span>
+                        <span class="text-earth"><i class="bi bi-wifi-off me-1"></i>Offline Tenants</span>
+                        <span style="color: #0A2B1D;">1 of 24 (4.2%)</span>
                     </div>
-                    <div class="progress" style="height: 10px;"><div class="progress-bar bg-danger" style="width: 4.2%;"></div></div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar" style="width: 4.2%; background-color: #7A5230;"></div>
+                    </div>
                 </div>
             </div>
-            <div class="mt-4 pt-3 border-top text-muted small">
-                <i class="bi bi-info-circle me-1"></i> Last global sync check: 5 minutes ago.
+            <div class="mt-4 pt-3 border-top text-muted small" style="border-color: #E2ECE6 !important;">
+                <i class="bi bi-info-circle text-success me-1"></i> Last global sync check: 5 minutes ago.
             </div>
         </div>
     </div>
 
-    <!-- Module Usage (Vertical Bar Chart) -->
+    <!-- Module Usage (Vertical Bar Chart - AgriNexus Palette) -->
     <div class="col-12 col-lg-7">
         <div class="stat-card h-100">
-            <div class="panel-title mb-3">Module Transactions</div>
-            <div class="panel-sub">Total system-wide activity per module</div>
-            <svg viewBox="0 0 500 250" class="w-100" style="max-height: 230px;">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <div class="panel-title mb-1">Module Transactions</div>
+                    <div class="panel-sub mb-0">Total system-wide activity per module</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-bar-chart-steps"></i></div>
+            </div>
+            <svg viewBox="0 0 500 250" class="w-100 mt-2" style="max-height: 230px;">
                 @for (int i = 0; i < ModuleUsage.Count; i++)
                 {
                     var m = ModuleUsage[i];
@@ -248,10 +280,10 @@
                     var y = 200 - barHeight;
 
                     <g>
-                        <rect x="@x" y="20" width="60" height="180" fill="#F1F5F9" rx="6" />
-                        <rect x="@x" y="@y" width="60" height="@barHeight" fill="@m.Color" rx="6" />
-                        <text x="@(x + 30)" y="220" text-anchor="middle" font-size="11" fill="#64748B" font-weight="600">@m.Name</text>
-                        <text x="@(x + 30)" y="@(y - 8)" text-anchor="middle" font-size="11" fill="#1E293B" font-weight="bold">@m.Count.ToString("N0")</text>
+                        <rect x="@x" y="20" width="60" height="180" fill="#F4F8F5" rx="8" />
+                        <rect x="@x" y="@y" width="60" height="@barHeight" fill="@m.Color" rx="8" />
+                        <text x="@(x + 30)" y="222" text-anchor="middle" font-size="11" fill="#475569" font-weight="600">@m.Name</text>
+                        <text x="@(x + 30)" y="@(y - 8)" text-anchor="middle" font-size="11" fill="#0A2B1D" font-weight="bold">@m.Count.ToString("N0")</text>
                     </g>
                 }
             </svg>
@@ -261,36 +293,47 @@
 
 <!-- TOP TENANTS TABLE -->
 <div class="panel">
-    <div class="panel-head d-flex justify-content-between align-items-center">
+    <div class="panel-head d-flex justify-content-between align-items-center p-3 px-4">
         <div>
             <div class="panel-title">Top Performing Tenants</div>
             <div class="panel-sub mb-0">Ranked by total transaction volume</div>
         </div>
-        <button class="btn btn-sm btn-outline-secondary rounded-3">View All</button>
+        <button type="button" class="btn-outline">
+            <i class="bi bi-buildings me-1 text-success"></i>View All
+        </button>
     </div>
     <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
+        <table class="table table-hover data-table align-middle mb-0">
             <thead>
                 <tr>
-                    <th>Business Name</th>
+                    <th class="px-4">Business Name</th>
                     <th>Plan</th>
                     <th>Active Branches</th>
                     <th>Total Sales</th>
-                    <th>Growth</th>
+                    <th class="px-4">Growth</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var t in TopTenants)
                 {
                     <tr>
-                        <td>
-                            <div class="fw-semibold">@t.Business</div>
-                            <div class="sub text-muted" style="font-size: 0.75rem;">@t.Code</div>
+                        <td class="px-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="tenant-avatar">
+                                    <i class="bi bi-building"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: #0A2B1D;">@t.Business</div>
+                                    <div class="sub fw-semibold" style="color: #1B5E34; font-size: 0.75rem;">@t.Code</div>
+                                </div>
+                            </div>
                         </td>
-                        <td><span class="pill pill-gray">@t.Plan</span></td>
-                        <td>@t.Branches</td>
-                        <td class="fw-semibold">@t.Sales</td>
-                        <td class="text-success fw-bold"><i class="bi bi-graph-up-arrow me-1"></i> +@t.Growth%</td>
+                        <td><span class="pill pill-forest">@t.Plan</span></td>
+                        <td class="fw-medium text-dark">
+                            <i class="bi bi-shop text-success me-1"></i>@t.Branches
+                        </td>
+                        <td class="fw-bold" style="color: #0A2B1D;">@t.Sales</td>
+                        <td class="text-forest fw-bold px-4"><i class="bi bi-graph-up-arrow me-1"></i> +@t.Growth%</td>
                     </tr>
                 }
             </tbody>
@@ -301,8 +344,8 @@
 <!-- Success Toast -->
 @if (showToast)
 {
-    <div class="toast-note" style="position: fixed; bottom: 2rem; right: 2rem; z-index: 1050; background: #1B5E34; color: white; padding: 1rem 1.5rem; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 10px;">
-        <i class="bi bi-check-circle-fill fs-5"></i> <span class="fw-semibold">Report generated successfully!</span>
+    <div class="toast-note shadow-lg" style="position: fixed; bottom: 2rem; right: 2rem; z-index: 1050; background: #0A2B1D; color: white; border: 1px solid #1B5E34; padding: 0.9rem 1.4rem; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
+        <i class="bi bi-file-earmark-check-fill fs-5 text-success"></i> <span class="fw-semibold">PDF report generated successfully!</span>
     </div>
 }
 
@@ -329,24 +372,25 @@
     static readonly double Circ = 2 * Math.PI * Radius;
 
     List<Stat> MainStats => new() {
-        new("MONTHLY RECURRING REVENUE", "₱185,400.00", "+12.5%", "bi-cash-stack", "stat-icon-blue"),
-        new("ACTIVE SUBSCRIPTIONS", "24", "+4", "bi-buildings", ""),
-        new("TOTAL TRANSACTIONS", "48,250", "+8.2%", "bi-receipt", "stat-icon-plain"),
-        new("SYNC HEALTH", "99.8%", "+0.1%", "bi-cloud-check", "stat-icon-warn")
+        new("MONTHLY RECURRING REVENUE", "₱185,400.00", "+12.5%", "bi-cash-stack", ""),
+        new("ACTIVE SUBSCRIPTIONS", "24", "+4", "bi-buildings-fill", ""),
+        new("TOTAL TRANSACTIONS", "48,250", "+8.2%", "bi-receipt-cutoff", ""),
+        new("SYNC HEALTH", "99.8%", "+0.1%", "bi-cloud-check-fill", "stat-icon-leaf")
     };
 
+    // AgriNexus Logo Palette: Deep Forest Green, Leaf Green, & Earth Soil Brown
     List<PlanSlice> PlanRevenueSlices => new() {
         new("Enterprise", 95000, "#1B5E34"),
-        new("Growth", 65400, "#4CAF50"),
-        new("Starter", 25000, "#81C784")
+        new("Growth", 65400, "#4E8D2A"),
+        new("Starter", 25000, "#7A5230")
     };
     double TotalPlanRevenue => PlanRevenueSlices.Sum(p => p.Amount);
 
     List<Module> ModuleUsage => new() {
-        new("Sales", 24500, "#1B5E34"),
-        new("Inventory", 15200, "#4CAF50"),
-        new("Harvest", 8100, "#81C784"),
-        new("Labor", 4500, "#A5D6A7")
+        new("Sales", 24500, "#0A2B1D"),
+        new("Inventory", 15200, "#1B5E34"),
+        new("Harvest", 8100, "#4E8D2A"),
+        new("Labor", 4500, "#7A5230")
     };
 
     List<Tenant> TopTenants => new() {
@@ -358,7 +402,7 @@
     async Task GenerateReport()
     {
         isGenerating = true;
-        await Task.Delay(2000); // Simulate report generation time
+        await Task.Delay(2000); // Simulate PDF report generation
         isGenerating = false;
 
         showToast = true;

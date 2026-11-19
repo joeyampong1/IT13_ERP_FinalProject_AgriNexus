@@ -8,9 +8,14 @@
 @inject IJSRuntime JS
 @using Microsoft.AspNetCore.Components.Web
 
-<div class="mb-4">
-    <h2 class="page-title">Business / Tenant Management</h2>
-    <p class="text-muted mb-0 page-sub">Every registered agribusiness on the platform, its subscription plan, and synchronization state.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="page-title">Business / Tenant Management</h2>
+        <p class="text-muted mb-0 page-sub">Every registered agribusiness on the platform, its subscription plan, and synchronization state.</p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-buildings-fill me-1"></i> Tenant Directory
+    </span>
 </div>
 
 <!-- STAT CARDS -->
@@ -44,14 +49,14 @@
         <input type="radio" class="btn-check" name="viewTabs" id="tabActive" autocomplete="off"
                checked="@(!showArchived)" @onchange="() => ToggleTab(false)">
         <label class="btn btn-outline-success fw-bold" for="tabActive">
-            <i class="bi bi-check-circle me-1"></i> Active
+            <i class="bi bi-check-circle-fill me-1"></i> Active
         </label>
 
         <!-- Archived Tab -->
         <input type="radio" class="btn-check" name="viewTabs" id="tabArchived" autocomplete="off"
                checked="@showArchived" @onchange="() => ToggleTab(true)">
         <label class="btn btn-outline-secondary fw-bold" for="tabArchived">
-            <i class="bi bi-archive me-1"></i> Archived
+            <i class="bi bi-archive-fill me-1"></i> Archived
         </label>
     </div>
 
@@ -64,20 +69,22 @@
                @bind:after="ResetPagination" />
     </div>
 
-    <span class="text-muted small count-label">@Filtered.Count @(Filtered.Count == 1 ? "business" : "businesses")</span>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold count-label" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+        <i class="bi bi-shop me-1 text-success"></i>@Filtered.Count @(Filtered.Count == 1 ? "business" : "businesses")
+    </span>
 
     <!-- NEW BUTTON -->
-    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+    <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNew">
         <i class="bi bi-plus-lg"></i> New business
     </button>
 </div>
 
 <!-- TABLE (WITH SCROLL, PAGINATION & ROUNDED CORNERS) -->
-<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 12px; border: 1px solid #e9ecef; max-height: calc(100vh - 280px); overflow: hidden;">
+<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 280px); overflow: hidden;">
 
     <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
         <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
-            <thead class="bg-light" style="position: sticky; top: 0; z-index: 1;">
+            <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                 <tr>
                     <th class="text-muted small fw-bold text-uppercase py-3 px-4">Business</th>
                     <th class="text-muted small fw-bold text-uppercase py-3">Owner</th>
@@ -95,19 +102,46 @@
 
                     <tr style="cursor: pointer;" @onclick="() => OpenDetails(t)">
                         <td class="px-4">
-                            <div class="fw-semibold">@t.Name</div>
-                            <div class="text-muted small mt-1">@t.Code@(string.IsNullOrWhiteSpace(t.Province) ? "" : " · " + t.Province)</div>
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="biz-avatar">
+                                    <i class="bi bi-building"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: #0A2B1D;">@t.Name</div>
+                                    <div class="text-muted small mt-1">
+                                        <span class="fw-semibold" style="color: #1B5E34;">@t.Code</span>@(string.IsNullOrWhiteSpace(t.Province) ? "" : " · " + t.Province)
+                                    </div>
+                                </div>
+                            </div>
                         </td>
                         <td>
-                            <div class="fw-medium">@t.OwnerName</div>
-                            <div class="text-muted small mt-1">@t.Email</div>
+                            <div class="fw-semibold text-dark">@t.OwnerName</div>
+                            <div class="text-muted small mt-1"><i class="bi bi-envelope me-1"></i>@t.Email</div>
                         </td>
-                        <td class="fw-medium">@(string.IsNullOrEmpty(t.Plan) ? "—" : t.Plan)</td>
-                        <td><span class="pill @StatusClass(t.Status)">@t.Status</span></td>
-                        <td><span class="pill @SyncClass(t.Sync)">@t.Sync</span></td>
-                        <td class="text-nowrap">@t.Registered.ToString("MMM d, yyyy")</td>
+                        <td class="fw-semibold" style="color: #0A2B1D;">
+                            @if (string.IsNullOrEmpty(t.Plan))
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                            else
+                            {
+                                <span><i class="bi bi-award text-success me-1"></i>@t.Plan</span>
+                            }
+                        </td>
+                        <td>
+                            <span class="pill @StatusClass(t.Status)">
+                                <i class="bi @(t.Status == "Active" ? "bi-check-circle-fill" : t.Status == "Trial" ? "bi-hourglass-split" : "bi-slash-circle") me-1"></i>@t.Status
+                            </span>
+                        </td>
+                        <td>
+                            <span class="pill @SyncClass(t.Sync)">
+                                <i class="bi @(t.Sync == "Synced" ? "bi-cloud-check-fill" : t.Sync == "Pending" ? "bi-arrow-repeat" : "bi-wifi-off") me-1"></i>@t.Sync
+                            </span>
+                        </td>
+                        <td class="text-nowrap text-muted small fw-medium">
+                            <i class="bi bi-calendar3 me-1 text-success"></i>@t.Registered.ToString("MMM d, yyyy")
+                        </td>
                         <td class="text-end px-4 action-cell">
-                            <!-- Importante ang (e) ug ang ToggleMenuAsync -->
                             <button type="button" class="btn-dots"
                                     @onclick="(e) => ToggleMenuAsync(e, t.Id)"
                                     @onclick:stopPropagation="true" aria-label="Actions">
@@ -118,7 +152,12 @@
                 }
                 @if (Filtered.Count == 0)
                 {
-                    <tr><td colspan="7" class="text-center text-muted py-5">No businesses found.</td></tr>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                            No businesses found.
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
@@ -127,14 +166,14 @@
     <!-- PAGINATION FOOTER -->
     @if (Filtered.Count > 0)
     {
-        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-radius: 0 0 12px 12px;">
+        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
             <div class="text-muted small mb-2 mb-md-0">
-                Showing <span class="fw-bold text-dark">@StartItem</span> - <span class="fw-bold text-dark">@EndItem</span> of <span class="fw-bold text-dark">@Filtered.Count</span> businesses
+                Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> businesses
             </div>
 
             <div class="d-flex gap-1">
                 <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
-                    Previous
+                    <i class="bi bi-chevron-left me-1"></i>Previous
                 </button>
 
                 @for (int i = 1; i <= TotalPages; i++)
@@ -147,7 +186,7 @@
                 }
 
                 <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
-                    Next
+                    Next<i class="bi bi-chevron-right ms-1"></i>
                 </button>
             </div>
         </div>
@@ -166,40 +205,36 @@
 
             @if (!showArchived)
             {
-                <!-- Edit (always available in Active tab) -->
                 <button type="button" class="action-item"
                         @onclick="() => OpenEdit(menuTenant)"
                         @onclick:stopPropagation="true">
-                    <i class="bi bi-pencil-square text-success"></i> Edit 
+                    <i class="bi bi-pencil-square text-success"></i> Edit
                 </button>
 
                 @if (menuTenant.Status == "Trial")
                 {
-                    <!-- Trial: Accept OR Reject -->
                     <button type="button" class="action-item"
                             @onclick="() => AcceptTenant(menuTenant)"
                             @onclick:stopPropagation="true">
-                        <i class="bi bi-check-circle text-primary"></i> Accept
+                        <i class="bi bi-check-circle-fill" style="color: #1B5E34;"></i> Accept
                     </button>
                     <button type="button" class="action-item text-danger"
                             @onclick="() => Reject(menuTenant)"
                             @onclick:stopPropagation="true">
-                        <i class="bi bi-x-circle"></i> Reject 
+                        <i class="bi bi-x-circle"></i> Reject
                     </button>
                 }
                 else
                 {
-                    <!-- Active / Suspended: Archive -->
                     <button type="button" class="action-item text-danger"
                             @onclick="() => Archive(menuTenant)"
                             @onclick:stopPropagation="true">
-                        <i class="bi bi-archive-fill"></i> Archive 
+                        <i class="bi bi-archive-fill"></i> Archive
                     </button>
                 }
             }
             else
             {
-                <!-- Archived tab: Restore only -->
                 <button type="button" class="action-item text-success"
                         @onclick="() => RestoreTenant(menuTenant)"
                         @onclick:stopPropagation="true">
@@ -214,20 +249,20 @@
 <!-- DETAILS MODAL (MODERN UI) -->
 @if (showDetailsModal && selectedTenant != null)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
             <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
                 <!-- Modern Header -->
-                <div class="modal-header border-0 bg-light p-4 d-flex justify-content-between align-items-center">
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
                     <div class="d-flex align-items-center gap-3">
-                        <div class="bg-success bg-opacity-10 text-success rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
-                            <i class="bi bi-building fs-4"></i>
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi bi-building-fill fs-4"></i>
                         </div>
                         <div>
                             <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedTenant.Name</h4>
-                            <span class="badge bg-secondary bg-opacity-10 text-dark border px-2 py-1 mt-1 rounded-pill">
-                                <i class="bi bi-upc-scan me-1 text-success"></i>@selectedTenant.Code
+                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                <i class="bi bi-upc-scan me-1"></i>@selectedTenant.Code
                             </span>
                         </div>
                     </div>
@@ -239,28 +274,39 @@
                     <!-- SECTION 1: Owner & Contact -->
                     <div class="mb-4">
                         <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
-                            <i class="bi bi-person-badge me-2 text-success"></i>Owner & Contact Info
+                            <i class="bi bi-person-badge-fill me-2 text-success"></i>Owner & Contact Info
                         </h6>
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="text-muted small fw-bold text-uppercase">Owner Name</label>
-                                <p class="mb-0 fw-medium fs-6 text-dark">@selectedTenant.OwnerName</p>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">@selectedTenant.OwnerName</p>
                             </div>
                             <div class="col-md-6">
                                 <label class="text-muted small fw-bold text-uppercase">Owner Email</label>
-                                <p class="mb-0 fw-medium fs-6 text-dark">@selectedTenant.Email</p>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">@selectedTenant.Email</p>
                             </div>
                             <div class="col-md-6 mt-3">
-                                <label class="text-muted small fw-bold text-uppercase">Temporary Password</label>
+                                <label class="text-muted small fw-bold text-uppercase">Owner Account Password</label>
                                 <div class="mt-1">
-                                    <span class="badge bg-warning text-dark px-3 py-2 rounded-3 fs-6 shadow-sm">
-                                        <i class="bi bi-key-fill me-2"></i>@selectedTenant.Password
-                                    </span>
+                                    @if (selectedTenant.IsTempPassword)
+                                    {
+                                        <span class="badge px-3 py-2 rounded-3 fs-6 shadow-sm" style="background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A;">
+                                            <i class="bi bi-key-fill me-2"></i>@selectedTenant.Password
+                                        </span>
+                                        <div class="text-muted small mt-1"><i class="bi bi-info-circle me-1"></i>Temporary password (not yet changed by owner)</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge px-3 py-2 rounded-3 fs-6" style="background-color: #F4F7F5; color: #0A2B1D; border: 1px solid #DCE6E0; letter-spacing: 2px;">
+                                            <i class="bi bi-shield-lock-fill text-success me-2"></i>••••••••••••
+                                        </span>
+                                        <div class="text-success small mt-1 fw-medium"><i class="bi bi-check-circle-fill me-1"></i>Updated by business owner</div>
+                                    }
                                 </div>
                             </div>
                             <div class="col-md-6 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase">Contact Number</label>
-                                <p class="mb-0 fw-medium fs-6 text-dark">
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
                                     @(string.IsNullOrEmpty(selectedTenant.Contact) ? "N/A" : selectedTenant.Contact)
                                 </p>
                             </div>
@@ -270,13 +316,13 @@
                     <!-- SECTION 2: Location & Plan -->
                     <div class="mb-4">
                         <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
-                            <i class="bi bi-geo-alt me-2 text-success"></i>Location & Subscription
+                            <i class="bi bi-geo-alt-fill me-2 text-success"></i>Location & Subscription
                         </h6>
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="text-muted small fw-bold text-uppercase">Province</label>
                                 <p class="mb-0 fw-medium text-dark">
-                                    <i class="bi bi-pin-map text-success me-2"></i>@(string.IsNullOrEmpty(selectedTenant.Province) ? "N/A" : selectedTenant.Province)
+                                    <i class="bi bi-pin-map-fill text-success me-2"></i>@(string.IsNullOrEmpty(selectedTenant.Province) ? "N/A" : selectedTenant.Province)
                                 </p>
                             </div>
                             <div class="col-md-6">
@@ -288,7 +334,7 @@
                             <div class="col-md-6 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase">Date Registered</label>
                                 <p class="mb-0 fw-medium text-dark">
-                                    <i class="bi bi-calendar-event text-success me-2"></i>@selectedTenant.Registered.ToString("MMMM d, yyyy")
+                                    <i class="bi bi-calendar-event-fill text-success me-2"></i>@selectedTenant.Registered.ToString("MMMM d, yyyy")
                                 </p>
                             </div>
                             <div class="col-12 mt-3">
@@ -299,7 +345,7 @@
                     </div>
 
                     <!-- SECTION 3: System Status & Notes -->
-                    <div class="p-4 rounded-4" style="background-color: #f8f9fa; border: 1px dashed #ced4da;">
+                    <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
                         <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
                             <i class="bi bi-gear-wide-connected me-2 text-success"></i>System Status & Notes
                         </h6>
@@ -313,10 +359,9 @@
                                 <span class="pill @SyncClass(selectedTenant.Sync)">@selectedTenant.Sync</span>
                             </div>
 
-                            <!-- Notes  -->
                             <div class="col-12 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase d-block mb-2">Internal Notes</label>
-                                <div class="p-3 bg-white rounded-3 border">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
                                     <p class="mb-0 text-muted small">@(string.IsNullOrEmpty(selectedTenant.Notes) ? "No notes available." : selectedTenant.Notes)</p>
                                 </div>
                             </div>
@@ -325,7 +370,7 @@
                 </div>
 
                 <!-- Footer Actions -->
-                <div class="modal-footer border-0 p-4 bg-light d-flex justify-content-between">
+                <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
                     <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
 
                     <div class="d-flex gap-2">
@@ -348,14 +393,14 @@
 <!-- ADD / EDIT MODAL (MODERN UI) -->
 @if (showModal)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
             <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
                 <!-- Modern Header -->
-                <div class="modal-header border-0 bg-light p-4">
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
                     <div class="d-flex align-items-center gap-3">
-                        <div class="bg-success bg-opacity-10 text-success rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
                             <i class="bi @(editingId == null ? "bi-shop" : "bi-pencil-square") fs-5"></i>
                         </div>
                         <div>
@@ -373,7 +418,7 @@
                         <!-- SECTION 1: Business Information -->
                         <div class="mb-4">
                             <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
-                                <i class="bi bi-building me-2 text-success"></i>Business Information
+                                <i class="bi bi-building-fill me-2 text-success"></i>Business Information
                             </h6>
                             <div class="row g-3">
                                 <div class="col-md-8">
@@ -398,10 +443,9 @@
                         <!-- SECTION 2: Owner Details -->
                         <div class="mb-4">
                             <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
-                                <i class="bi bi-person-badge me-2 text-success"></i>Owner Details
+                                <i class="bi bi-person-badge-fill me-2 text-success"></i>Owner Details
                             </h6>
                             <div class="row g-3">
-                                <!-- Name Fields (Consistent na sila karon) -->
                                 <div class="col-md-4">
                                     <label class="form-label fw-bold small text-muted">First Name</label>
                                     <div class="input-group modern-input">
@@ -459,7 +503,7 @@
                         <!-- SECTION 3: Location & Plan -->
                         <div class="mb-4">
                             <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
-                                <i class="bi bi-geo-alt me-2 text-success"></i>Location & Subscription
+                                <i class="bi bi-geo-alt-fill me-2 text-success"></i>Location & Subscription
                             </h6>
                             <div class="row g-3">
                                 <div class="col-md-6">
@@ -505,9 +549,9 @@
                                         <span class="input-group-text bg-white"><i class="bi bi-card-checklist text-success"></i></span>
                                         <select class="form-select" @bind="form.Plan">
                                             <option value="">Select Plan...</option>
-                                            @foreach (var p in Plans.Keys)
+                                            @foreach (var p in dbPlans)
                                             {
-                                                <option value="@p">@p</option>
+                                                <option value="@p.Name">@p.Name</option>
                                             }
                                         </select>
                                     </div>
@@ -523,7 +567,7 @@
                         </div>
 
                         <!-- SECTION 4: System Status & Notes -->
-                        <div class="p-4 rounded-4" style="background-color: #f8f9fa; border: 1px dashed #ced4da;">
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
                             <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
                                 <i class="bi bi-gear-wide-connected me-2 text-success"></i>System Status & Notes
                             </h6>
@@ -553,7 +597,7 @@
                     </form>
                 </div>
 
-                <div class="modal-footer border-0 p-4 bg-light d-flex justify-content-end gap-2">
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
                     <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
                     <button type="button" class="btn-save px-5 shadow-sm" @onclick="Save">
                         <i class="bi bi-check2-circle me-2"></i>@(editingId == null ? "Save Business" : "Update Business")
@@ -567,24 +611,24 @@
 <!-- SUCCESS CREDENTIALS MODAL -->
 @if (showSuccessModal)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow-lg rounded-4 text-center">
                 <div class="modal-body p-4 mt-2">
-                    <div class="bg-success bg-opacity-10 text-success rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
-                        <i class="bi bi-check-circle" style="font-size: 2.5rem;"></i>
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #E8F3EC; color: #1B5E34;">
+                        <i class="bi bi-check-circle-fill" style="font-size: 2.5rem;"></i>
                     </div>
                     <h4 class="fw-bolder mb-1" style="color: #0A2B1D;">Account Created!</h4>
                     <p class="text-muted small mb-4">Please copy these temporary credentials and provide them to the business owner.</p>
 
-                    <div class="text-start p-3 rounded-3 mb-4" style="background-color: #f8f9fa; border: 1px solid #dee2e6;">
+                    <div class="text-start p-3 rounded-3 mb-4" style="background-color: #F7FAF8; border: 1px solid #E2ECE6;">
                         <div class="mb-2">
                             <label class="text-muted small fw-bold text-uppercase">Email Address</label>
-                            <div class="fw-bold">@generatedEmail</div>
+                            <div class="fw-bold text-dark">@generatedEmail</div>
                         </div>
                         <div>
                             <label class="text-muted small fw-bold text-uppercase">Temporary Password</label>
-                            <div class="fw-bold" style="color: var(--primary-green);">@generatedPassword</div>
+                            <div class="fw-bold" style="color: #1B5E34;">@generatedPassword</div>
                         </div>
                     </div>
 
@@ -600,7 +644,7 @@
 <!-- REJECT CONFIRMATION MODAL -->
 @if (showRejectModal && tenantToReject != null)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
             <div class="modal-content border-0 shadow-lg rounded-4 text-center">
                 <div class="modal-body p-4 mt-2">
@@ -615,7 +659,7 @@
                     </p>
 
                     <div class="d-flex justify-content-center gap-3">
-                        <button type="button" class="btn btn-light rounded-3 fw-bold px-4" @onclick="CloseRejectModal">Cancel</button>
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CloseRejectModal">Cancel</button>
                         <button type="button" class="btn btn-danger rounded-3 fw-bold px-4 shadow-sm" @onclick="ConfirmReject">
                             <i class="bi bi-x-circle-fill me-1"></i> Yes, Reject
                         </button>
@@ -629,11 +673,10 @@
 <!-- ARCHIVE CONFIRMATION MODAL -->
 @if (showArchiveModal && tenantToArchive != null)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.6); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
             <div class="modal-content border-0 shadow-lg rounded-4 text-center">
                 <div class="modal-body p-4 mt-2">
-                    <!-- Changed icon to archive and color to warning/danger -->
                     <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
                         <i class="bi bi-archive" style="font-size: 2.5rem;"></i>
                     </div>
@@ -645,8 +688,7 @@
                     </p>
 
                     <div class="d-flex justify-content-center gap-3">
-                        <!-- Changed methods to Archive -->
-                        <button type="button" class="btn btn-light rounded-3 fw-bold px-4" @onclick="CloseArchiveModal">Cancel</button>
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CloseArchiveModal">Cancel</button>
                         <button type="button" class="btn btn-danger rounded-3 fw-bold px-4 shadow-sm" @onclick="ConfirmArchive">
                             <i class="bi bi-archive-fill me-1"></i> Yes, Archive
                         </button>
@@ -675,7 +717,7 @@
 
         public string Email { get; set; } = "";
 
-        // NEW: Property to hold the password for display
+        // Property to hold the password for display
         public string Password { get; set; } = "";
 
         public string Contact { get; set; } = "";
@@ -686,6 +728,7 @@
         public DateTime Registered { get; set; } = DateTime.Today;
         public string Address { get; set; } = "";
         public string Notes { get; set; } = "";
+        public bool IsTempPassword { get; set; } = true;
 
         public Tenant Clone() => (Tenant)MemberwiseClone();
     }
@@ -727,6 +770,7 @@
     private List<Province> provinces = new();
     private string selectedRegionCode = "";
     private string selectedProvinceCode = "";
+    private List<AgriNexus.DataLayer.Models.SubscriptionPlan> dbPlans = new();
 
     private int currentPage = 1;
     private int pageSize = 5;
@@ -747,6 +791,7 @@
         await LoadTenantsAsync();
 
         regions = (await AddressProvider.GetRegionsAsync()).ToList();
+        dbPlans = await DbContext.SubscriptionPlans.ToListAsync();
     }
 
     private async Task OnRegionChanged()
@@ -769,7 +814,7 @@
         var selectedProvince = provinces.FirstOrDefault(p => p.Code == selectedProvinceCode);
         if (selectedProvince != null)
         {
-            form.Province = selectedProvince.Name; 
+            form.Province = selectedProvince.Name;
         }
     }
 
@@ -777,21 +822,19 @@
     private void GoToPage(int page) => currentPage = page;
     private void PreviousPage() { if (currentPage > 1) currentPage--; }
     private void NextPage() { if (currentPage < TotalPages) currentPage++; }
-    private void ResetPagination() => currentPage = 1; 
+    private void ResetPagination() => currentPage = 1;
 
     private async Task LoadTenantsAsync()
     {
-        // Start with the base query
         var query = DbContext.Businesses.Include(b => b.Users).AsQueryable();
 
-        // Check if we are viewing Archived or Active
         if (showArchived)
         {
             query = query.Where(b => b.IsArchived);
         }
         else
         {
-            query = query.Where(b => !b.IsArchived);
+            query = query.Where(b => !b.IsArchived && b.Status != "Incomplete");
         }
 
         var businesses = await query.ToListAsync();
@@ -809,6 +852,7 @@
                 LName = owner?.LName ?? "",
                 Email = b.Email,
                 Password = owner?.PasswordHash ?? "",
+                IsTempPassword = owner?.IsTempPassword ?? true,
                 Plan = b.PlanName,
                 Status = b.Status,
                 Sync = b.SyncStatus,
@@ -830,7 +874,6 @@
             t.OwnerName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
             t.Province.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
 
-    // Pagination Computed Properties
     private int TotalPages => (int)Math.Ceiling((double)Filtered.Count / pageSize);
     private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
     private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
@@ -838,40 +881,33 @@
 
     private async Task ToggleMenuAsync(MouseEventArgs e, long id)
     {
-        // If clicking the same menu, close it
         if (openMenuId == id)
         {
             openMenuId = null;
             return;
         }
 
-        // ✅ Compute height based on actual button count
         var menuTenant = tenants.FirstOrDefault(x => x.Id == id);
-        int itemCount = 1; // default: Restore (Archived tab)
+        int itemCount = 1;
 
         if (!showArchived && menuTenant != null)
         {
-            // Trial → 3 buttons (Edit + Accept + Reject)
-            // Active/Suspended → 2 buttons (Edit + Archive)
             itemCount = menuTenant.Status == "Trial" ? 3 : 2;
         }
 
-        const double itemHeight = 42;  // approximate per button (adjust based on CSS)
-        const double padding = 16;     // top + bottom padding
-        const double menuWidth = 200;  // update if your CSS width is different
+        const double itemHeight = 42;
+        const double padding = 16;
+        const double menuWidth = 200;
 
         double menuHeight = (itemCount * itemHeight) + padding;
 
-        //  Single JS interop call for both dimensions
         var viewport = await JS.InvokeAsync<Viewport>("eval",
             "({ w: window.innerWidth, h: window.innerHeight })");
         var viewportWidth = viewport.W;
         var viewportHeight = viewport.H;
 
-        // Compute Left Position (keep within screen bounds)
         menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewportWidth - menuWidth - 10);
 
-        // Compute Top Position (flip upwards if not enough space below)
         menuTop = (e.ClientY + menuHeight > viewportHeight)
             ? e.ClientY - menuHeight - 5
             : e.ClientY + 15;
@@ -891,8 +927,8 @@
 
             return new()
             {
-                new("REGISTERED BUSINESSES", tenants.Count.ToString(), "", "bi-buildings", ""),
-                new("ACTIVE TENANTS", active.ToString(), $"{trial} still on trial", "bi-credit-card", ""),
+                new("REGISTERED BUSINESSES", tenants.Count.ToString(), "", "bi-buildings-fill", ""),
+                new("ACTIVE TENANTS", active.ToString(), $"{trial} still on trial", "bi-credit-card-2-front-fill", ""),
                 new("RECURRING REVENUE", $"₱{revenue:N2}", "Monthly subscription value", "bi-graph-up-arrow", ""),
                 new("SYNC ATTENTION", syncAttention.ToString(), "", "bi-arrow-repeat", "stat-icon-warn"),
             };
@@ -904,8 +940,8 @@
         "Active" => "pill-green",
         "Trial" => "pill-blue",
         "Suspended" => "pill-red",
-        "Rejected" => "pill-gray",     
-        "Archived" => "pill-gray",     
+        "Rejected" => "pill-gray",
+        "Archived" => "pill-gray",
         _ => "pill-gray"
     };
 
@@ -923,20 +959,16 @@
         return $"TEN-{nextId:000}";
     }
 
-    // Helper for auto-capitalization
     private string CapitalizeWords(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return input;
-        // I-convert Title Case (e.g., "juan dela cruz" -> "Juan Dela Cruz")
         return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input.ToLower().Trim());
     }
 
-    // Method to format the contact number after typing
     private void FormatContactNumber()
     {
         if (string.IsNullOrEmpty(form.Contact)) return;
 
-        // get the symbols and digits from the input
         var digits = new string(form.Contact.Where(char.IsDigit).ToArray());
 
         if (string.IsNullOrEmpty(digits))
@@ -945,24 +977,20 @@
             return;
         }
 
-        // 2. SMART LOGIC: Handle '63' or '9' prefixes
         if (digits.StartsWith("63") && digits.Length > 2)
         {
             digits = "0" + digits.Substring(2);
         }
         else if (digits.StartsWith("9"))
         {
-       
             digits = "0" + digits;
         }
 
-        // 3. Limit to 11 digits
         if (digits.Length > 11)
         {
             digits = digits.Substring(0, 11);
         }
 
-        // 4. Format to "09XX XXX XXXX"
         if (digits.Length > 7)
         {
             form.Contact = $"{digits.Substring(0, 4)} {digits.Substring(4, 3)} {digits.Substring(7)}";
@@ -977,7 +1005,6 @@
         }
     }
 
-    // NEW METHOD: Generate Random 8-Character Password
     private string GenerateTempPassword()
     {
         const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -1004,7 +1031,7 @@
 
     void OpenEdit(Tenant t)
     {
-        showDetailsModal = false; 
+        showDetailsModal = false;
         form = t.Clone();
         editingId = t.Id;
         showErrors = false;
@@ -1027,23 +1054,37 @@
         selectedTenant = null;
     }
 
-    // ACCEPT FUNCTION (From Trial to Active)
     async Task AcceptTenant(Tenant t)
     {
         var business = await DbContext.Businesses.FindAsync(t.Id);
         if (business != null)
         {
             business.Status = "Active";
-            DbContext.Businesses.Update(business);
-            await DbContext.SaveChangesAsync();
 
-            // Refresh
+            var owner = await DbContext.Users
+                .FirstOrDefaultAsync(u => u.BusinessId == t.Id && u.Role == "TenantAdmin");
+            if (owner != null)
+            {
+                owner.Status = "Active";
+            }
+
+            var sub = await DbContext.Subscriptions
+                .Where(s => s.BusinessId == t.Id)
+                .OrderByDescending(s => s.SubscriptionId)
+                .FirstOrDefaultAsync();
+            if (sub != null)
+            {
+                sub.Status = "Active";
+                sub.PaymentStatus = "Paid";
+                sub.RenewalDate = DateTime.Today.AddDays(sub.Cycle == "yearly" ? 365 : 30);
+            }
+
+            await DbContext.SaveChangesAsync();
             await LoadTenantsAsync();
             if (showDetailsModal) CloseDetailsModal();
         }
     }
 
-    // Updated Save method (With Auto Password Generation)
     async Task Save()
     {
         showErrors = true;
@@ -1055,105 +1096,140 @@
         var rawContact = new string(form.Contact.Where(char.IsDigit).ToArray());
         if (rawContact.Length != 11)
         {
-            // You can log or display an error message here if needed
             Console.WriteLine("Contact number must be 11 digits.");
-            return; 
+            return;
         }
+
+        var cleanEmail = form.Email.Trim();
 
         if (editingId == null)
         {
-            // NEW CODE: CHECK FOR DUPLICATE EMAIL
-            var emailExists = await DbContext.Users.AnyAsync(u => u.Email.ToLower() == form.Email.Trim().ToLower());
+            var emailExists = await DbContext.Users
+                .AnyAsync(u => u.Email.ToLower() == cleanEmail.ToLower());
 
             if (emailExists)
             {
                 emailError = "This email is already registered to an existing user.";
-                return; 
+                return;
             }
-            // CREATE NEW BUSINESS
+
+            // 1. Create Business Tenant
             var newBusiness = new Business
             {
-                BusinessName = form.Name,
-                Email = form.Email,
+                BusinessName = form.Name.Trim(),
+                Email = cleanEmail,
                 PlanName = form.Plan,
                 Status = form.Status,
                 SyncStatus = form.Sync,
                 RegisteredAt = form.Registered,
-                ContactNumber = form.Contact,
-                Province = form.Province,
-                Address = form.Address,
-                Notes = form.Notes
+                ContactNumber = form.Contact.Trim(),
+                Province = form.Province.Trim(),
+                Address = form.Address.Trim(),
+                Notes = form.Notes.Trim()
             };
 
             DbContext.Businesses.Add(newBusiness);
             await DbContext.SaveChangesAsync();
 
-            // GENERATE TEMPORARY PASSWORD
+            // 2. Create Default TenantAdmin (Business Owner) Account
             string tempPassword = GenerateTempPassword();
 
-            // CREATE USER ACCOUNT
             var newUser = new User
             {
                 BusinessId = newBusiness.BusinessId,
                 Role = "TenantAdmin",
-                FName = form.FName,
-                MName = form.MName,
-                LName = form.LName,
-                Email = form.Email,
-                PasswordHash = tempPassword, // Use the generated password
+                FName = form.FName.Trim(),
+                MName = form.MName.Trim(),
+                LName = form.LName.Trim(),
+                Email = cleanEmail,
+                PasswordHash = tempPassword,
+                IsTempPassword = true,
                 Status = "Active",
                 CreatedAt = DateTime.Now
             };
             DbContext.Users.Add(newUser);
+
+            // 3. Create Initial Subscription Record (para sa MySubscription page)
+            var matchedPlan = await DbContext.SubscriptionPlans
+                .FirstOrDefaultAsync(p => !p.IsArchived && p.Name.ToLower() == form.Plan.Trim().ToLower());
+
+            if (matchedPlan != null)
+            {
+                bool isTrial = string.Equals(form.Status, "Trial", StringComparison.OrdinalIgnoreCase);
+                string cycle = string.IsNullOrWhiteSpace(matchedPlan.Cycle) ? "monthly" : matchedPlan.Cycle;
+                int daysToAdd = isTrial ? 14 : (cycle.Equals("yearly", StringComparison.OrdinalIgnoreCase) ? 365 : 30);
+
+                var initialSub = new Subscription
+                {
+                    BusinessId = newBusiness.BusinessId,
+                    SubscriptionPlanId = matchedPlan.PlanId,
+                    Amount = isTrial ? 0m : matchedPlan.Price,
+                    Cycle = isTrial ? "trial" : cycle,
+                    RenewalDate = DateTime.Today.AddDays(daysToAdd),
+                    PaymentStatus = isTrial ? "Trial" : "Paid",
+                    Status = "Active",
+                    AutoRenew = true
+                };
+                DbContext.Subscriptions.Add(initialSub);
+            }
+
             await DbContext.SaveChangesAsync();
 
-            // SHOW SUCCESS MODAL
-            generatedEmail = form.Email;
+            generatedEmail = cleanEmail;
             generatedPassword = tempPassword;
 
-            showModal = false; // Close the Add Modal
-            showSuccessModal = true; // Open the Success Modal
+            showModal = false;
+            showSuccessModal = true;
         }
         else
         {
-            // UPDATE BUSINESS
             var existingBusiness = await DbContext.Businesses.FindAsync(editingId);
             if (existingBusiness != null)
             {
-                existingBusiness.BusinessName = form.Name;
-                existingBusiness.Email = form.Email;
+                var existingUser = await DbContext.Users
+                    .FirstOrDefaultAsync(u => u.BusinessId == editingId && u.Role == "TenantAdmin");
+
+                var emailTakenByOther = await DbContext.Users
+                    .AnyAsync(u => u.Email.ToLower() == cleanEmail.ToLower()
+                                && (existingUser == null || u.UserId != existingUser.UserId));
+
+                if (emailTakenByOther)
+                {
+                    emailError = "This email is already used by another user.";
+                    return;
+                }
+
+                existingBusiness.BusinessName = form.Name.Trim();
+                existingBusiness.Email = cleanEmail;
                 existingBusiness.PlanName = form.Plan;
                 existingBusiness.Status = form.Status;
                 existingBusiness.SyncStatus = form.Sync;
                 existingBusiness.RegisteredAt = form.Registered;
-                existingBusiness.ContactNumber = form.Contact;
-                existingBusiness.Province = form.Province;
-                existingBusiness.Address = form.Address;
-                existingBusiness.Notes = form.Notes;
+                existingBusiness.ContactNumber = form.Contact.Trim();
+                existingBusiness.Province = form.Province.Trim();
+                existingBusiness.Address = form.Address.Trim();
+                existingBusiness.Notes = form.Notes.Trim();
 
                 DbContext.Businesses.Update(existingBusiness);
-                await DbContext.SaveChangesAsync();
 
-                // UPDATE USER ACCOUNT
-                var existingUser = await DbContext.Users.FirstOrDefaultAsync(u => u.BusinessId == editingId && u.Role == "TenantAdmin");
                 if (existingUser != null)
                 {
-                    existingUser.FName = form.FName;
-                    existingUser.MName = form.MName;
-                    existingUser.LName = form.LName;
-                    existingUser.Email = form.Email;
+                    existingUser.FName = form.FName.Trim();
+                    existingUser.MName = form.MName.Trim();
+                    existingUser.LName = form.LName.Trim();
+                    existingUser.Email = cleanEmail;
                     DbContext.Users.Update(existingUser);
-                    await DbContext.SaveChangesAsync();
                 }
+
+                await DbContext.SaveChangesAsync();
             }
 
-            showModal = false; // Close modal for edit
+            showModal = false;
         }
 
         await LoadTenantsAsync();
     }
 
-    // 1. Open the reject confirmation modal
     void Reject(Tenant t)
     {
         tenantToReject = t;
@@ -1161,14 +1237,12 @@
         openMenuId = null;
     }
 
-    // 2. Close the modal
     void CloseRejectModal()
     {
         showRejectModal = false;
         tenantToReject = null;
     }
 
-    // 3. Execute the reject process
     async Task ConfirmReject()
     {
         if (tenantToReject == null) return;
@@ -1176,10 +1250,9 @@
         var business = await DbContext.Businesses.FindAsync(tenantToReject.Id);
         if (business != null)
         {
-            business.IsArchived = true;         // goes to Archived tab
-            business.Status = "Rejected";       // distinct from Archived
+            business.IsArchived = true;
+            business.Status = "Rejected";
 
-            // Disable the owner's account
             var owner = await DbContext.Users
                 .FirstOrDefaultAsync(u => u.BusinessId == tenantToReject.Id && u.Role == "TenantAdmin");
             if (owner != null)
@@ -1192,7 +1265,6 @@
         await LoadTenantsAsync();
     }
 
-    // 1. Open the archive confirmation modal
     void Archive(Tenant t)
     {
         tenantToArchive = t;
@@ -1200,14 +1272,12 @@
         openMenuId = null;
     }
 
-    // 2. Close the modal
     void CloseArchiveModal()
     {
         showArchiveModal = false;
         tenantToArchive = null;
     }
 
-    // 3. Execute the archive process (Soft Delete)
     async Task ConfirmArchive()
     {
         if (tenantToArchive == null) return;
@@ -1217,9 +1287,8 @@
         if (businessToArchive != null)
         {
             businessToArchive.IsArchived = true;
-            businessToArchive.Status = "Archived";  // track reason
+            businessToArchive.Status = "Archived";
 
-            // Disable owner (same as Reject)
             var owner = await DbContext.Users
                 .FirstOrDefaultAsync(u => u.BusinessId == tenantToArchive.Id && u.Role == "TenantAdmin");
             if (owner != null)
@@ -1245,11 +1314,8 @@
         if (business != null)
         {
             business.IsArchived = false;
-
-            // Rejected → back to Trial (re-review), Archived → back to Active
             business.Status = t.Status == "Rejected" ? "Trial" : "Active";
 
-            // Re-enable owner account
             var owner = await DbContext.Users
                 .FirstOrDefaultAsync(u => u.BusinessId == t.Id && u.Role == "TenantAdmin");
             if (owner != null)

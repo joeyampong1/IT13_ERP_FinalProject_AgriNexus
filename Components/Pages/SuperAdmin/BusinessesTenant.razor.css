@@ -1,5 +1,5 @@
 .page-title {
-    font-weight: 700;
+    font-weight: 800;
     font-size: 2rem;
     letter-spacing: -0.5px;
     color: #0A2B1D;
@@ -12,32 +12,46 @@
 
 /* ---------- STAT CARDS ---------- */
 .stat-card {
+    background-color: #FFFFFF;
+    border: 1px solid #E2ECE6;
     border-radius: 16px;
     padding: 20px 22px;
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(10, 43, 29, 0.07);
+    }
 
     .stat-card .card-title {
         font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #64748B;
         margin-bottom: 0;
         line-height: 1.3;
     }
 
     .stat-card .card-value {
-        font-size: 1.7rem;
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: #0A2B1D;
         letter-spacing: -0.5px;
     }
 
 .stat-icon {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     flex-shrink: 0;
     border-radius: 10px;
-    background: #E8EEEA;
-    color: #1B4D2E;
+    background: #E8F3EC;
+    color: #1B5E34;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    font-size: 1.05rem;
 }
 
 .stat-icon-warn {
@@ -71,56 +85,62 @@
     .search-box input {
         width: 100%;
         padding: .55rem .9rem .55rem 2.4rem;
-        border: 1px solid var(--border-color);
+        border: 1px solid #E2ECE6;
         border-radius: 12px;
-        background: #fff;
+        background: #FFFFFF;
+        color: #0A2B1D;
         font-size: .9rem;
         outline: none;
     }
 
         .search-box input:focus {
-            border-color: #1B5E34; 
-            box-shadow: 0 0 0 0.2rem rgba(27, 94, 52, 0.15); 
+            border-color: #1B5E34;
+            box-shadow: 0 0 0 0.2rem rgba(27, 94, 52, 0.15);
         }
+
     .search-box:focus-within i {
-        color: #1B5E34; 
+        color: #1B5E34;
     }
 
 .btn-new {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    background: #1B5E34;
-    color: #fff;
+    background: linear-gradient(135deg, #0A2B1D 0%, #1B5E34 100%);
+    color: #FFFFFF;
     border: 0;
     border-radius: 12px;
     padding: .6rem 1.4rem;
     font-weight: 600;
     font-size: .9rem;
     cursor: pointer;
+    transition: all 0.2s ease;
 }
 
     .btn-new:hover {
-        background: #144A29;
+        background: linear-gradient(135deg, #0D3826 0%, #227340 100%);
+        transform: translateY(-1px);
     }
 
 /* ---------- TABLE ---------- */
 .panel {
-    background: #fff;
-    border: 1px solid var(--border-color);
+    background: #FFFFFF;
+    border: 1px solid #E2ECE6;
     border-radius: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
 }
 
-.table-wrap {
-    overflow: visible; /* para dili ma-clip ang ... menu */
-}
-
-@media (max-width: 991.98px) {
-    .table-wrap {
-        overflow-x: auto;
-        min-height: 260px;
-    }
+.biz-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background-color: #E8F3EC;
+    color: #1B5E34;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
 }
 
 .biz-table {
@@ -132,31 +152,36 @@
         font-size: .7rem;
         letter-spacing: .08em;
         text-transform: uppercase;
-        color: var(--text-muted);
-        font-weight: 600;
+        color: #64748B;
+        font-weight: 700;
         padding: 1rem;
-        border-bottom: 1px solid var(--border-color);
+        border-bottom: 1px solid #E2ECE6;
         white-space: nowrap;
     }
 
     .biz-table td {
-        padding: .85rem 1rem;
-        border-color: var(--border-color);
+        padding: .9rem 1rem;
+        border-color: #E2ECE6;
     }
 
     .biz-table tbody tr:last-child td {
         border-bottom: 0;
     }
 
-    .biz-table .sub {
-        font-size: .75rem;
-        color: var(--text-muted);
+    .biz-table tbody tr {
+        transition: background-color 0.15s ease-in-out;
     }
+
+        .biz-table tbody tr:hover {
+            background-color: #F4F8F5;
+            cursor: pointer;
+        }
 
 /* ---------- PILLS ---------- */
 .pill {
-    display: inline-block;
-    padding: 2px 12px;
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 12px;
     border-radius: 999px;
     font-size: .72rem;
     font-weight: 600;
@@ -164,9 +189,9 @@
 }
 
 .pill-green {
-    background: #E6F0E9;
+    background: #E8F3EC;
     color: #1B5E34;
-    border-color: #CFE0D4;
+    border-color: #C6DFCE;
 }
 
 .pill-blue {
@@ -190,6 +215,7 @@
 .pill-gray {
     background: #F1F5F9;
     color: #64748B;
+    border-color: #E2E8F0;
 }
 
 /* ---------- ROW ACTION MENU ---------- */
@@ -203,174 +229,33 @@
     border: 0;
     padding: 4px 8px;
     border-radius: 8px;
-    color: #1E293B;
+    color: #0A2B1D;
     cursor: pointer;
 }
 
     .btn-dots:hover {
-        background: #F1F5F9;
+        background: #E8F3EC;
+        color: #1B5E34;
     }
 
-.menu-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 30;
-}
-
-.row-menu {
-    position: absolute;
-    right: 1rem;
-    top: calc(100% - 6px);
-    z-index: 31;
-    min-width: 140px;
-    background: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 6px;
-    box-shadow: 0 10px 25px rgba(0,0,0,.12);
-    text-align: left;
-}
-
-.row-menu-item {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: none;
-    border: 0;
-    padding: .5rem .7rem;
-    border-radius: 8px;
-    font-size: .88rem;
-    cursor: pointer;
-    color: var(--text-main);
-}
-
-    .row-menu-item:hover {
-        background: #F1F5F9;
-    }
-
-/* ---------- MODAL ---------- */
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 2000; /* mas taas kaysa sidebar (1000) */
-    background: rgba(10, 31, 20, .55);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 2.5rem 1rem;
-    overflow-y: auto;
-}
-
-.modal-card {
-    background: #fff;
-    border-radius: 14px;
-    width: 100%;
-    max-width: 670px;
-    padding: 1.5rem 1.6rem;
-    box-shadow: 0 25px 60px rgba(0,0,0,.3);
-}
-
-.modal-heading {
-    font-weight: 700;
-    letter-spacing: -0.3px;
-    color: #0A2B1D;
-}
-
-.btn-close-x {
-    background: none;
-    border: 0;
-    color: #475569;
-    cursor: pointer;
-    padding: 2px 6px;
-}
-
-.modal-card .form-label {
-    font-size: .9rem;
-    font-weight: 500;
-    margin-bottom: .35rem;
-}
-
-.modal-card .form-control,
-.modal-card .form-select {
-    border-radius: 10px;
-    border: 1px solid var(--border-color);
-    padding: .55rem .8rem;
-    font-size: .9rem;
-}
-
-    .modal-card .form-control:focus,
-    .modal-card .form-select:focus {
-        border-color: var(--primary-green);
-        box-shadow: 0 0 0 .15rem rgba(56, 142, 60, .15);
-    }
-
-.req {
-    color: #DC2626;
-}
-
-.err {
-    color: #DC2626;
-    font-size: .75rem;
-    margin-top: 4px;
-}
-
-.btn-cancel {
-    background: none;
-    border: 0;
-    font-weight: 500;
-    cursor: pointer;
-    color: var(--text-main);
-}
-
-.btn-save {
-    background: #1B5E34;
-    color: #fff;
-    border: 0;
-    border-radius: 12px;
-    padding: .6rem 1.4rem;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-    .btn-save:hover {
-        background: #144A29;
-    }
-
-/* =========================================
-   TABLE ROW & FLOATING ACTION MENU (FINAL)
-   ========================================= */
-
-.biz-table tbody tr {
-    transition: background-color 0.15s ease-in-out;
-}
-
-    .biz-table tbody tr:hover {
-        background-color: #F1F5F9;
-        cursor: pointer;
-    }
-
-/* Floating Action Menu (Fixed Position) */
-.vertical-action-menu {
-    position: fixed; /* Prevents clipping by table overflow */
-    z-index: 1060;
-    width: 170px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 6px;
-    box-shadow: 0 10px 30px rgba(0,0,0,.15);
-    text-align: left;
-}
-
-/* Backdrop for closing the menu */
 .menu-backdrop {
     position: fixed;
     inset: 0;
     z-index: 1040;
 }
 
-/* Individual action buttons */
+.vertical-action-menu {
+    position: fixed;
+    z-index: 1060;
+    width: 170px;
+    background: #FFFFFF;
+    border: 1px solid #E2ECE6;
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 12px 28px rgba(10, 43, 29, 0.14);
+    text-align: left;
+}
+
 .action-item {
     display: flex;
     align-items: center;
@@ -382,33 +267,50 @@
     border-radius: 8px;
     font-size: 0.85rem;
     font-weight: 500;
-    color: #334155;
+    color: #0A2B1D;
     transition: all 0.2s ease;
     cursor: pointer;
 }
 
     .action-item:hover {
-        background-color: #F1F5F9;
-        color: #0A2B1D;
+        background-color: #F0F7F3;
+        color: #1B5E34;
     }
 
     .action-item.text-danger:hover {
         background-color: #FEE2E2;
         color: #B91C1C;
     }
-/* =========================================
-   TOOLBAR TOGGLE TABS (FINAL FIX)
-   ========================================= */
 
-/* 1. Reset the container */
+    .action-item.text-success:hover {
+        background-color: #E8F3EC;
+        color: #1B5E34;
+    }
+
+/* ---------- SAVE BUTTON ---------- */
+.btn-save {
+    background: linear-gradient(135deg, #0A2B1D 0%, #1B5E34 100%);
+    color: #FFFFFF;
+    border: 0;
+    border-radius: 12px;
+    padding: .6rem 1.4rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+    .btn-save:hover {
+        background: linear-gradient(135deg, #0D3826 0%, #227340 100%);
+    }
+
+/* ---------- TOOLBAR TOGGLE TABS ---------- */
 .toolbar .btn-group {
     border-radius: 10px;
     overflow: hidden;
-    border: 1px solid #e2e8f0;
-    background-color: transparent !important;
+    border: 1px solid #E2ECE6;
+    background-color: #FFFFFF !important;
 }
 
-    /* 2. Default state for BOTH tabs (Unselected) */
     .toolbar .btn-group .btn {
         font-size: 0.85rem;
         padding: 0.5rem 1.2rem;
@@ -419,50 +321,34 @@
         box-shadow: none !important;
     }
 
-/* 3. ACTIVE TAB (Selected) */
 .btn-check:checked + .btn-outline-success {
-    background-color: #1B5E34 !important;
-    background-image: none !important;
+    background: linear-gradient(135deg, #0A2B1D 0%, #1B5E34 100%) !important;
     border-color: #1B5E34 !important;
-    color: #ffffff !important;
+    color: #FFFFFF !important;
     box-shadow: none !important;
 }
 
-    /* ACTIVE TAB HOVER */
     .btn-check:checked + .btn-outline-success:hover {
-        background-color: #144A29 !important;
-        border-color: #144A29 !important;
+        background: linear-gradient(135deg, #0D3826 0%, #227340 100%) !important;
     }
 
-    /* Force Icon & Text to White inside Active Tab */
     .btn-check:checked + .btn-outline-success i,
     .btn-check:checked + .btn-outline-success span {
-        color: #ffffff !important;
+        color: #FFFFFF !important;
     }
 
-/* 4. ARCHIVED TAB (Selected) */
 .btn-check:checked + .btn-outline-secondary {
     background-color: #475569 !important;
-    background-image: none !important;
     border-color: #475569 !important;
-    color: #ffffff !important;
+    color: #FFFFFF !important;
     box-shadow: none !important;
 }
 
-    /* ARCHIVED TAB HOVER */
     .btn-check:checked + .btn-outline-secondary:hover {
         background-color: #334155 !important;
-        border-color: #334155 !important;
     }
 
-/* 5. UNSELECTED TAB HOVER */
 .btn-check:not(:checked) + .btn:hover {
-    background-color: #F8FAFC !important;
-    color: #1B5E34;
-}
-
-/* 6. Restore Button Hover (Optional) */
-.action-item.text-success:hover {
-    background-color: #E6F0E9;
+    background-color: #F4F8F5 !important;
     color: #1B5E34;
 }

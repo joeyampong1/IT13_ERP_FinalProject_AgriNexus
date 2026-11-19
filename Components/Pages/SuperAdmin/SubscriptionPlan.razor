@@ -1,19 +1,32 @@
 ﻿@page "/subscription-plans"
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Web
+@layout MainLayout
+@inject AgriNexusDbContext DbContext
+@inject IJSRuntime JS
+@using DBPlan = AgriNexus.DataLayer.Models.SubscriptionPlan
 
-<div class="mb-4">
-    <h2 class="page-title">Subscription Plan Management</h2>
-    <p class="text-muted mb-0 page-sub">Define what each tenant gets: branch and staff limits, storage, and bundled features.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="page-title">Subscription Plan Management</h2>
+        <p class="text-muted mb-0 page-sub">Define what each tenant gets: branch and staff limits, storage, and bundled features.</p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-wallet2 me-1"></i> Tier & Pricing Catalog
+    </span>
 </div>
 
 <!-- STAT CARDS -->
 <div class="row g-3 mb-4">
     @foreach (var s in Stats)
     {
-        <div class="col-12 col-md-4">
+        <div class="col-12 col-sm-6 col-xl-3">
             <div class="stat-card h-100">
                 <div class="d-flex justify-content-between align-items-start gap-2">
                     <span class="card-title">@s.Title</span>
-                    <div class="stat-icon"><i class="bi @s.Icon"></i></div>
+                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
                 </div>
                 <div class="mt-3">
                     <div class="card-value">@s.Value</div>
@@ -27,152 +40,418 @@
     }
 </div>
 
-<!-- TOOLBAR -->
-<div class="toolbar mb-3">
+<!-- TOOLBAR WITH TABS -->
+<div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+
+    <!-- ACTIVE / RETIRED TABS -->
+    <div class="btn-group shadow-sm" role="group" aria-label="View Tabs">
+        <input type="radio" class="btn-check" name="viewTabs" id="tabActive" autocomplete="off"
+               checked="@(!showRetired)" @onchange="() => ToggleTab(false)">
+        <label class="btn btn-outline-success fw-bold" for="tabActive">
+            <i class="bi bi-check-circle-fill me-1"></i> Active
+        </label>
+
+        <input type="radio" class="btn-check" name="viewTabs" id="tabRetired" autocomplete="off"
+               checked="@showRetired" @onchange="() => ToggleTab(true)">
+        <label class="btn btn-outline-secondary fw-bold" for="tabRetired">
+            <i class="bi bi-archive-fill me-1"></i> Retired
+        </label>
+    </div>
+
+    <!-- SEARCH BOX -->
     <div class="search-box">
         <i class="bi bi-search"></i>
-        <input type="text" placeholder="Search plans..." @bind="searchText" @bind:event="oninput" />
+        <input type="text" placeholder="Search plans..."
+               @bind="searchText"
+               @bind:event="oninput"
+               @bind:after="ResetPagination" />
     </div>
-    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "plan" : "plans")</span>
-    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+
+    <span class="badge rounded-pill px-3 py-2 fw-semibold count-label" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+        <i class="bi bi-layers me-1 text-success"></i>@Filtered.Count @(Filtered.Count == 1 ? "plan" : "plans")
+    </span>
+
+    <!-- NEW BUTTON -->
+    <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNew">
         <i class="bi bi-plus-lg"></i> New plan
     </button>
 </div>
 
-<!-- TABLE -->
-<div class="panel">
-    <div class="table-wrap">
-        <table class="table plan-table align-middle mb-0">
-            <thead>
+<!-- TABLE (WITH SCROLL, PAGINATION & ROUNDED CORNERS) -->
+<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 280px); overflow: hidden;">
+
+    <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+            <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                 <tr>
-                    <th>Plan</th>
-                    <th>Price</th>
-                    <th>Branches</th>
-                    <th>Staff</th>
-                    <th>Storage</th>
-                    <th>Features</th>
-                    <th>Status</th>
-                    <th></th>
+                    <th class="text-muted small fw-bold text-uppercase py-3 px-4">Plan</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Price</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Limits</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Storage</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Features</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Status</th>
+                    <th class="py-3"></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var p in Filtered)
+                @for (int i = 0; i < PaginatedPlans.Count(); i++)
                 {
-                    <tr>
-                        <td class="fw-semibold">
-                            @p.Name
-                            @if (p.Recommended)
-                            {
-                                <i class="bi bi-stars rec-icon" title="Recommended"></i>
-                            }
+                    var p = PaginatedPlans.ElementAt(i);
+
+                    <tr style="cursor: pointer;" @onclick="() => OpenDetails(p)">
+                        <td class="px-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="plan-avatar">
+                                    <i class="bi @(p.Recommended ? "bi-award-fill" : "bi-card-checklist")"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: #0A2B1D;">
+                                        @p.Name
+                                        @if (p.Recommended)
+                                        {
+                                            <i class="bi bi-stars text-warning ms-1" title="Recommended"></i>
+                                        }
+                                    </div>
+                                    <div class="text-muted small mt-1">@Cap(p.Cycle) cycle</div>
+                                </div>
+                            </div>
                         </td>
-                        <td class="fw-semibold">₱@p.Price.ToString("N2")<span class="per">/@(p.Cycle == "yearly" ? "yr" : "mo")</span></td>
-                        <td>@p.Branches</td>
-                        <td>@p.Staff</td>
-                        <td>@p.StorageGb GB</td>
-                        <td class="text-muted">@p.FeatureList.Count included</td>
-                        <td><span class="pill @(p.Status == "active" ? "pill-green" : "pill-gray")">@Cap(p.Status)</span></td>
-                        <td class="text-end action-cell">
-                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(p.Id)" aria-label="Actions">
+                        <td class="fw-bold" style="color: #0A2B1D;">₱@p.Price.ToString("N2")</td>
+                        <td>
+                            <div class="small text-muted"><i class="bi bi-shop text-success me-1"></i>@p.Branches Branches</div>
+                            <div class="small text-muted"><i class="bi bi-people text-success me-1"></i>@p.Staff Staff</div>
+                        </td>
+                        <td class="fw-medium text-dark">
+                            <i class="bi bi-hdd-stack text-success me-1"></i>@p.StorageGb GB
+                        </td>
+                        <td class="text-muted small fw-medium">
+                            <i class="bi bi-check2-circle text-success me-1"></i>@p.FeatureList.Count included
+                        </td>
+                        <td>
+                            <span class="pill @(p.Status == "active" ? "pill-green" : "pill-gray")">
+                                <i class="bi @(p.Status == "active" ? "bi-check-circle-fill" : "bi-archive") me-1"></i>@Cap(p.Status)
+                            </span>
+                        </td>
+                        <td class="text-end px-4 action-cell">
+                            <button type="button" class="btn-dots"
+                                    @onclick="(e) => ToggleMenuAsync(e, p.Id)"
+                                    @onclick:stopPropagation="true" aria-label="Actions">
                                 <i class="bi bi-three-dots"></i>
                             </button>
-                            @if (openMenuId == p.Id)
-                            {
-                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                <div class="row-menu">
-                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(p)">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </button>
-                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(p)">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </div>
-                            }
                         </td>
                     </tr>
                 }
                 @if (Filtered.Count == 0)
                 {
-                    <tr><td colspan="8" class="text-center text-muted py-5">No plans found.</td></tr>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                            No plans found.
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
     </div>
-</div>
 
-<!-- MODAL -->
-@if (showModal)
-{
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New plan" : "Edit plan")</h5>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    <!-- PAGINATION FOOTER -->
+    @if (Filtered.Count > 0)
+    {
+        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+            <div class="text-muted small mb-2 mb-md-0">
+                Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> plans
             </div>
 
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Plan name <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
-                    {
-                        <div class="err">Plan name is required.</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Monthly price (₱)</label>
-                    <input type="number" min="0" step="0.01" class="form-control" @bind="form.Price" />
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                    <i class="bi bi-chevron-left me-1"></i>Previous
+                </button>
+
+                @for (int i = 1; i <= TotalPages; i++)
+                {
+                    var pageNumber = i;
+                    <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                            @onclick="() => GoToPage(pageNumber)">
+                        @pageNumber
+                    </button>
+                }
+
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                    Next<i class="bi bi-chevron-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- ACTION MENU -->
+@if (openMenuId != null)
+{
+    var menuPlan = plans.FirstOrDefault(x => x.Id == openMenuId);
+    if (menuPlan != null)
+    {
+        <div class="menu-backdrop" @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
+
+        <div class="vertical-action-menu shadow-lg" style="top:@(menuTop)px; left:@(menuLeft)px;">
+            @if (!showRetired)
+            {
+                <button type="button" class="action-item" @onclick="() => OpenEdit(menuPlan)" @onclick:stopPropagation="true">
+                    <i class="bi bi-pencil-square text-success"></i> Edit Plan
+                </button>
+                <button type="button" class="action-item text-danger" @onclick="() => Archive(menuPlan)" @onclick:stopPropagation="true">
+                    <i class="bi bi-archive-fill"></i> Retire Plan
+                </button>
+            }
+            else
+            {
+                <button type="button" class="action-item text-success" @onclick="() => RestorePlan(menuPlan)" @onclick:stopPropagation="true">
+                    <i class="bi bi-arrow-counterclockwise"></i> Restore Plan
+                </button>
+            }
+        </div>
+    }
+}
+
+<!-- DETAILS MODAL -->
+@if (showDetailsModal && selectedPlan != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi bi-card-list fs-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedPlan.Name</h4>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+                                <span class="badge px-2 py-1 rounded-pill" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+                                    @Cap(selectedPlan.Cycle) Billing
+                                </span>
+                                @if (selectedPlan.Recommended)
+                                {
+                                    <span class="badge px-2 py-1 rounded-pill fw-bold" style="background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A;">
+                                        <i class="bi bi-star-fill text-warning me-1"></i>Recommended Plan
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
                 </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Billing cycle</label>
-                    <select class="form-select" @bind="form.Cycle">
-                        <option value="monthly">monthly</option>
-                        <option value="yearly">yearly</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Branch limit</label>
-                    <input type="number" min="1" class="form-control" @bind="form.Branches" />
-                </div>
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-info-circle-fill me-2 text-success"></i>Plan Details
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Price</label>
+                                <p class="mb-0 fw-bolder fs-5" style="color: #0A2B1D;">₱@selectedPlan.Price.ToString("N2")</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Status</label>
+                                <div class="mt-1">
+                                    <span class="pill @(selectedPlan.Status == "active" ? "pill-green" : "pill-gray")">
+                                        <i class="bi @(selectedPlan.Status == "active" ? "bi-check-circle-fill" : "bi-archive") me-1"></i>@Cap(selectedPlan.Status)
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="col-12 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Description</label>
+                                <p class="mb-0 text-muted">@(string.IsNullOrEmpty(selectedPlan.Description) ? "No description." : selectedPlan.Description)</p>
+                            </div>
+                        </div>
+                    </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Staff account limit</label>
-                    <input type="number" min="1" class="form-control" @bind="form.Staff" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Storage (GB)</label>
-                    <input type="number" min="1" class="form-control" @bind="form.StorageGb" />
-                </div>
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-sliders me-2 text-success"></i>Limits & Storage
+                        </h6>
+                        <div class="row g-3 text-center">
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 border" style="background-color: #F7FAF8; border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #1B5E34;">@selectedPlan.Branches</h4>
+                                    <small class="text-muted fw-medium">Branches</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 border" style="background-color: #F7FAF8; border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #1B5E34;">@selectedPlan.Staff</h4>
+                                    <small class="text-muted fw-medium">Staff Accounts</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 border" style="background-color: #F7FAF8; border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #1B5E34;">@selectedPlan.StorageGb GB</h4>
+                                    <small class="text-muted fw-medium">Storage</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" @bind="form.Status">
-                        <option value="active">active</option>
-                        <option value="retired">retired</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Highlight as recommended</label>
-                    <div class="form-check form-switch switch-row">
-                        <input class="form-check-input" type="checkbox" role="switch" id="recSwitch" @bind="form.Recommended" />
-                        <label class="form-check-label" for="recSwitch">@(form.Recommended ? "Enabled" : "Disabled")</label>
+                    <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-check2-square me-2 text-success"></i>Included Features
+                        </h6>
+                        <ul class="list-group list-group-flush bg-transparent">
+                            @foreach (var feature in selectedPlan.FeatureList)
+                            {
+                                <li class="list-group-item bg-transparent px-0 text-dark small fw-medium">
+                                    <i class="bi bi-check-circle-fill text-success me-2"></i>@feature
+                                </li>
+                            }
+                        </ul>
                     </div>
                 </div>
 
-                <div class="col-12">
-                    <label class="form-label">Description</label>
-                    <textarea class="form-control" rows="3" @bind="form.Description"></textarea>
-                </div>
-                <div class="col-12">
-                    <label class="form-label">Included features (one per line)</label>
-                    <textarea class="form-control" rows="5" @bind="featuresText"></textarea>
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedPlan)">
+                        <i class="bi bi-pencil-square me-2"></i>Edit Plan
+                    </button>
                 </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
+<!-- ADD / EDIT MODAL -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(editingId == null ? "bi-plus-circle-fill" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingId == null ? "Create New Plan" : "Edit Plan Details")
+                            </h4>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-card-heading me-2 text-success"></i>Basic Information
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <label class="form-label fw-bold small text-muted">Plan Name <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-tag text-success"></i></span>
+                                        <input class="form-control" @bind="form.Name" placeholder="e.g. Starter Plan" />
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">Price (₱)</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-currency-exchange text-success"></i></span>
+                                        <input type="number" min="0" class="form-control" @bind="form.Price" />
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Billing Cycle</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="form.Cycle">
+                                        <option value="monthly">Monthly</option>
+                                        <option value="yearly">Yearly</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Status</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="form.Status">
+                                        <option value="active">Active</option>
+                                        <option value="retired">Retired</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-sliders me-2 text-success"></i>Limits & Storage
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">Branch Limit</label>
+                                    <input type="number" min="1" class="form-control border-0 shadow-sm" @bind="form.Branches" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">Staff Limit</label>
+                                    <input type="number" min="1" class="form-control border-0 shadow-sm" @bind="form.Staff" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">Storage (GB)</label>
+                                    <input type="number" min="1" class="form-control border-0 shadow-sm" @bind="form.StorageGb" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-gear-wide-connected me-2 text-success"></i>Details & Features
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small text-muted">Description</label>
+                                    <textarea class="form-control border-0 shadow-sm" rows="2" @bind="form.Description" placeholder="Brief overview of the plan..."></textarea>
+                                </div>
+                                <div class="col-12 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Included Features (One per line)</label>
+                                    <textarea class="form-control border-0 shadow-sm" rows="4" @bind="featuresText" placeholder="Inventory management&#10;Multi-branch support"></textarea>
+                                </div>
+                                <div class="col-12 mt-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="recSwitch" @bind="form.Recommended" />
+                                        <label class="form-check-label fw-bold small text-muted" for="recSwitch">Highlight as Recommended</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="Save">
+                        <i class="bi bi-check2-circle me-2"></i>@(editingId == null ? "Save Plan" : "Update Plan")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- RETIRE CONFIRMATION MODAL -->
+@if (showArchiveModal && planToArchive != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
+                        <i class="bi bi-archive" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Retire Plan?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to retire <strong>@planToArchive.Name</strong>? <br />
+                        It will be hidden from new tenants, but existing tenants on this plan will remain unaffected.
+                    </p>
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CloseArchiveModal">Cancel</button>
+                        <button type="button" class="btn btn-danger rounded-3 fw-bold px-4 shadow-sm" @onclick="ConfirmArchive">
+                            <i class="bi bi-archive-fill me-1"></i> Yes, Retire
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -190,9 +469,28 @@
         public int Staff { get; set; } = 5;
         public int StorageGb { get; set; } = 5;
         public string Status { get; set; } = "active";
+        public bool IsArchived { get; set; }
         public bool Recommended { get; set; }
         public string Description { get; set; } = "";
         public List<string> FeatureList { get; set; } = new();
+
+        public static Plan FromEntity(DBPlan e) => new()
+        {
+            Id = e.PlanId,
+            Name = e.Name,
+            Price = e.Price,
+            Cycle = e.Cycle,
+            Branches = e.BranchLimit,
+            Staff = e.StaffLimit,
+            StorageGb = e.StorageGb,
+            Status = e.Status,
+            IsArchived = e.IsArchived,
+            Recommended = e.Recommended,
+            Description = e.Description ?? "",
+            FeatureList = string.IsNullOrEmpty(e.FeatureList)
+                ? new List<string>()
+                : e.FeatureList!.Split(new[] { '\n', ',' }, StringSplitOptions.RemoveEmptyEntries).Select(f => f.Trim()).ToList()
+        };
 
         public Plan Clone()
         {
@@ -202,7 +500,13 @@
         }
     }
 
-    record Stat(string Title, string Value, string Note, string Icon);
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    class Viewport
+    {
+        public double W { get; set; }
+        public double H { get; set; }
+    }
 
     // ---------- STATE ----------
     string searchText = "";
@@ -213,44 +517,92 @@
     Plan form = new();
     string featuresText = "";
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    readonly List<Plan> plans = new()
+    bool showDetailsModal;
+    Plan? selectedPlan;
+
+    bool showRetired = false;
+    bool showArchiveModal;
+    Plan? planToArchive;
+
+    List<Plan> plans = new();
+
+    private int currentPage = 1;
+    private int pageSize = 5;
+    private double menuTop;
+    private double menuLeft;
+
+    protected override async Task OnInitializedAsync()
     {
-        new() { Id = 1, Name = "Starter", Price = 1499, Cycle = "monthly", Branches = 1, Staff = 5, StorageGb = 5, Status = "active",
-                Description = "For small farms getting started.",
-                FeatureList = new() { "Inventory management", "Basic sales", "Worker records", "Harvest recording", "Email support" } },
-        new() { Id = 2, Name = "Growth", Price = 3999, Cycle = "monthly", Branches = 3, Staff = 25, StorageGb = 50, Status = "active", Recommended = true,
-                Description = "For growing agribusinesses with multiple branches.",
-                FeatureList = new() { "Everything in Starter", "Multi-branch support", "Production costing", "Financial reports", "Attendance & logs", "Priority support" } },
-        new() { Id = 3, Name = "Enterprise", Price = 9999, Cycle = "monthly", Branches = 15, Staff = 150, StorageGb = 250, Status = "active",
-                Description = "For large operations that need full control.",
-                FeatureList = new() { "Everything in Growth", "Audit trail", "Role & permission control", "Consolidated reports", "Data export", "Dedicated support" } },
-        new() { Id = 4, Name = "Cooperative Custom", Price = 14999, Cycle = "yearly", Branches = 25, Staff = 300, StorageGb = 500, Status = "active",
-                Description = "Custom plan for cooperatives and federations.",
-                FeatureList = new() { "Member management", "Consolidated reports", "Custom onboarding", "Offline synchronization", "Dedicated support" } },
-        new() { Id = 5, Name = "Legacy Lite", Price = 899, Cycle = "monthly", Branches = 1, Staff = 3, StorageGb = 2, Status = "retired",
-                Description = "Retired plan kept for existing tenants.",
-                FeatureList = new() { "Inventory management", "Basic sales", "Worker records" } },
-    };
+        await LoadPlansAsync();
+    }
+
+    private async Task LoadPlansAsync()
+    {
+        var dbPlans = await DbContext.SubscriptionPlans.ToListAsync();
+        plans = dbPlans.Select(e => Plan.FromEntity(e)).ToList();
+    }
+
+    // Pagination Methods
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
 
     // ---------- COMPUTED ----------
-    List<Plan> Filtered => string.IsNullOrWhiteSpace(searchText)
-        ? plans
-        : plans.Where(p =>
-            p.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            p.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+    List<Plan> Filtered
+    {
+        get
+        {
+            var baseList = plans.Where(p => showRetired ? p.IsArchived : !p.IsArchived).ToList();
+            if (string.IsNullOrWhiteSpace(searchText)) return baseList;
+
+            return baseList.Where(p =>
+                p.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                p.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private int TotalPages => (int)Math.Ceiling((double)Filtered.Count / pageSize);
+    private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<Plan> PaginatedPlans => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private async Task ToggleMenuAsync(MouseEventArgs e, int id)
+    {
+        if (openMenuId == id)
+        {
+            openMenuId = null;
+            return;
+        }
+
+        const double itemHeight = 42;
+        const double padding = 16;
+        const double menuWidth = 200;
+        int itemCount = showRetired ? 1 : 2;
+
+        double menuHeight = (itemCount * itemHeight) + padding;
+
+        var viewport = await JS.InvokeAsync<Viewport>("eval", "({ w: window.innerWidth, h: window.innerHeight })");
+
+        menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewport.W - menuWidth - 10);
+        menuTop = (e.ClientY + menuHeight > viewport.H) ? e.ClientY - menuHeight - 5 : e.ClientY + 15;
+
+        openMenuId = id;
+    }
 
     List<Stat> Stats
     {
         get
         {
-            var avg = plans.Count == 0 ? 0 : plans.Average(p => p.Price);
-            var max = plans.Count == 0 ? 0 : plans.Max(p => p.Price);
+            var activeCount = plans.Count(p => p.Status == "active");
+            var avgPrice = activeCount == 0 ? 0 : plans.Where(p => p.Status == "active").Average(p => p.Price);
+
             return new()
             {
-                new("PLANS DEFINED", plans.Count.ToString(), "", "bi-credit-card"),
-                new("ACTIVE PLANS", plans.Count(p => p.Status == "active").ToString(), "", "bi-layers"),
-                new("AVERAGE PRICE", $"₱{avg:N2}", $"Highest: ₱{max:N2}", "bi-stars"),
+                new("PLANS DEFINED", plans.Count.ToString(), "", "bi-credit-card-2-front-fill", ""),
+                new("ACTIVE PLANS", activeCount.ToString(), "", "bi-layers-fill", ""),
+                new("AVERAGE PRICE", $"₱{avgPrice:N2}", "Active plans average", "bi-cash-stack", ""),
+                new("RECOMMENDED", plans.Count(p => p.Recommended && p.Status == "active").ToString(), "Highlighted to users", "bi-award-fill", "stat-icon-warn"),
             };
         }
     }
@@ -269,6 +621,7 @@
 
     void OpenEdit(Plan p)
     {
+        showDetailsModal = false;
         form = p.Clone();
         featuresText = string.Join("\n", p.FeatureList);
         editingId = p.Id;
@@ -277,9 +630,21 @@
         showModal = true;
     }
 
+    void OpenDetails(Plan p)
+    {
+        selectedPlan = p;
+        showDetailsModal = true;
+    }
+
+    void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedPlan = null;
+    }
+
     void CloseModal() => showModal = false;
 
-    void Save()
+    async Task Save()
     {
         showErrors = true;
         if (string.IsNullOrWhiteSpace(form.Name)) return;
@@ -292,23 +657,88 @@
 
         if (editingId == null)
         {
-            form.Id = plans.Count == 0 ? 1 : plans.Max(p => p.Id) + 1;
-            plans.Add(form);
+            var newPlan = new DBPlan
+            {
+                Name = form.Name,
+                Price = form.Price,
+                Cycle = form.Cycle,
+                BranchLimit = form.Branches,
+                StaffLimit = form.Staff,
+                StorageGb = form.StorageGb,
+                Status = form.Status,
+                IsArchived = form.Status == "retired",
+                Recommended = form.Recommended,
+                Description = form.Description,
+                FeatureList = string.Join("\n", form.FeatureList)
+            };
+            DbContext.SubscriptionPlans.Add(newPlan);
         }
         else
         {
-            var idx = plans.FindIndex(p => p.Id == editingId);
-            if (idx >= 0) plans[idx] = form;
+            var existingPlan = await DbContext.SubscriptionPlans.FindAsync(editingId);
+            if (existingPlan != null)
+            {
+                existingPlan.Name = form.Name; existingPlan.Price = form.Price; existingPlan.Cycle = form.Cycle;
+                existingPlan.BranchLimit = form.Branches; existingPlan.StaffLimit = form.Staff; existingPlan.StorageGb = form.StorageGb;
+                existingPlan.Status = form.Status; existingPlan.Recommended = form.Recommended; existingPlan.Description = form.Description;
+                existingPlan.IsArchived = form.Status == "retired";
+                existingPlan.FeatureList = string.Join("\n", form.FeatureList);
+                DbContext.SubscriptionPlans.Update(existingPlan);
+            }
         }
+        await DbContext.SaveChangesAsync();
+        await LoadPlansAsync();
         showModal = false;
     }
 
-    void Delete(Plan p)
+    void Archive(Plan p)
     {
-        plans.Remove(p);
+        planToArchive = p;
+        showArchiveModal = true;
         openMenuId = null;
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseArchiveModal()
+    {
+        showArchiveModal = false;
+        planToArchive = null;
+    }
+
+    async Task ConfirmArchive()
+    {
+        if (planToArchive == null) return;
+        var p = await DbContext.SubscriptionPlans.FindAsync(planToArchive.Id);
+        if (p != null)
+        {
+            p.IsArchived = true;
+            p.Status = "retired";
+            DbContext.SubscriptionPlans.Update(p);
+            await DbContext.SaveChangesAsync();
+        }
+        CloseArchiveModal();
+        await LoadPlansAsync();
+    }
+
+    async Task RestorePlan(Plan p)
+    {
+        var existingPlan = await DbContext.SubscriptionPlans.FindAsync(p.Id);
+        if (existingPlan != null)
+        {
+            existingPlan.IsArchived = false;
+            existingPlan.Status = "active";
+            DbContext.SubscriptionPlans.Update(existingPlan);
+            await DbContext.SaveChangesAsync();
+        }
+        openMenuId = null;
+        await LoadPlansAsync();
+    }
+
+    private async Task ToggleTab(bool isRetired)
+    {
+        showRetired = isRetired;
+        currentPage = 1;
+        await Task.CompletedTask;
+    }
+
     void CloseMenu() => openMenuId = null;
 }

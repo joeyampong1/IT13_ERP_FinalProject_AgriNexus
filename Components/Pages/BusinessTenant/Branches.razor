@@ -1,9 +1,24 @@
 ﻿@page "/branches"
+@layout MainLayout
 @using System.Globalization
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Web
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
+@inject AgriNexus.Services.AuthService Auth
+@inject IJSRuntime JS
 
-<div class="mb-4">
-    <h2 class="page-title">Branch Management</h2>
-    <p class="text-muted mb-0 page-sub">@BusinessName · each branch operates its own plots, staff, inventory and cash drawer.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="page-title">Branch Management</h2>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@businessName</strong> · each branch operates its own plots, staff, inventory and cash drawer.
+        </p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-shop me-1"></i> Branch Directory
+    </span>
 </div>
 
 <!-- STAT CARDS -->
@@ -28,138 +43,485 @@
     }
 </div>
 
-<!-- TOOLBAR -->
-<div class="toolbar mb-3">
+<!-- TOOLBAR WITH TABS -->
+<div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+
+    <!-- ACTIVE / INACTIVE TABS -->
+    <div class="btn-group shadow-sm" role="group" aria-label="View Tabs">
+        <input type="radio" class="btn-check" name="branchViewTabs" id="tabBranchActive" autocomplete="off"
+               checked="@(!showInactive)" @onchange="() => ToggleTab(false)">
+        <label class="btn btn-outline-success fw-bold" for="tabBranchActive">
+            <i class="bi bi-check-circle-fill me-1"></i> Active
+        </label>
+
+        <input type="radio" class="btn-check" name="branchViewTabs" id="tabBranchInactive" autocomplete="off"
+               checked="@showInactive" @onchange="() => ToggleTab(true)">
+        <label class="btn btn-outline-secondary fw-bold" for="tabBranchInactive">
+            <i class="bi bi-archive-fill me-1"></i> Inactive
+        </label>
+    </div>
+
+    <!-- SEARCH BOX -->
     <div class="search-box">
         <i class="bi bi-search"></i>
-        <input type="text" placeholder="Search branches..." @bind="searchText" @bind:event="oninput" />
+        <input type="text" placeholder="Search branches..."
+               @bind="searchText"
+               @bind:event="oninput"
+               @bind:after="ResetPagination" />
     </div>
-    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "branch" : "branches")</span>
-    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+
+    <span class="badge rounded-pill px-3 py-2 fw-semibold count-label" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+        <i class="bi bi-shop me-1 text-success"></i>@Filtered.Count @(Filtered.Count == 1 ? "branch" : "branches")
+    </span>
+
+    <!-- NEW BUTTON -->
+    <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNew">
         <i class="bi bi-plus-lg"></i> New branch
     </button>
 </div>
 
-<!-- TABLE -->
-<div class="panel">
-    <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
-            <thead>
+<!-- TABLE (WITH SCROLL, PAGINATION & ROUNDED CORNERS) -->
+<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 280px); overflow: hidden;">
+
+    <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+            <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                 <tr>
-                    <th>Branch</th>
-                    <th>Branch manager</th>
-                    <th>Contact</th>
-                    <th>Plots</th>
-                    <th>Staff</th>
-                    <th>Opened</th>
-                    <th>Status</th>
-                    <th></th>
+                    <th class="text-muted small fw-bold text-uppercase py-3 px-4">Branch</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Branch Manager</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Contact</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Plots</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Staff</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Opened</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Status</th>
+                    <th class="py-3"></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var b in Filtered)
+                @foreach (var b in PaginatedBranches)
                 {
-                    <tr>
-                        <td>
-                            <div class="fw-semibold">@b.Name</div>
-                            <div class="sub">@b.Code</div>
+                    <tr style="cursor: pointer;" @onclick="() => OpenDetails(b)">
+                        <td class="px-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="branch-avatar">
+                                    <i class="bi bi-shop"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: #0A2B1D;">@b.Name</div>
+                                    <div class="text-muted small mt-1">
+                                        <span class="fw-semibold" style="color: #1B5E34;">@b.Code</span>
+                                        @(string.IsNullOrWhiteSpace(b.Address) ? "" : " · " + b.Address)
+                                    </div>
+                                </div>
+                            </div>
                         </td>
-                        <td>@(string.IsNullOrWhiteSpace(b.Manager) ? "—" : b.Manager)</td>
-                        <td class="text-nowrap">@(string.IsNullOrWhiteSpace(b.Contact) ? "—" : b.Contact)</td>
-                        <td>@b.Plots</td>
-                        <td>@b.Staff</td>
-                        <td class="text-nowrap">@b.Opened.ToString("MMM d, yyyy", Inv)</td>
-                        <td><span class="pill @(b.Status == "active" ? "pill-green" : "pill-gray")">@Cap(b.Status)</span></td>
-                        <td class="text-end action-cell">
-                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(b.Id)" aria-label="Actions">
+                        <td>
+                            @if (string.IsNullOrWhiteSpace(b.Manager))
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                            else
+                            {
+                                <span class="fw-semibold text-dark"><i class="bi bi-person-badge text-success me-1"></i>@b.Manager</span>
+                            }
+                        </td>
+                        <td class="text-nowrap text-dark fw-medium">
+                            @if (string.IsNullOrWhiteSpace(b.Contact))
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                            else
+                            {
+                                <span><i class="bi bi-telephone text-success me-1"></i>@b.Contact</span>
+                            }
+                        </td>
+                        <td class="fw-semibold text-dark">@b.Plots</td>
+                        <td class="fw-semibold text-dark">@b.Staff</td>
+                        <td class="text-nowrap text-muted small fw-medium">
+                            <i class="bi bi-calendar3 text-success me-1"></i>@b.Opened.ToString("MMM d, yyyy", Inv)
+                        </td>
+                        <td>
+                            <span class="pill @(b.Status == "active" ? "pill-forest" : "pill-earth")">
+                                <i class="bi @(b.Status == "active" ? "bi-check-circle-fill" : "bi-pause-circle-fill") me-1"></i>@Cap(b.Status)
+                            </span>
+                        </td>
+                        <td class="text-end px-4 action-cell">
+                            <button type="button" class="btn-dots"
+                                    @onclick="(e) => ToggleMenuAsync(e, b.Id)"
+                                    @onclick:stopPropagation="true" aria-label="Actions">
                                 <i class="bi bi-three-dots"></i>
                             </button>
-                            @if (openMenuId == b.Id)
-                            {
-                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                <div class="row-menu">
-                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(b)">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </button>
-                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(b)">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </div>
-                            }
                         </td>
                     </tr>
                 }
                 @if (Filtered.Count == 0)
                 {
-                    <tr><td colspan="8" class="text-center text-muted py-5">No branches found.</td></tr>
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                            No branches found.
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
     </div>
+
+    <!-- PAGINATION FOOTER -->
+    @if (Filtered.Count > 0)
+    {
+        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+            <div class="text-muted small mb-2 mb-md-0">
+                Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> branches
+            </div>
+
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                    <i class="bi bi-chevron-left me-1"></i>Previous
+                </button>
+
+                @for (int i = 1; i <= TotalPages; i++)
+                {
+                    var pageNumber = i;
+                    <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                            @onclick="() => GoToPage(pageNumber)">
+                        @pageNumber
+                    </button>
+                }
+
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                    Next<i class="bi bi-chevron-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    }
 </div>
 
-<!-- MODAL -->
+<!-- FLOATING ACTION MENU -->
+@if (openMenuId != null)
+{
+    var menuBranch = branches.FirstOrDefault(x => x.Id == openMenuId);
+    if (menuBranch != null)
+    {
+        <div class="menu-backdrop" @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
+
+        <div class="vertical-action-menu shadow-lg" style="top:@(menuTop)px; left:@(menuLeft)px;">
+            @if (!showInactive)
+            {
+                <button type="button" class="action-item"
+                        @onclick="() => OpenEdit(menuBranch)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-pencil-square text-success"></i> Edit
+                </button>
+                <button type="button" class="action-item text-earth"
+                        @onclick="() => PromptDeactivate(menuBranch)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-archive-fill"></i> Deactivate
+                </button>
+            }
+            else
+            {
+                <button type="button" class="action-item text-success"
+                        @onclick="() => ActivateBranchAsync(menuBranch)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reactivate
+                </button>
+            }
+        </div>
+    }
+}
+
+<!-- DETAILS MODAL -->
+@if (showDetailsModal && selectedBranch != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <!-- Header -->
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi bi-shop fs-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedBranch.Name</h4>
+                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                <i class="bi bi-upc-scan me-1"></i>@selectedBranch.Code
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <!-- SECTION 1: Branch Leadership & Contact -->
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-person-badge-fill me-2 text-success"></i>Manager &amp; Contact Information
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Branch Manager</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    @(string.IsNullOrWhiteSpace(selectedBranch.Manager) ? "Not assigned" : selectedBranch.Manager)
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Contact Number</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    @(string.IsNullOrWhiteSpace(selectedBranch.Contact) ? "N/A" : selectedBranch.Contact)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Date Opened</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-calendar-event-fill text-success me-2"></i>@selectedBranch.Opened.ToString("MMMM d, yyyy", Inv)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Operational Status</label>
+                                <span class="pill @(selectedBranch.Status == "active" ? "pill-forest" : "pill-earth")">
+                                    <i class="bi @(selectedBranch.Status == "active" ? "bi-check-circle-fill" : "bi-pause-circle-fill") me-1"></i>@Cap(selectedBranch.Status)
+                                </span>
+                            </div>
+                            <div class="col-12 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Branch Address</label>
+                                <p class="mb-0 text-muted fst-italic">
+                                    @(string.IsNullOrWhiteSpace(selectedBranch.Address) ? "No address provided." : selectedBranch.Address)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: Operational Footprint -->
+                    <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-grid-1x2-fill me-2 text-success"></i>Operational Summary
+                        </h6>
+                        <div class="row g-3 text-center">
+                            <div class="col-4">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #1B5E34;">@selectedBranch.Plots</h4>
+                                    <small class="text-muted fw-medium">Farm Plots</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #4E8D2A;">@selectedBranch.Hectares.ToString("0.##", Inv) ha</h4>
+                                    <small class="text-muted fw-medium">Total Area</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #7A5230;">@selectedBranch.Staff</h4>
+                                    <small class="text-muted fw-medium">Assigned Staff</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedBranch)">
+                        <i class="bi bi-pencil-square me-2"></i>Edit Branch
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ADD / EDIT MODAL -->
 @if (showModal)
 {
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New branch" : "Edit branch")</h5>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <!-- Header -->
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(editingId == null ? "bi-shop" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingId == null ? "Register New Branch" : "Edit Branch Details")
+                            </h4>
+                            <p class="text-muted small mb-0">Fill in the branch information below to @(editingId == null ? "create a new branch" : "update the branch").</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <!-- SECTION 1: Branch Identification -->
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-shop me-2 text-success"></i>Branch Identification
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <label class="form-label fw-bold small text-muted">Branch Name <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-building text-success"></i></span>
+                                        <input class="form-control" placeholder="e.g. North Field Branch"
+                                               @bind="form.Name"
+                                               @bind:after="() => form.Name = CapitalizeWords(form.Name)" />
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
+                                    {
+                                        <div class="err">Branch name is required.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">Branch Code <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && (string.IsNullOrWhiteSpace(form.Code) || CodeTaken) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-upc-scan text-success"></i></span>
+                                        <input class="form-control fw-bold" placeholder="@NextCode"
+                                               @bind="form.Code"
+                                               @bind:after="() => form.Code = form.Code.Trim().ToUpper()" />
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(form.Code))
+                                    {
+                                        <div class="err">Branch code is required.</div>
+                                    }
+                                    @if (showErrors && CodeTaken)
+                                    {
+                                        <div class="err">This code is already used.</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SECTION 2: Management & Contact -->
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-person-badge-fill me-2 text-success"></i>Management &amp; Contact
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Branch Manager</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person-badge text-success"></i></span>
+                                        <select class="form-select" @bind="form.Manager">
+                                            <option value="">-- Select Branch Manager --</option>
+                                            @foreach (var m in availableManagers)
+                                            {
+                                                var fullName = $"{m.FName} {m.MName} {m.LName}".Replace("  ", " ").Trim();
+                                                <option value="@fullName">@fullName</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    @if (availableManagers.Count == 0)
+                                    {
+                                        <div class="text-muted small mt-1">
+                                            <i class="bi bi-info-circle me-1"></i>No active Branch Managers yet. Create one in Staff &amp; Permissions.
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Contact Number</label>
+                                    <div class="input-group modern-input @(showErrors && !string.IsNullOrEmpty(contactError) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-telephone text-success"></i></span>
+                                        <input type="tel"
+                                               inputmode="numeric"
+                                               maxlength="13"
+                                               class="form-control"
+                                               @bind="form.Contact"
+                                               @bind:event="oninput"
+                                               @bind:after="FormatContactNumber"
+                                               placeholder="09XX XXX XXXX"
+                                               spellcheck="false" />
+                                    </div>
+                                    @if (showErrors && !string.IsNullOrEmpty(contactError))
+                                    {
+                                        <div class="err">@contactError</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SECTION 3: Location & Status -->
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-geo-alt-fill me-2 text-success"></i>Location &amp; Operational Status
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Date Opened</label>
+                                    <input type="date" class="form-control border-0 shadow-sm" @bind="form.Opened" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Status</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="form.Status">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Complete Address</label>
+                                    <input class="form-control border-0 shadow-sm"
+                                           @bind="form.Address"
+                                           @bind:after="() => form.Address = CapitalizeWords(form.Address)"
+                                           placeholder="Barangay, Municipality, Province" />
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Footer -->
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="SaveAsync" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check2-circle me-2"></i>
+                            <span>@(editingId == null ? "Save Branch" : "Update Branch")</span>
+                        }
+                    </button>
+                </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Branch name <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
-                    {
-                        <div class="err">Branch name is required.</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Branch code <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Code) ? "is-invalid" : "")" placeholder="@NextCode" @bind="form.Code" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Code))
-                    {
-                        <div class="err">Branch code is required.</div>
-                    }
-                    @if (showErrors && CodeTaken)
-                    {
-                        <div class="err">This code is already used.</div>
-                    }
-                </div>
+<!-- DEACTIVATE CONFIRMATION MODAL -->
+@if (showDeactivateModal && branchToDeactivate != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #F5EFEA; color: #7A5230;">
+                        <i class="bi bi-archive-fill" style="font-size: 2.3rem;"></i>
+                    </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Branch manager</label>
-                    <input class="form-control" @bind="form.Manager" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Contact number</label>
-                    <input class="form-control" @bind="form.Contact" />
-                </div>
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Deactivate Branch?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to set <strong>@branchToDeactivate.Name</strong> to inactive?<br />
+                        It will be moved to the Inactive tab, while keeping all historical records safe.
+                    </p>
 
-                <div class="col-md-6">
-                    <label class="form-label">Date opened</label>
-                    <input type="date" class="form-control" @bind="form.Opened" />
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CloseDeactivateModal">Cancel</button>
+                        <button type="button" class="btn-earth rounded-3 fw-bold px-4 shadow-sm" @onclick="ConfirmDeactivateAsync">
+                            <i class="bi bi-archive-fill me-1"></i> Yes, Deactivate
+                        </button>
+                    </div>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" @bind="form.Status">
-                        <option value="active">active</option>
-                        <option value="inactive">inactive</option>
-                    </select>
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label">Address</label>
-                    <input class="form-control" @bind="form.Address" />
-                </div>
-            </div>
-
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
             </div>
         </div>
     </div>
@@ -167,14 +529,18 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+    <div class="toast-note shadow-lg">
+        <i class="bi @(toastIsWarning ? "bi-exclamation-circle-fill" : "bi-check-circle-fill")"></i>
+        <span>@toast</span>
+    </div>
 }
 
 @code {
     // ---------- MODELS ----------
     class BranchRec
     {
-        public int Id { get; set; }
+        public long Id { get; set; }
+        public long BusinessId { get; set; }
         public string Name { get; set; } = "";
         public string Code { get; set; } = "";
         public string Manager { get; set; } = "";
@@ -191,42 +557,147 @@
 
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
 
+    class Viewport
+    {
+        public double W { get; set; }
+        public double H { get; set; }
+    }
+
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    // TODO: kuhaa ang business name gikan sa naka-login nga tenant
-    const string BusinessName = "Verdant Agri Ventures";
-
     // ---------- STATE ----------
+    long currentBusinessId;
+    string businessName = "AgriNexus Farm Operations";
+    int unassignedStaffCount = 0;
+
     string searchText = "";
+    string contactError = "";
     string toast = "";
+    bool toastIsWarning = false;
+
     bool showModal;
     bool showErrors;
-    int? editingId;
-    int? openMenuId;
+    bool isSaving;
+    long? editingId;
+    long? openMenuId;
     BranchRec form = new();
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // Plots/Staff/Hectares i-compute na gikan sa Farms & Plots ug Staff modules kung naa na
-    readonly List<BranchRec> branches = new()
-    {
-        new() { Id = 1, Name = "North Field Branch", Code = "BR-NORTH", Manager = "Ramon Delos Santos", Contact = "0917 220 1145",
-                Plots = 3, Hectares = 5, Staff = 4, Opened = new(2024, 3, 1), Status = "active" },
-        new() { Id = 2, Name = "South Valley Branch", Code = "BR-SOUTH", Manager = "Liza Fernandez", Contact = "0918 771 3320",
-                Plots = 2, Hectares = 3, Staff = 4, Opened = new(2024, 9, 15), Status = "active" },
-        new() { Id = 3, Name = "Central Packing Branch", Code = "BR-CENTRAL", Manager = "Noel Bautista", Contact = "0920 553 8891",
-                Plots = 1, Hectares = 2, Staff = 1, Opened = new(2025, 5, 20), Status = "active" },
-    };
+    bool showDetailsModal;
+    BranchRec? selectedBranch;
 
-    // Staff nga wala pa naka-assign sa branch (owner/admin staff)
-    const int UnassignedStaff = 2;
+    bool showInactive = false;
+    bool showDeactivateModal;
+    BranchRec? branchToDeactivate;
+
+    List<BranchRec> branches = new();
+    List<User> availableManagers = new();
+
+    private int currentPage = 1;
+    private int pageSize = 5;
+    private double menuTop;
+    private double menuLeft;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Resolve logged-in tenant's BusinessId
+        var currentUser = await DbContext.Users
+            .Include(u => u.Business)
+            .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                   || u.FName == Auth.CurrentUserName);
+
+        if (currentUser?.BusinessId != null)
+        {
+            currentBusinessId = currentUser.BusinessId.Value;
+            if (currentUser.Business != null)
+            {
+                businessName = currentUser.Business.BusinessName;
+            }
+        }
+        else
+        {
+            // Fallback to first business if testing without tenant login
+            var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+            if (firstBiz != null)
+            {
+                currentBusinessId = firstBiz.BusinessId;
+                businessName = firstBiz.BusinessName;
+            }
+        }
+
+        await LoadBranchesAsync();
+    }
+
+    private async Task LoadBranchesAsync()
+    {
+        var query = DbContext.Branches.AsQueryable();
+
+        if (currentBusinessId > 0)
+        {
+            query = query.Where(b => b.BusinessId == currentBusinessId);
+        }
+
+        var dbBranches = await query
+            .OrderBy(b => b.BranchId)
+            .ToListAsync();
+
+            availableManagers = await DbContext.Users
+            .Where(u => u.BusinessId == currentBusinessId 
+                     && u.Role == "BranchManager" 
+                     && u.Status == "Active")
+            .OrderBy(u => u.FName)
+            .ToListAsync();
+
+        // Count staff per branch from Users table
+        var branchStaffCounts = await DbContext.Users
+            .Where(u => u.BusinessId == currentBusinessId && u.BranchId != null && u.Status == "Active")
+            .GroupBy(u => u.BranchId!.Value)
+            .Select(g => new { BranchId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.BranchId, x => x.Count);
+
+        unassignedStaffCount = await DbContext.Users
+            .CountAsync(u => u.BusinessId == currentBusinessId && u.BranchId == null && u.Status == "Active");
+
+        branches = dbBranches.Select(b => new BranchRec
+        {
+            Id = b.BranchId,
+            BusinessId = b.BusinessId,
+            Name = b.BranchName,
+            Code = b.BranchCode,
+            Manager = b.ManagerName,
+            Contact = b.ContactNumber,
+            Address = b.Address,
+            Opened = b.DateOpened,
+            Status = (b.Status ?? "active").ToLower(),
+            Staff = branchStaffCounts.TryGetValue(b.BranchId, out var count) ? count : 0,
+            Plots = 0,
+            Hectares = 0
+        }).ToList();
+    }
 
     // ---------- COMPUTED ----------
-    List<BranchRec> Filtered => string.IsNullOrWhiteSpace(searchText)
-        ? branches
-        : branches.Where(b =>
-            b.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            b.Code.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            b.Manager.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+    List<BranchRec> Filtered
+    {
+        get
+        {
+            var baseList = branches
+                .Where(b => showInactive ? b.Status != "active" : b.Status == "active")
+                .ToList();
+
+            if (string.IsNullOrWhiteSpace(searchText))
+                return baseList;
+
+            return baseList.Where(b =>
+                b.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                b.Code.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                b.Manager.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                b.Address.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private int TotalPages => (int)Math.Ceiling((double)Filtered.Count / pageSize);
+    private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<BranchRec> PaginatedBranches => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
 
     List<Stat> Stats
     {
@@ -235,17 +706,25 @@
             var active = branches.Count(b => b.Status == "active");
             var plots = branches.Sum(b => b.Plots);
             var ha = branches.Sum(b => b.Hectares);
-            var staff = branches.Sum(b => b.Staff) + UnassignedStaff;
+            var staff = branches.Sum(b => b.Staff) + unassignedStaffCount;
+
             return new()
             {
-                new("BRANCHES", branches.Count.ToString(), active + " active", "bi-shop", ""),
-                new("PLOTS ACROSS BRANCHES", plots.ToString(), ha.ToString("0.##", Inv) + " hectares total", "bi-map", "stat-icon-plain"),
-                new("STAFF ASSIGNED", staff.ToString(), "", "bi-people", "stat-icon-blue"),
+                new("TOTAL BRANCHES", branches.Count.ToString(), active + " active branches", "bi-shop", ""),
+                new("PLOTS ACROSS BRANCHES", plots.ToString(), ha.ToString("0.##", Inv) + " hectares total", "bi-map-fill", "stat-icon-leaf"),
+                new("STAFF ASSIGNED", staff.ToString(), unassignedStaffCount + " tenant-wide admin", "bi-people-fill", "stat-icon-earth"),
             };
         }
     }
 
-    string NextCode => "BR-" + (branches.Count + 1).ToString("000");
+    string NextCode
+    {
+        get
+        {
+            long nextId = branches.Any() ? branches.Max(b => b.Id) + 1 : 1;
+            return $"BR-{nextId:000}";
+        }
+    }
 
     bool CodeTaken => !string.IsNullOrWhiteSpace(form.Code) &&
         branches.Any(b => b.Id != (editingId ?? -1) &&
@@ -253,73 +732,267 @@
 
     static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
 
-    // ---------- ACTIONS ----------
+    // Pagination Methods
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
+
+    private async Task ToggleTab(bool inactive)
+    {
+        showInactive = inactive;
+        currentPage = 1;
+        await Task.CompletedTask;
+    }
+
+    // Floating Menu Positioning
+    private async Task ToggleMenuAsync(MouseEventArgs e, long id)
+    {
+        if (openMenuId == id)
+        {
+            openMenuId = null;
+            return;
+        }
+
+        const double itemHeight = 42;
+        const double padding = 16;
+        const double menuWidth = 180;
+        int itemCount = showInactive ? 1 : 2;
+        double menuHeight = (itemCount * itemHeight) + padding;
+
+        var viewport = await JS.InvokeAsync<Viewport>("eval", "({ w: window.innerWidth, h: window.innerHeight })");
+
+        menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewport.W - menuWidth - 10);
+        menuTop = (e.ClientY + menuHeight > viewport.H) ? e.ClientY - menuHeight - 5 : e.ClientY + 15;
+
+        openMenuId = id;
+    }
+
+    void CloseMenu() => openMenuId = null;
+
+    // Input Formatting Helpers
+    private string CapitalizeWords(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input;
+        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input.ToLower().Trim());
+    }
+
+    private void FormatContactNumber()
+    {
+        if (string.IsNullOrEmpty(form.Contact)) return;
+
+        // 1. Extract digits only (strip letters and symbols)
+        var digits = new string(form.Contact.Where(char.IsDigit).ToArray());
+
+        if (string.IsNullOrEmpty(digits))
+        {
+            form.Contact = "";
+            return;
+        }
+
+        // 2. Smart prefix handling (+63 / 63 or 9 -> 09)
+        if (digits.StartsWith("63") && digits.Length > 2)
+        {
+            digits = "0" + digits.Substring(2);
+        }
+        else if (digits.StartsWith("9"))
+        {
+            digits = "0" + digits;
+        }
+
+        // 3. Limit to 11 digits
+        if (digits.Length > 11)
+        {
+            digits = digits.Substring(0, 11);
+        }
+
+        // 4. Auto-format to "09XX XXX XXXX"
+        if (digits.Length > 7)
+        {
+            form.Contact = $"{digits.Substring(0, 4)} {digits.Substring(4, 3)} {digits.Substring(7)}";
+        }
+        else if (digits.Length > 4)
+        {
+            form.Contact = $"{digits.Substring(0, 4)} {digits.Substring(4)}";
+        }
+        else
+        {
+            form.Contact = digits;
+        }
+    }
+
+    // ---------- CRUD ACTIONS ----------
     void OpenNew()
     {
-        form = new BranchRec { Opened = DateTime.Today, Status = "active" };
+        form = new BranchRec
+        {
+            BusinessId = currentBusinessId,
+            Code = NextCode,
+            Opened = DateTime.Today,
+            Status = "active"
+        };
         editingId = null;
         showErrors = false;
+        contactError = "";
         showModal = true;
     }
 
     void OpenEdit(BranchRec b)
     {
+        showDetailsModal = false;
         form = b.Clone();
         editingId = b.Id;
         showErrors = false;
+        contactError = "";
         openMenuId = null;
         showModal = true;
     }
 
+    void OpenDetails(BranchRec b)
+    {
+        selectedBranch = b;
+        showDetailsModal = true;
+    }
+
+    void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedBranch = null;
+    }
+
     void CloseModal() => showModal = false;
 
-    void Save()
+    async Task SaveAsync()
     {
         showErrors = true;
+        contactError = "";
+
         if (string.IsNullOrWhiteSpace(form.Name) || string.IsNullOrWhiteSpace(form.Code) || CodeTaken)
             return;
 
-        form.Code = form.Code.Trim();
-
-        if (editingId == null)
+        // Validate 11-digit contact number if provided
+        if (!string.IsNullOrWhiteSpace(form.Contact))
         {
-            form.Id = branches.Count == 0 ? 1 : branches.Max(b => b.Id) + 1;
-            branches.Add(form);
-        }
-        else
-        {
-            var idx = branches.FindIndex(b => b.Id == editingId);
-            if (idx >= 0)
+            var rawContact = new string(form.Contact.Where(char.IsDigit).ToArray());
+            if (rawContact.Length != 11)
             {
-                // Ayaw i-usab ang plots/staff, kay gikan kini sa ubang modules
-                form.Plots = branches[idx].Plots;
-                form.Hectares = branches[idx].Hectares;
-                form.Staff = branches[idx].Staff;
-                branches[idx] = form;
+                contactError = "Contact number must be 11 digits (e.g., 09XX XXX XXXX).";
+                return;
             }
         }
-        showModal = false;
+
+        isSaving = true;
+
+        try
+        {
+            if (editingId == null)
+            {
+                // CREATE
+                var entity = new Branch
+                {
+                    BusinessId = currentBusinessId,
+                    BranchName = form.Name.Trim(),
+                    BranchCode = form.Code.Trim().ToUpper(),
+                    ManagerName = form.Manager.Trim(),
+                    ContactNumber = form.Contact.Trim(),
+                    Address = form.Address.Trim(),
+                    DateOpened = form.Opened,
+                    Status = form.Status
+                };
+
+                DbContext.Branches.Add(entity);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Branch registered successfully.");
+            }
+            else
+            {
+                // UPDATE
+                var existing = await DbContext.Branches.FindAsync(editingId.Value);
+                if (existing != null)
+                {
+                    existing.BranchName = form.Name.Trim();
+                    existing.BranchCode = form.Code.Trim().ToUpper();
+                    existing.ManagerName = form.Manager.Trim();
+                    existing.ContactNumber = form.Contact.Trim();
+                    existing.Address = form.Address.Trim();
+                    existing.DateOpened = form.Opened;
+                    existing.Status = form.Status;
+
+                    DbContext.Branches.Update(existing);
+                    await DbContext.SaveChangesAsync();
+                    await ShowToast("Branch details updated.");
+                }
+            }
+
+            showModal = false;
+            await LoadBranchesAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error saving branch: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
-    async Task Delete(BranchRec b)
+    void PromptDeactivate(BranchRec b)
     {
         openMenuId = null;
         if (b.Plots > 0 || b.Staff > 0)
         {
-            await ShowToast(b.Name + " still has plots or staff. Reassign them first, or set the branch to inactive.");
+            _ = ShowToast(b.Name + " still has plots or staff. Reassign them first before deactivating.", isWarning: true);
             return;
         }
-        branches.Remove(b);
+        branchToDeactivate = b;
+        showDeactivateModal = true;
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
-    void CloseMenu() => openMenuId = null;
+    void CloseDeactivateModal()
+    {
+        showDeactivateModal = false;
+        branchToDeactivate = null;
+    }
 
-    async Task ShowToast(string message)
+    async Task ConfirmDeactivateAsync()
+    {
+        if (branchToDeactivate == null) return;
+
+        var existing = await DbContext.Branches.FindAsync(branchToDeactivate.Id);
+        if (existing != null)
+        {
+            existing.Status = "inactive";
+            DbContext.Branches.Update(existing);
+            await DbContext.SaveChangesAsync();
+            await ShowToast($"{branchToDeactivate.Name} moved to Inactive.");
+        }
+
+        CloseDeactivateModal();
+        await LoadBranchesAsync();
+    }
+
+    async Task ActivateBranchAsync(BranchRec b)
+    {
+        openMenuId = null;
+        var existing = await DbContext.Branches.FindAsync(b.Id);
+        if (existing != null)
+        {
+            existing.Status = "active";
+            DbContext.Branches.Update(existing);
+            await DbContext.SaveChangesAsync();
+            await ShowToast($"{b.Name} reactivated.");
+        }
+
+        await LoadBranchesAsync();
+    }
+
+    async Task ShowToast(string message, bool isWarning = false)
     {
         toast = message;
+        toastIsWarning = isWarning;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3500);
+        await Task.Delay(3200);
         toast = "";
         await InvokeAsync(StateHasChanged);
     }

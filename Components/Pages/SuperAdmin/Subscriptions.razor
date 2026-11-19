@@ -1,8 +1,13 @@
 ﻿@page "/subscriptions"
 
-<div class="mb-4">
-    <h2 class="page-title">Subscription Monitoring &amp; Renewal</h2>
-    <p class="text-muted mb-0 page-sub">Track each tenant’s plan, renewal date, payment status, and recurring revenue.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="page-title">Subscription Monitoring &amp; Renewal</h2>
+        <p class="text-muted mb-0 page-sub">Track each tenant’s plan, renewal date, payment status, and recurring revenue.</p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-arrow-repeat me-1"></i> Billing &amp; Renewals
+    </span>
 </div>
 
 <!-- STAT CARDS -->
@@ -31,16 +36,28 @@
 <div class="row g-3 mb-4">
     <div class="col-12 col-lg-8">
         <div class="stat-card h-100">
-            <div class="panel-title">Recurring revenue by plan</div>
-            <div class="panel-sub">Monthly value</div>
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <div class="panel-title">Recurring revenue by plan</div>
+                    <div class="panel-sub">Monthly value</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-bar-chart-fill"></i></div>
+            </div>
 
             <svg viewBox="0 0 640 300" class="w-100" style="max-height:320px" role="img" aria-label="Recurring revenue by plan">
+                <defs>
+                    <linearGradient id="subBarGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#1B5E34" />
+                        <stop offset="100%" stop-color="#0A2B1D" />
+                    </linearGradient>
+                </defs>
+
                 @for (int i = 0; i <= 4; i++)
                 {
                     var y = 20 + i * 60;
                     var val = AxisMax / 4 * (4 - i);
                     <g>
-                        <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
+                        <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2ECE6" stroke-dasharray="3 4" />
                         <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@(val == 0 ? "₱0" : $"₱{val / 1000:0}K")</text>
                     </g>
                 }
@@ -48,12 +65,14 @@
                 {
                     var r = RevenueByPlan[i];
                     var slot = 568.0 / RevenueByPlan.Count;
-                    var w = slot * 0.8;
+                    var w = slot * 0.72;
                     var x = 62 + i * slot + (slot - w) / 2;
                     var h = (double)(r.Amount / AxisMax) * 240;
+                    var barY = 260 - h;
                     <g>
-                        <rect x="@x.ToString("0.##")" y="@((260 - h).ToString("0.##"))" width="@w.ToString("0.##")" height="@h.ToString("0.##")" rx="6" fill="#206A3B" />
-                        <text x="@((x + w / 2).ToString("0.##"))" y="282" text-anchor="middle" font-size="11" fill="#475569">@r.Plan</text>
+                        <rect x="@x.ToString("0.##")" y="@barY.ToString("0.##")" width="@w.ToString("0.##")" height="@h.ToString("0.##")" rx="8" fill="url(#subBarGrad)" />
+                        <text x="@((x + w / 2).ToString("0.##"))" y="@((barY - 6).ToString("0.##"))" text-anchor="middle" font-size="11" font-weight="700" fill="#0A2B1D">₱@r.Amount.ToString("N0")</text>
+                        <text x="@((x + w / 2).ToString("0.##"))" y="282" text-anchor="middle" font-size="11" font-weight="600" fill="#475569">@r.Plan</text>
                     </g>
                 }
             </svg>
@@ -62,8 +81,13 @@
 
     <div class="col-12 col-lg-4">
         <div class="stat-card h-100">
-            <div class="panel-title">Subscription status</div>
-            <div class="panel-sub">Tenant billing health</div>
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <div>
+                    <div class="panel-title">Subscription status</div>
+                    <div class="panel-sub">Tenant billing health</div>
+                </div>
+                <div class="stat-icon"><i class="bi bi-pie-chart-fill"></i></div>
+            </div>
 
             <div class="d-flex justify-content-center my-3">
                 <svg viewBox="0 0 200 200" width="210" height="210" role="img" aria-label="Subscription status">
@@ -73,19 +97,21 @@
                     @foreach (var s in StatusSlices)
                     {
                         var len = s.Count / (double)subs.Count * Circ;
-                        <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@s.Color" stroke-width="30"
+                        <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@s.Color" stroke-width="28"
                                 stroke-dasharray="@((len - 3).ToString("0.##")) @((Circ - len + 3).ToString("0.##"))"
                                 stroke-dashoffset="@((-offset).ToString("0.##"))"
                                 transform="rotate(-90 100 100)" />
                         offset += len;
                     }
+                    <text x="100" y="96" text-anchor="middle" font-size="24" font-weight="800" fill="#0A2B1D">@subs.Count</text>
+                    <text x="100" y="114" text-anchor="middle" font-size="10" font-weight="600" fill="#64748B">TOTAL RECORDS</text>
                 </svg>
             </div>
 
             <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
                 @foreach (var s in StatusSlices)
                 {
-                    <span><span class="legend-dot" style="background:@s.Color"></span>@s.Label · @s.Count</span>
+                    <span class="fw-medium"><span class="legend-dot" style="background:@s.Color"></span>@s.Label · <strong class="text-dark">@s.Count</strong></span>
                 }
             </div>
         </div>
@@ -95,38 +121,70 @@
 <!-- TABLE -->
 <div class="panel">
     <div class="table-wrap">
-        <table class="table sub-table align-middle mb-0">
+        <table class="table table-hover sub-table align-middle mb-0">
             <thead>
                 <tr>
-                    <th>Business</th>
+                    <th class="px-4">Business</th>
                     <th>Plan</th>
                     <th>Amount</th>
                     <th>Renewal</th>
                     <th>Payment</th>
                     <th>Status</th>
                     <th>Auto-<br />renew</th>
-                    <th></th>
+                    <th class="px-4"></th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var s in subs)
                 {
                     <tr>
-                        <td>
-                            <div class="fw-semibold">@s.Business</div>
-                            <div class="sub">@s.Code</div>
+                        <td class="px-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="sub-avatar">
+                                    <i class="bi bi-building"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: #0A2B1D;">@s.Business</div>
+                                    <div class="sub fw-semibold" style="color: #1B5E34;">@s.Code</div>
+                                </div>
+                            </div>
                         </td>
-                        <td class="fw-medium">@s.Plan</td>
-                        <td class="fw-semibold text-nowrap">₱@s.Amount.ToString("N2")</td>
+                        <td class="fw-semibold" style="color: #0A2B1D;">
+                            <i class="bi bi-award text-success me-1"></i>@s.Plan
+                        </td>
+                        <td class="fw-bold text-nowrap" style="color: #0A2B1D;">₱@s.Amount.ToString("N2")</td>
                         <td>
-                            <div>@s.Renewal.ToString("MMM d, yyyy")</div>
+                            <div class="fw-medium text-dark">
+                                <i class="bi bi-calendar-event text-success me-1"></i>@s.Renewal.ToString("MMM d, yyyy")
+                            </div>
                             <div class="sub">@DaysText(s.Renewal)</div>
                         </td>
-                        <td><span class="pill @PaymentClass(s.Payment)">@s.Payment</span></td>
-                        <td><span class="pill @StatusClass(s.Status)">@s.Status</span></td>
-                        <td>@(s.AutoRenew ? "On" : "Off")</td>
-                        <td class="text-end">
-                            <button type="button" class="btn-outline" @onclick="() => RecordRenewal(s)">Record renewal</button>
+                        <td>
+                            <span class="pill @PaymentClass(s.Payment)">
+                                <i class="bi @(s.Payment == "Paid" ? "bi-check-circle-fill" : s.Payment == "Pending" ? "bi-hourglass-split" : "bi-exclamation-circle-fill") me-1"></i>@s.Payment
+                            </span>
+                        </td>
+                        <td>
+                            <span class="pill @StatusClass(s.Status)">
+                                <i class="bi @(s.Status == "Active" ? "bi-shield-check" : s.Status == "Expiring Soon" ? "bi-clock-history" : "bi-x-circle") me-1"></i>@s.Status
+                            </span>
+                        </td>
+                        <td>
+                            @if (s.AutoRenew)
+                            {
+                                <span class="badge rounded-pill px-2 py-1" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                    <i class="bi bi-check2 me-1"></i>On
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge rounded-pill px-2 py-1 bg-light text-muted border">Off</span>
+                            }
+                        </td>
+                        <td class="text-end px-4">
+                            <button type="button" class="btn-outline" @onclick="() => RecordRenewal(s)">
+                                <i class="bi bi-arrow-clockwise me-1 text-success"></i>Record renewal
+                            </button>
                         </td>
                     </tr>
                 }
@@ -160,7 +218,7 @@
 
     static DateTime Today => DateTime.Today;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
+    // Temporary prototype data
     readonly List<Subscription> subs = new()
     {
         new() { Id = 1, Business = "Verdant Agri Ventures", Code = "AGV-001", Plan = "Growth", Amount = 3999, Cycle = "monthly",
@@ -187,10 +245,10 @@
 
             return new()
             {
-                new("ACTIVE SUBSCRIPTIONS", active.ToString(), $"{subs.Count} records", "bi-credit-card", ""),
-                new("MONTHLY RECURRING REVENUE", $"₱{mrr:N2}", "", "bi-graph-up-arrow", ""),
-                new("RENEWING WITHIN 30 DAYS", renewing.ToString(), "", "bi-calendar-check", "stat-icon-warn"),
-                new("OVERDUE PAYMENTS", overdue.Count.ToString(), $"₱{overdue.Sum(o => o.Amount):N2}", "bi-arrow-repeat", "stat-icon-danger"),
+                new("ACTIVE SUBSCRIPTIONS", active.ToString(), $"{subs.Count} records", "bi-credit-card-2-front-fill", ""),
+                new("MONTHLY RECURRING REVENUE", $"₱{mrr:N2}", "", "bi-cash-stack", ""),
+                new("RENEWING WITHIN 30 DAYS", renewing.ToString(), "", "bi-calendar-check-fill", "stat-icon-warn"),
+                new("OVERDUE PAYMENTS", overdue.Count.ToString(), $"₱{overdue.Sum(o => o.Amount):N2}", "bi-exclamation-triangle-fill", "stat-icon-danger"),
             };
         }
     }
@@ -201,7 +259,6 @@
         .OrderBy(r => r.Plan == "Growth" ? 0 : r.Plan == "Cooperative Custom" ? 1 : r.Plan == "Enterprise" ? 2 : 3)
         .ToList();
 
-    // Axis max, rounded up sa 4 ka steps (e.g. 16000 -> 4K, 8K, 12K, 16K)
     decimal AxisMax
     {
         get
@@ -211,11 +268,12 @@
         }
     }
 
+// Harmonized AgriNexus Logo Palette (Deep Forest Green, Leaf Green, & Earth Soil Brown)
     List<Slice> StatusSlices => new List<Slice>
     {
-        new("Active", subs.Count(s => s.Status == "Active"), "#206A3B"),
-        new("Expiring Soon", subs.Count(s => s.Status == "Expiring Soon"), "#5FAA33"),
-        new("Expired", subs.Count(s => s.Status == "Expired"), "#92D050"),
+        new("Active", subs.Count(s => s.Status == "Active"), "#1B5E34"),        
+        new("Expiring Soon", subs.Count(s => s.Status == "Expiring Soon"), "#4E8D2A"), 
+        new("Expired", subs.Count(s => s.Status == "Expired"), "#7A5230"),      
     }.Where(s => s.Count > 0).ToList();
 
     static string DaysText(DateTime renewal)
@@ -244,7 +302,6 @@
     // ---------- ACTIONS ----------
     void RecordRenewal(Subscription s)
     {
-        // Gikan sa karon nga renewal date (o karon kung overdue na), ipadayon sa sunod nga cycle
         var baseDate = s.Renewal < Today ? Today : s.Renewal;
         s.Renewal = s.Cycle == "yearly" ? baseDate.AddYears(1) : baseDate.AddMonths(1);
         s.Payment = "Paid";
