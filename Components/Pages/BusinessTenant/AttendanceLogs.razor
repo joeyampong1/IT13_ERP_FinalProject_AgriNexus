@@ -1,9 +1,25 @@
 ﻿@page "/attendance"
+@layout MainLayout
 @using System.Globalization
+@using System.Reflection
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Web
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
+@inject AgriNexus.Services.AuthService Auth
+@inject IJSRuntime JS
 
-<div class="mb-4">
-    <h2 class="page-title">Labor Attendance and Work Logs</h2>
-    <p class="text-muted mb-0 page-sub">Daily attendance, hours worked and computed labor cost per worker, task and plot.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="page-title">Labor Attendance and Work Logs</h2>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@ActiveBranch</strong> · daily attendance, hours worked and computed labor cost per worker, task and plot.
+        </p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-clock-history me-1"></i> Attendance &amp; Labor Ledger
+    </span>
 </div>
 
 <!-- STAT CARDS -->
@@ -28,156 +44,472 @@
     }
 </div>
 
-<!-- TOOLBAR -->
-<div class="toolbar mb-3">
+<!-- TOOLBAR WITH ACTIVE / ARCHIVED TOGGLE + FILTERS -->
+<div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+
+    <div class="btn-group shadow-sm" role="group" aria-label="View Tabs">
+        <input type="radio" class="btn-check" name="attViewTabs" id="tabAttActive" autocomplete="off"
+               checked="@(!showArchived)" @onchange="() => ToggleTab(false)">
+        <label class="btn btn-outline-success fw-bold" for="tabAttActive">
+            <i class="bi bi-check-circle me-1"></i> Active
+        </label>
+
+        <input type="radio" class="btn-check" name="attViewTabs" id="tabAttArchived" autocomplete="off"
+               checked="@showArchived" @onchange="() => ToggleTab(true)">
+        <label class="btn btn-outline-secondary fw-bold" for="tabAttArchived">
+            <i class="bi bi-archive me-1"></i> Archived
+        </label>
+    </div>
+
     <div class="search-box">
         <i class="bi bi-search"></i>
-        <input type="text" placeholder="Search work logs..." @bind="searchText" @bind:event="oninput" />
+        <input type="text" placeholder="Search work logs..."
+               @bind="searchText"
+               @bind:event="oninput"
+               @bind:after="ResetPagination" />
     </div>
-    <span class="text-muted small">@Filtered.Count work @(Filtered.Count == 1 ? "log" : "logs")</span>
-    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
-        <i class="bi bi-plus-lg"></i> New work log
-    </button>
+
+    <select class="filter-select" @bind="dateRangeFilter" @bind:after="ResetPagination">
+        <option value="all">All Time</option>
+        <option value="month">This Month</option>
+        <option value="90days">Last 90 Days</option>
+        <option value="year">This Year</option>
+    </select>
+
+    @if (!showArchived)
+    {
+        <select class="filter-select" @bind="statusFilter" @bind:after="ResetPagination">
+            <option value="">All statuses</option>
+            <option value="recorded">Recorded</option>
+            <option value="approved">Approved</option>
+        </select>
+    }
+
+    <span class="badge rounded-pill px-3 py-2 fw-semibold count-label" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+        <i class="bi bi-clock-history me-1 text-success"></i>@Filtered.Count work @(Filtered.Count == 1 ? "log" : "logs")
+    </span>
+
+    @if (!showArchived)
+    {
+        <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNew">
+            <i class="bi bi-plus-lg"></i> New work log
+        </button>
+    }
 </div>
 
 <!-- TABLE -->
-<div class="panel">
-    <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
-            <thead>
+<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 280px); overflow: hidden;">
+    <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+            <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                 <tr>
-                    <th>Date</th>
-                    <th>Worker</th>
-                    <th>Task</th>
-                    <th>Plot</th>
-                    <th>Hours</th>
-                    <th>Labor cost</th>
-                    <th>Status</th>
-                    <th></th>
+                    <th class="text-muted small fw-bold text-uppercase py-3 px-4">Date</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Worker</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Task</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Plot</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Hours</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Labor cost</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Status</th>
+                    <th class="py-3"></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var l in Filtered)
+                @foreach (var l in PaginatedLogs)
                 {
-                    <tr>
-                        <td class="text-nowrap">@l.Date.ToString("MMM d, yyyy", Inv)</td>
-                        <td class="col-worker fw-semibold">@(string.IsNullOrWhiteSpace(l.WorkerName) ? "—" : l.WorkerName)</td>
-                        <td class="col-task">@(string.IsNullOrWhiteSpace(l.Task) ? "—" : l.Task)</td>
-                        <td class="col-plot">@(string.IsNullOrWhiteSpace(l.Plot) ? "—" : l.Plot)</td>
-                        <td>@Hrs(l.Hours)</td>
-                        <td class="text-nowrap">@Peso(Cost(l))</td>
-                        <td><span class="pill @(l.Status == "approved" ? "pill-green" : "pill-slate")">@Cap(l.Status)</span></td>
-                        <td class="text-end action-cell">
-                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(l.Id)" aria-label="Actions">
+                    var wName = WorkerNameOf(l.WorkerId);
+                    var pName = PlotNameOf(l.PlotId);
+
+                    <tr style="cursor: pointer;" @onclick="() => OpenDetails(l)">
+                        <td class="text-nowrap px-4 text-muted small fw-medium">
+                            <i class="bi bi-calendar3 text-success me-1"></i>@l.WorkDate.ToString("MMM d, yyyy", Inv)
+                        </td>
+                        <td class="col-worker">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="biz-avatar">
+                                    <i class="bi bi-person"></i>
+                                </div>
+                                <span class="fw-bold" style="color: #0A2B1D;">@(string.IsNullOrWhiteSpace(wName) ? "—" : wName)</span>
+                            </div>
+                        </td>
+                        <td class="col-task text-dark fw-medium">@(string.IsNullOrWhiteSpace(l.Task) ? "—" : l.Task)</td>
+                        <td class="col-plot text-dark">@(string.IsNullOrWhiteSpace(pName) ? "—" : pName)</td>
+                        <td class="text-nowrap fw-semibold text-dark">@Hrs(l.HoursWorked)</td>
+                        <td class="text-nowrap fw-semibold text-dark">@Peso(Cost(l))</td>
+                        <td>
+                            <span class="pill @StatusPillClass(l.Status)">
+                                <i class="bi @StatusIcon(l.Status) me-1"></i>@Cap(l.Status)
+                            </span>
+                        </td>
+                        <td class="text-end px-4 action-cell">
+                            <button type="button" class="btn-dots"
+                                    @onclick="(e) => ToggleMenuAsync(e, l)"
+                                    @onclick:stopPropagation="true" aria-label="Actions">
                                 <i class="bi bi-three-dots"></i>
                             </button>
-                            @if (openMenuId == l.Id)
-                            {
-                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                <div class="row-menu">
-                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(l)">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </button>
-                                    @if (l.Status != "approved")
-                                    {
-                                        <button type="button" class="row-menu-item" @onclick="() => Approve(l)">
-                                            <i class="bi bi-check-circle"></i> Approve log
-                                        </button>
-                                    }
-                                    <div class="menu-sep"></div>
-                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(l)">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </div>
-                            }
                         </td>
                     </tr>
                 }
                 @if (Filtered.Count == 0)
                 {
-                    <tr><td colspan="8" class="text-center text-muted py-5">No work logs found.</td></tr>
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                            @(showArchived ? "No archived work logs found." : "No work logs found.")
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
     </div>
+
+    @if (Filtered.Count > 0)
+    {
+        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+            <div class="text-muted small mb-2 mb-md-0">
+                Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> logs
+            </div>
+
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                    <i class="bi bi-chevron-left me-1"></i>Previous
+                </button>
+
+                @for (int p = 1; p <= TotalPages; p++)
+                {
+                    var pageNumber = p;
+                    <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                            @onclick="() => GoToPage(pageNumber)">
+                        @pageNumber
+                    </button>
+                }
+
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                    Next<i class="bi bi-chevron-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    }
 </div>
 
-<!-- MODAL -->
-@if (showModal)
+<!-- FLOATING ACTION MENU -->
+@if (openMenuId != null)
 {
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New work log" : "Edit work log")</h5>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
-            </div>
+    var menuLog = logs.FirstOrDefault(x => x.AttendanceId == openMenuId);
+    if (menuLog != null)
+    {
+        var st = (menuLog.Status ?? "recorded").ToLower();
 
-            <div class="row g-3">
-                <div class="col-12">
-                    <label class="form-label">Worker</label>
-                    <select class="form-select" value="@form.WorkerRef" @onchange="OnWorkerChanged">
-                        <option value="">Select...</option>
-                        @foreach (var w in rates.Keys)
-                        {
-                            <option value="@w" selected="@(form.WorkerRef == w)">@w</option>
-                        }
-                    </select>
+        <div class="menu-backdrop" @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
+
+        <div class="vertical-action-menu shadow-lg" style="top:@(menuTop)px; left:@(menuLeft)px;">
+            @if (st != "archived")
+            {
+                <button type="button" class="action-item"
+                        @onclick="() => OpenEdit(menuLog)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-pencil-square text-success"></i> Edit
+                </button>
+
+                @if (st != "approved")
+                {
+                    <button type="button" class="action-item"
+                            @onclick="() => ApproveAsync(menuLog)"
+                            @onclick:stopPropagation="true">
+                        <i class="bi bi-check-circle text-success"></i> Approve log
+                    </button>
+                }
+
+                <button type="button" class="action-item text-earth"
+                        @onclick="() => PromptArchive(menuLog)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-archive"></i> Archive
+                </button>
+            }
+            else
+            {
+                <button type="button" class="action-item text-success"
+                        @onclick="() => RestoreLogAsync(menuLog)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-arrow-counterclockwise"></i> Restore
+                </button>
+            }
+        </div>
+    }
+}
+
+<!-- DETAILS MODAL (ROW CLICK) -->
+@if (showDetailsModal && selectedLog != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi bi-clock-history fs-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@WorkerNameOf(selectedLog.WorkerId)</h4>
+                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                <i class="bi bi-calendar3 me-1"></i>@selectedLog.WorkDate.ToString("MMMM d, yyyy", Inv)
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
                 </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Worker name (as displayed)</label>
-                    <input class="form-control" @bind="form.WorkerName" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Work date</label>
-                    <input type="date" class="form-control" @bind="form.Date" />
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-info-circle me-2 text-success"></i>Work Log Details
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Task Performed</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">@(string.IsNullOrWhiteSpace(selectedLog.Task) ? "—" : selectedLog.Task)</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Plot</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">@PlotNameOf(selectedLog.PlotId)</p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Daily Rate</label>
+                                <p class="mb-0 fw-medium text-dark">@Peso(DailyRateOf(selectedLog.WorkerId))</p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Status</label>
+                                <span class="pill @StatusPillClass(selectedLog.Status)">
+                                    <i class="bi @StatusIcon(selectedLog.Status) me-1"></i>@Cap(selectedLog.Status)
+                                </span>
+                            </div>
+                            <div class="col-12 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Notes</label>
+                                <p class="mb-0 text-muted fst-italic">
+                                    @(string.IsNullOrWhiteSpace(selectedLog.Notes) ? "No notes provided." : selectedLog.Notes)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-calculator me-2 text-success"></i>Hours &amp; Computed Labor Cost
+                        </h6>
+                        <div class="row g-3 text-center">
+                            <div class="col-md-6">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #0A2B1D;">@Hrs(selectedLog.HoursWorked) hrs</h4>
+                                    <small class="text-muted fw-medium">Hours Worked</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #1B5E34;">@Peso(Cost(selectedLog))</h4>
+                                    <small class="text-muted fw-medium">Computed Labor Cost</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Hours worked</label>
-                    <input type="number" min="0" max="24" step="0.5" class="form-control @(showErrors && HoursInvalid ? "is-invalid" : "")" @bind="hoursInput" />
-                    @if (showErrors && HoursInvalid)
+                <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                    @if (!string.Equals(selectedLog.Status, "archived", StringComparison.OrdinalIgnoreCase))
                     {
-                        <div class="err">Enter hours between 0.5 and 24.</div>
+                        <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedLog)">
+                            <i class="bi bi-pencil-square me-2"></i>Edit Details
+                        </button>
                     }
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">Task performed</label>
-                    <input class="form-control" @bind="form.Task" />
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ADD / EDIT MODAL -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(editingId == null ? "bi-clock-history" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingId == null ? "New Work Log" : "Edit Work Log")
+                            </h4>
+                            <p class="text-muted small mb-0">Record daily worker hours, task performed, and computed labor cost.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
                 </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Plot</label>
-                    <select class="form-select" @bind="form.Plot">
-                        <option value="">Select...</option>
-                        @foreach (var p in plotOptions)
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-person-badge me-2 text-success"></i>Worker, Date &amp; Hours
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Worker <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(selectedWorkerIdStr) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                                        <select class="form-select" @bind="selectedWorkerIdStr">
+                                            <option value="">-- Select Worker --</option>
+                                            @foreach (var w in workers)
+                                            {
+                                                <option value="@w.WorkerId">@w.FullName (@Peso(w.DailyRate)/day)</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(selectedWorkerIdStr))
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>Please select a worker.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Work Date</label>
+                                    <input type="date" class="form-control" @bind="form.WorkDate" />
+                                </div>
+
+                                <div class="col-md-6 mt-4">
+                                    <label class="form-label fw-bold small text-muted">Hours Worked <span class="text-danger">*</span></label>
+                                    <input type="number" min="0" max="24" step="0.5"
+                                           class="form-control @(showErrors && HoursInvalid ? "is-invalid" : "")"
+                                           @bind="hoursInput" />
+                                    @if (showErrors && HoursInvalid)
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>Enter hours between 0.5 and 24.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6 mt-4">
+                                    <label class="form-label fw-bold small text-muted">Task Performed</label>
+                                    <input class="form-control" placeholder="Irrigation, weeding, harvesting..."
+                                           @bind="form.Task"
+                                           @bind:after="() => form.Task = CapitalizeWords(form.Task)" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-geo-alt me-2 text-success"></i>Plot, Status &amp; Notes
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Plot</label>
+                                    @if (plotOptions.Count > 0)
+                                    {
+                                        <select class="form-select border-0 shadow-sm" @bind="selectedPlotIdStr">
+                                            <option value="">-- Select Plot --</option>
+                                            @foreach (var p in plotOptions)
+                                            {
+                                                <option value="@p.Id">@p.Name</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <input type="number" class="form-control border-0 shadow-sm" placeholder="Plot ID (optional)" @bind="form.PlotId" />
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Status</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="form.Status">
+                                        <option value="recorded">recorded</option>
+                                        <option value="approved">approved</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-12 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Notes</label>
+                                    <textarea class="form-control border-0 shadow-sm" rows="3" @bind="form.Notes"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (EstimatedCost.HasValue)
                         {
-                            <option value="@p">@p</option>
+                            <div class="hint mt-3">
+                                <i class="bi bi-calculator"></i> Computed labor cost: <strong>@Peso(EstimatedCost.Value)</strong> (daily rate ÷ 8 hours × hours worked)
+                            </div>
                         }
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" @bind="form.Status">
-                        <option value="recorded">recorded</option>
-                        <option value="approved">approved</option>
-                    </select>
+                    </form>
                 </div>
 
-                <div class="col-12">
-                    <label class="form-label">Notes</label>
-                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="PromptSave" disabled="@isSaving">
+                        <i class="bi bi-check2-circle me-2"></i>@(editingId == null ? "Save Work Log" : "Update Work Log")
+                    </button>
                 </div>
             </div>
+        </div>
+    </div>
+}
 
-            @if (EstimatedCost.HasValue)
-            {
-                <div class="hint mt-3"><i class="bi bi-calculator"></i> Computed labor cost: <strong>@Peso(EstimatedCost.Value)</strong> (daily rate ÷ 8 hours × hours worked)</div>
-            }
+<!-- SAVE CONFIRMATION MODAL -->
+@if (showConfirmSaveModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1060;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #E8F3EC; color: #1B5E34;">
+                        <i class="bi bi-check2" style="font-size: 2.5rem;"></i>
+                    </div>
 
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">@(editingId == null ? "Save Work Log?" : "Update Work Log?")</h4>
+                    <p class="text-muted small mb-4">
+                        @(editingId == null
+                            ? "Are you sure you want to save this attendance work log?"
+                            : "Are you sure you want to save changes to this work log?")
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelSaveConfirm">Cancel</button>
+                        <button type="button" class="btn-save rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmSaveAsync">
+                            @(isSaving ? "Saving..." : "Yes, Save")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ARCHIVE CONFIRMATION MODAL -->
+@if (showConfirmArchiveModal && logToArchive != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1060;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #F5EFEA; color: #7A5230;">
+                        <i class="bi bi-archive" style="font-size: 2.5rem;"></i>
+                    </div>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Archive Work Log?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to archive the work log for <strong>@WorkerNameOf(logToArchive.WorkerId)</strong> on <strong>@logToArchive.WorkDate.ToString("MMM d, yyyy", Inv)</strong>?
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelArchiveConfirm">Cancel</button>
+                        <button type="button" class="btn-earth rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmArchiveAsync">
+                            <i class="bi bi-archive me-1"></i> Yes, Archive
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -185,211 +517,580 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+    <div class="toast-note shadow-lg">
+        <i class="bi @(toastIsWarning ? "bi-exclamation-circle" : "bi-check2")"></i>
+        <span>@toast</span>
+    </div>
 }
 
 @code {
-    // ---------- MODELS ----------
-    class LogRec
-    {
-        public int Id { get; set; }
-        public DateTime Date { get; set; } = DateTime.Today;
-        public string WorkerRef { get; set; } = "";
-        public string WorkerName { get; set; } = "";
-        public string Task { get; set; } = "";
-        public string Plot { get; set; } = "";
-        public decimal Hours { get; set; } = 8;
-        public string Status { get; set; } = "recorded";   // recorded | approved
-        public string Notes { get; set; } = "";
-
-        public LogRec Clone() => (LogRec)MemberwiseClone();
-    }
-
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record PlotOption(int Id, string Name);
+
+    class Viewport
+    {
+        public double W { get; set; }
+        public double H { get; set; }
+    }
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    // TODO: kuhaa ang daily rates gikan sa Workers module ug ang plots gikan sa Farms & Plots
-    readonly Dictionary<string, decimal> rates = new()
-    {
-        ["Ernesto Bacani"] = 500,
-        ["Ronnie Aquino"] = 420,
-        ["Jomar Salvador"] = 400,
-        ["Lito Marasigan"] = 420,
-        ["Avelino Dungca"] = 480,
-        ["Marilou Pangan"] = 400,
-        ["Rolando Espino"] = 400,
-        ["Danilo Roque"] = 420,
-    };
+    long currentBusinessId;
+    long? currentBranchId;
+    string ActiveBranch = "All Branches";
 
-    readonly string[] plotOptions =
-    {
-        "North Plot A", "North Plot B", "North Plot C", "South Plot D", "South Plot E", "Central Plot F",
-    };
+    List<Branch> branches = new();
+    List<AgriNexus.DataLayer.Models.Worker> workers = new();
+    List<PlotOption> plotOptions = new();
+    List<AttendanceLog> logs = new();
 
-    // ---------- STATE ----------
+    bool showArchived = false;
     string searchText = "";
+    string dateRangeFilter = "all"; // all | month | 90days | year
+    string statusFilter = ""; // "" | recorded | approved
+    string selectedWorkerIdStr = "";
+    string selectedPlotIdStr = "";
     string toast = "";
+    bool toastIsWarning = false;
+
     bool showModal;
     bool showErrors;
+    bool isSaving;
     int? editingId;
     int? openMenuId;
-    LogRec form = new();
+    AttendanceLog form = new();
     decimal? hoursInput = 8;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // 16 ka logs, 5 niini kay "recorded" pa (naghulat og approval)
-    readonly List<LogRec> logs = new()
+    bool showDetailsModal;
+    AttendanceLog? selectedLog;
+
+    bool showConfirmSaveModal;
+    bool showConfirmArchiveModal;
+    AttendanceLog? logToArchive;
+
+    private int currentPage = 1;
+    private int pageSize = 5;
+    private double menuTop;
+    private double menuLeft;
+
+    protected override async Task OnInitializedAsync()
     {
-        new() { Id = 1,  Date = new(2026, 10, 24), WorkerRef = "Ernesto Bacani",  WorkerName = "Ernesto Bacani",  Task = "Irrigation scheduling",       Plot = "North Plot A",   Hours = 8, Status = "recorded" },
-        new() { Id = 2,  Date = new(2026, 10, 24), WorkerRef = "Jomar Salvador",  WorkerName = "Jomar Salvador",  Task = "Harvest preparation",         Plot = "North Plot A",   Hours = 8, Status = "recorded" },
-        new() { Id = 3,  Date = new(2026, 10, 23), WorkerRef = "Lito Marasigan",  WorkerName = "Lito Marasigan",  Task = "Land preparation",            Plot = "North Plot C",   Hours = 8, Status = "recorded" },
-        new() { Id = 4,  Date = new(2026, 10, 22), WorkerRef = "Ronnie Aquino",   WorkerName = "Ronnie Aquino",   Task = "Spraying — pest control",     Plot = "North Plot B",   Hours = 6, Status = "approved" },
-        new() { Id = 5,  Date = new(2026, 10, 21), WorkerRef = "Ernesto Bacani",  WorkerName = "Ernesto Bacani",  Task = "Fertilizer application",      Plot = "North Plot A",   Hours = 8, Status = "approved" },
-        new() { Id = 6,  Date = new(2026, 10, 19), WorkerRef = "Lito Marasigan",  WorkerName = "Lito Marasigan",  Task = "Fertilizer application",      Plot = "North Plot B",   Hours = 8, Status = "approved" },
-        new() { Id = 7,  Date = new(2026, 10, 24), WorkerRef = "Marilou Pangan",  WorkerName = "Marilou Pangan",  Task = "Ampalaya picking and packing", Plot = "South Plot E",  Hours = 8, Status = "recorded" },
-        new() { Id = 8,  Date = new(2026, 10, 23), WorkerRef = "Rolando Espino",  WorkerName = "Rolando Espino",  Task = "Weeding and cultivation",     Plot = "South Plot D",   Hours = 8, Status = "recorded" },
-        new() { Id = 9,  Date = new(2026, 10, 20), WorkerRef = "Avelino Dungca",  WorkerName = "Avelino Dungca",  Task = "Fertilizer application",      Plot = "South Plot D",   Hours = 8, Status = "approved" },
-        new() { Id = 10, Date = new(2026, 10, 20), WorkerRef = "Danilo Roque",    WorkerName = "Danilo Roque",    Task = "Storage cleanup",             Plot = "Central Plot F", Hours = 8, Status = "approved" },
-        new() { Id = 11, Date = new(2026, 10, 18), WorkerRef = "Rolando Espino",  WorkerName = "Rolando Espino",  Task = "Weeding and cultivation",     Plot = "South Plot D",   Hours = 8, Status = "approved" },
-        new() { Id = 12, Date = new(2026, 10, 17), WorkerRef = "Marilou Pangan",  WorkerName = "Marilou Pangan",  Task = "Ampalaya picking",            Plot = "South Plot E",   Hours = 7, Status = "approved" },
-        new() { Id = 13, Date = new(2026, 10, 16), WorkerRef = "Jomar Salvador",  WorkerName = "Jomar Salvador",  Task = "Rice harvesting",             Plot = "North Plot A",   Hours = 8, Status = "approved" },
-        new() { Id = 14, Date = new(2026, 10, 15), WorkerRef = "Ernesto Bacani",  WorkerName = "Ernesto Bacani",  Task = "Canal check",                 Plot = "North Plot B",   Hours = 8, Status = "approved" },
-        new() { Id = 15, Date = new(2026, 10, 14), WorkerRef = "Ronnie Aquino",   WorkerName = "Ronnie Aquino",   Task = "Spraying",                    Plot = "North Plot B",   Hours = 8, Status = "approved" },
-        new() { Id = 16, Date = new(2026, 10, 13), WorkerRef = "Lito Marasigan",  WorkerName = "Lito Marasigan",  Task = "Transplanting",               Plot = "North Plot C",   Hours = 8, Status = "approved" },
+        try
+        {
+            User? currentUser = null;
+
+            if (Auth.CurrentUserId > 0)
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+            {
+                var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                           || u.FName == Auth.CurrentUserName);
+            }
+
+            if (currentUser?.BusinessId != null)
+            {
+                currentBusinessId = currentUser.BusinessId.Value;
+                currentBranchId = currentUser.BranchId;
+            }
+            else
+            {
+                var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+                if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+            }
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading attendance logs: " + ex.Message, isWarning: true);
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            branches = await DbContext.Branches
+                .Where(b => b.BusinessId == currentBusinessId)
+                .OrderBy(b => b.BranchName)
+                .ToListAsync();
+
+            if (currentBranchId.HasValue)
+            {
+                var matched = branches.FirstOrDefault(b => b.BranchId == currentBranchId.Value);
+                if (matched != null) ActiveBranch = matched.BranchName;
+            }
+            else if (branches.Count > 0)
+            {
+                ActiveBranch = branches[0].BranchName;
+            }
+
+            var branchIds = branches.Select(b => b.BranchId).ToHashSet();
+
+            var allBranchWorkers = await DbContext.Workers
+                .Where(w => branchIds.Contains(w.BranchId))
+                .ToListAsync();
+
+            var workerIds = allBranchWorkers.Select(w => w.WorkerId).ToHashSet();
+            workers = allBranchWorkers
+                .Where(w => !string.Equals(w.Status, "archived", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(w => w.FullName)
+                .ToList();
+
+            plotOptions = await TryLoadPlotsAsync();
+
+            logs = await DbContext.AttendanceLogs
+                .Where(l => workerIds.Contains(l.WorkerId))
+                .OrderByDescending(l => l.WorkDate)
+                .ThenByDescending(l => l.AttendanceId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Database load error: " + ex.Message, isWarning: true);
+        }
+    }
+
+    private async Task<List<PlotOption>> TryLoadPlotsAsync()
+    {
+        var result = new List<PlotOption>();
+        try
+        {
+            var prop = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .FirstOrDefault(p => p.Name.Equals("Plots", StringComparison.OrdinalIgnoreCase)
+                                  || p.Name.Equals("FarmPlots", StringComparison.OrdinalIgnoreCase));
+
+            if (prop?.GetValue(DbContext) is System.Collections.IEnumerable rawSet)
+            {
+                foreach (var entity in rawSet)
+                {
+                    if (entity == null) continue;
+                    var t = entity.GetType();
+                    var idProp = t.GetProperty("PlotId") ?? t.GetProperty("Id");
+                    var nameProp = t.GetProperty("PlotName") ?? t.GetProperty("Name") ?? t.GetProperty("Code");
+                    if (idProp != null && nameProp != null)
+                    {
+                        if (int.TryParse(idProp.GetValue(entity)?.ToString(), out var id))
+                        {
+                            var name = nameProp.GetValue(entity)?.ToString() ?? $"Plot #{id}";
+                            result.Add(new PlotOption(id, name));
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Ignore if plots DbSet is not present yet
+        }
+        return await Task.FromResult(result.OrderBy(p => p.Name).ToList());
+    }
+
+    List<AttendanceLog> NonArchivedLogs => logs
+        .Where(l => !string.Equals(l.Status, "archived", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    DateTime? DateCutoff => dateRangeFilter switch
+    {
+        "month" => new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
+        "90days" => DateTime.Today.AddDays(-90),
+        "year" => new DateTime(DateTime.Today.Year, 1, 1),
+        _ => null
     };
 
-    // ---------- COMPUTED ----------
-    List<LogRec> Filtered => (string.IsNullOrWhiteSpace(searchText)
-        ? logs
-        : logs.Where(l =>
-            l.WorkerName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            l.Task.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            l.Plot.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            l.Status.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList())
-        .OrderByDescending(l => l.Date).ThenByDescending(l => l.Id).ToList();
+    string WorkerNameOf(int workerId) =>
+        workers.FirstOrDefault(w => w.WorkerId == workerId)?.FullName
+        ?? DbContext.Workers.Local.FirstOrDefault(w => w.WorkerId == workerId)?.FullName
+        ?? "—";
+
+    decimal DailyRateOf(int workerId) =>
+        workers.FirstOrDefault(w => w.WorkerId == workerId)?.DailyRate
+        ?? DbContext.Workers.Local.FirstOrDefault(w => w.WorkerId == workerId)?.DailyRate
+        ?? 0m;
+
+    string PlotNameOf(int? plotId)
+    {
+        if (!plotId.HasValue) return "—";
+        var matched = plotOptions.FirstOrDefault(p => p.Id == plotId.Value);
+        return matched != null ? matched.Name : $"Plot #{plotId.Value}";
+    }
+
+    List<AttendanceLog> Filtered
+    {
+        get
+        {
+            var baseList = logs
+                .Where(l => showArchived
+                    ? string.Equals(l.Status, "archived", StringComparison.OrdinalIgnoreCase)
+                    : !string.Equals(l.Status, "archived", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var cutoff = DateCutoff;
+            if (cutoff.HasValue)
+                baseList = baseList.Where(l => l.WorkDate.Date >= cutoff.Value).ToList();
+
+            if (!showArchived && !string.IsNullOrEmpty(statusFilter))
+                baseList = baseList.Where(l => string.Equals(l.Status, statusFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                baseList = baseList.Where(l =>
+                    WorkerNameOf(l.WorkerId).Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    (l.Task ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    PlotNameOf(l.PlotId).Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    (l.Status ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            return baseList.OrderByDescending(l => l.WorkDate).ThenByDescending(l => l.AttendanceId).ToList();
+        }
+    }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Filtered.Count / pageSize));
+    private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<AttendanceLog> PaginatedLogs => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
 
     List<Stat> Stats
     {
         get
         {
             var today = DateTime.Today;
-            var month = logs.Where(l => l.Date.Year == today.Year && l.Date.Month == today.Month).ToList();
-            var waiting = logs.Count(l => l.Status == "recorded");
+            var activeList = NonArchivedLogs;
+            var month = activeList.Where(l => l.WorkDate.Year == today.Year && l.WorkDate.Month == today.Month).ToList();
+            var waiting = activeList.Count(l => string.Equals(l.Status, "recorded", StringComparison.OrdinalIgnoreCase));
+
             return new()
             {
-                new("LOGS THIS MONTH", month.Count.ToString(), logs.Count + " logs in history", "bi-clock-history", ""),
-                new("HOURS THIS MONTH", Hrs(month.Sum(l => l.Hours)), "", "bi-clock", "stat-icon-blue"),
-                new("LABOR COST THIS MONTH", Peso(month.Sum(Cost)), waiting + " logs awaiting approval", "bi-cash-coin", "stat-icon-plain"),
+                new("LOGS THIS MONTH", month.Count.ToString(), activeList.Count + " logs in history", "bi-clock-history", ""),
+                new("HOURS THIS MONTH", Hrs(month.Sum(l => l.HoursWorked)), "", "bi-clock", "stat-icon-leaf"),
+                new("LABOR COST THIS MONTH", Peso(month.Sum(Cost)), waiting + " logs awaiting approval", "bi-cash-coin", "stat-icon-earth"),
             };
         }
     }
 
-    bool HoursInvalid => !hoursInput.HasValue || hoursInput.Value <= 0 || hoursInput.Value > 24;
+    bool HoursInvalid => !hoursInput.HasValue || hoursInput.Value < 0.5m || hoursInput.Value > 24m;
 
     decimal? EstimatedCost
     {
         get
         {
-            var name = string.IsNullOrWhiteSpace(form.WorkerRef) ? form.WorkerName : form.WorkerRef;
-            if (!rates.TryGetValue(name ?? "", out var rate) || !hoursInput.HasValue || hoursInput.Value <= 0) return null;
-            return Math.Round(rate / 8 * hoursInput.Value, 2);
+            if (!int.TryParse(selectedWorkerIdStr, out var wId) || wId <= 0) return null;
+            if (!hoursInput.HasValue || hoursInput.Value < 0.5m || hoursInput.Value > 24m) return null;
+            var rate = DailyRateOf(wId);
+            return Math.Round(rate / 8m * hoursInput.Value, 2);
         }
     }
 
-    // ---------- HELPERS ----------
-    // Labor cost = daily rate ÷ 8 oras × oras nga nagtrabaho
-    decimal Cost(LogRec l)
+    decimal Cost(AttendanceLog l)
     {
-        var name = string.IsNullOrWhiteSpace(l.WorkerRef) ? l.WorkerName : l.WorkerRef;
-        return rates.TryGetValue(name ?? "", out var rate) ? Math.Round(rate / 8 * l.Hours, 2) : 0;
+        var rate = DailyRateOf(l.WorkerId);
+        return Math.Round(rate / 8m * l.HoursWorked, 2);
     }
 
     static string Hrs(decimal v) => v.ToString("0.##", Inv);
-
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    static string Cap(string? s) => string.IsNullOrWhiteSpace(s) ? "" : char.ToUpper(s[0]) + s.Substring(1);
 
-    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+    static string StatusPillClass(string? s) =>
+        string.Equals(s, "approved", StringComparison.OrdinalIgnoreCase) ? "pill-forest" : "pill-earth";
 
-    // ---------- ACTIONS ----------
+    static string StatusIcon(string? s) =>
+        string.Equals(s, "approved", StringComparison.OrdinalIgnoreCase) ? "bi-check-circle" : "bi-clock-history";
+
+    private string CapitalizeWords(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input ?? "";
+        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input.ToLower().Trim());
+    }
+
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
+
+    private async Task ToggleTab(bool archived)
+    {
+        showArchived = archived;
+        if (archived) statusFilter = "";
+        currentPage = 1;
+        openMenuId = null;
+        await Task.CompletedTask;
+    }
+
+    private async Task ToggleMenuAsync(MouseEventArgs e, AttendanceLog item)
+    {
+        if (openMenuId == item.AttendanceId)
+        {
+            openMenuId = null;
+            return;
+        }
+
+        var st = (item.Status ?? "recorded").ToLower();
+        int itemCount = st == "archived" ? 1 : (st == "approved" ? 2 : 3);
+
+        const double itemHeight = 42;
+        const double padding = 16;
+        const double menuWidth = 185;
+        double menuHeight = (itemCount * itemHeight) + padding;
+
+        var viewport = await JS.InvokeAsync<Viewport>("eval", "({ w: window.innerWidth, h: window.innerHeight })");
+
+        menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewport.W - menuWidth - 10);
+        menuTop = (e.ClientY + menuHeight > viewport.H) ? e.ClientY - menuHeight - 5 : e.ClientY + 15;
+
+        openMenuId = item.AttendanceId;
+    }
+
+    void CloseMenu() => openMenuId = null;
+
+    void OpenDetails(AttendanceLog l)
+    {
+        selectedLog = l;
+        showDetailsModal = true;
+    }
+
+    void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedLog = null;
+    }
+
     void OpenNew()
     {
-        form = new LogRec { Date = DateTime.Today, Status = "recorded" };
+        openMenuId = null;
+        form = new AttendanceLog
+        {
+            WorkDate = DateTime.Today,
+            HoursWorked = 8,
+            Status = "recorded"
+        };
+        selectedWorkerIdStr = "";
+        selectedPlotIdStr = "";
         hoursInput = 8;
         editingId = null;
         showErrors = false;
         showModal = true;
     }
 
-    void OpenEdit(LogRec l)
+    void OpenEdit(AttendanceLog l)
     {
-        form = l.Clone();
-        hoursInput = l.Hours;
-        editingId = l.Id;
-        showErrors = false;
+        showDetailsModal = false;
         openMenuId = null;
+        form = new AttendanceLog
+        {
+            AttendanceId = l.AttendanceId,
+            WorkerId = l.WorkerId,
+            PlotId = l.PlotId,
+            WorkDate = l.WorkDate,
+            Task = l.Task,
+            HoursWorked = l.HoursWorked,
+            Status = l.Status,
+            Notes = l.Notes
+        };
+        selectedWorkerIdStr = l.WorkerId > 0 ? l.WorkerId.ToString() : "";
+        selectedPlotIdStr = l.PlotId.HasValue ? l.PlotId.Value.ToString() : "";
+        hoursInput = l.HoursWorked;
+        editingId = l.AttendanceId;
+        showErrors = false;
         showModal = true;
     }
 
     void CloseModal() => showModal = false;
 
-    // Kung mopili og worker, i-fill ang "Worker name (as displayed)"
-    void OnWorkerChanged(ChangeEventArgs e)
-    {
-        var name = e.Value?.ToString() ?? "";
-        form.WorkerRef = name;
-        if (name.Length > 0) form.WorkerName = name;
-    }
-
-    void Save()
+    void PromptSave()
     {
         showErrors = true;
-        if (HoursInvalid) return;
+        if (string.IsNullOrWhiteSpace(selectedWorkerIdStr) || HoursInvalid)
+            return;
 
-        form.Hours = hoursInput!.Value;
-        if (string.IsNullOrWhiteSpace(form.WorkerName)) form.WorkerName = form.WorkerRef;
-
-        if (editingId == null)
-        {
-            form.Id = logs.Count == 0 ? 1 : logs.Max(l => l.Id) + 1;
-            logs.Add(form);
-        }
-        else
-        {
-            var idx = logs.FindIndex(l => l.Id == editingId);
-            if (idx >= 0) logs[idx] = form;
-        }
-        showModal = false;
+        showConfirmSaveModal = true;
     }
 
-    async Task Approve(LogRec l)
+    void CancelSaveConfirm() => showConfirmSaveModal = false;
+
+    async Task ConfirmSaveAsync()
     {
-        openMenuId = null;
-        l.Status = "approved";
-        // TODO: i-log sa Audit Logs ug i-apil sa Labor Cost Records / Production Costing
-        await ShowToast("Work log for " + l.WorkerName + " approved.");
+        isSaving = true;
+        try
+        {
+            if (!int.TryParse(selectedWorkerIdStr, out var workerId) || workerId <= 0)
+            {
+                await ShowToast("Please select a valid worker.", isWarning: true);
+                return;
+            }
+
+            int? parsedPlotId = int.TryParse(selectedPlotIdStr, out var pId) && pId > 0
+                ? pId
+                : form.PlotId;
+
+            var cleanTask = (form.Task ?? "").Trim();
+            var cleanStatus = string.IsNullOrWhiteSpace(form.Status) ? "recorded" : form.Status.Trim().ToLower();
+
+            if (editingId == null)
+            {
+                var created = new AttendanceLog
+                {
+                    WorkerId = workerId,
+                    PlotId = parsedPlotId,
+                    WorkDate = form.WorkDate,
+                    Task = cleanTask,
+                    HoursWorked = hoursInput ?? 8,
+                    Status = cleanStatus,
+                    Notes = string.IsNullOrWhiteSpace(form.Notes) ? null : form.Notes.Trim()
+                };
+
+                DbContext.AttendanceLogs.Add(created);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Work log saved.");
+            }
+            else
+            {
+                var existing = await DbContext.AttendanceLogs.FindAsync(editingId.Value);
+                if (existing != null)
+                {
+                    existing.WorkerId = workerId;
+                    existing.PlotId = parsedPlotId;
+                    existing.WorkDate = form.WorkDate;
+                    existing.Task = cleanTask;
+                    existing.HoursWorked = hoursInput ?? 8;
+                    existing.Status = cleanStatus;
+                    existing.Notes = string.IsNullOrWhiteSpace(form.Notes) ? null : form.Notes.Trim();
+
+                    DbContext.AttendanceLogs.Update(existing);
+                    await DbContext.SaveChangesAsync();
+                    await ShowToast("Work log updated.");
+                }
+            }
+
+            showConfirmSaveModal = false;
+            showModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error saving work log: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
-    async Task Delete(LogRec l)
+    async Task ApproveAsync(AttendanceLog l)
     {
         openMenuId = null;
-        if (l.Status == "approved")
+        try
         {
-            await ShowToast("Approved logs are part of the labor cost records and can’t be deleted.");
+            var existing = await DbContext.AttendanceLogs.FindAsync(l.AttendanceId);
+            if (existing != null)
+            {
+                existing.Status = "approved";
+                DbContext.AttendanceLogs.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Work log for " + WorkerNameOf(l.WorkerId) + " approved.");
+            }
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error approving work log: " + ex.Message, isWarning: true);
+        }
+    }
+
+    async Task PromptArchive(AttendanceLog l)
+    {
+        openMenuId = null;
+        if (string.Equals(l.Status, "approved", StringComparison.OrdinalIgnoreCase))
+        {
+            await ShowToast("Approved logs are part of the labor cost records and can’t be archived.", isWarning: true);
             return;
         }
-        logs.Remove(l);
-        await ShowToast("Work log removed.");
+
+        logToArchive = l;
+        showConfirmArchiveModal = true;
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
-    void CloseMenu() => openMenuId = null;
+    void CancelArchiveConfirm()
+    {
+        showConfirmArchiveModal = false;
+        logToArchive = null;
+    }
 
-    async Task ShowToast(string message)
+    async Task ConfirmArchiveAsync()
+    {
+        if (logToArchive == null) return;
+        isSaving = true;
+        try
+        {
+            var existing = await DbContext.AttendanceLogs.FindAsync(logToArchive.AttendanceId);
+            if (existing != null)
+            {
+                if (string.Equals(existing.Status, "approved", StringComparison.OrdinalIgnoreCase))
+                {
+                    await ShowToast("Approved logs are part of the labor cost records and can’t be archived.", isWarning: true);
+                    return;
+                }
+
+                existing.Status = "archived";
+                DbContext.AttendanceLogs.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Work log moved to Archived.");
+            }
+
+            showConfirmArchiveModal = false;
+            logToArchive = null;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error archiving work log: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    async Task RestoreLogAsync(AttendanceLog l)
+    {
+        openMenuId = null;
+        try
+        {
+            var existing = await DbContext.AttendanceLogs.FindAsync(l.AttendanceId);
+            if (existing != null)
+            {
+                existing.Status = "recorded";
+                DbContext.AttendanceLogs.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Work log restored to Active.");
+            }
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error restoring work log: " + ex.Message, isWarning: true);
+        }
+    }
+
+    async Task ShowToast(string message, bool isWarning = false)
     {
         toast = message;
+        toastIsWarning = isWarning;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3000);
+        await Task.Delay(3200);
         toast = "";
         await InvokeAsync(StateHasChanged);
     }

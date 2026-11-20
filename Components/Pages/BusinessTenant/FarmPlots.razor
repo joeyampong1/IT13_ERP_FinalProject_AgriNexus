@@ -1,9 +1,26 @@
 ﻿@page "/farms"
+@layout MainLayout
 @using System.Globalization
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Web
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
+@inject AgriNexus.Services.AuthService Auth
+@inject IJSRuntime JS
+@using Russkyc.Addressess.Philippines
+@using Russkyc.Addressess.Philippines.Entities
 
-<div class="mb-4">
-    <h2 class="page-title">Farm and Plot Management</h2>
-    <p class="text-muted mb-0 page-sub">@ActiveBranch · total land, irrigation, soil and current crop per plot.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="page-title">Farm and Plot Management</h2>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@businessName</strong> · manage farms, land area, and plots per farm.
+        </p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-map me-1"></i> Farm &amp; Plot Directory
+    </span>
 </div>
 
 <!-- STAT CARDS -->
@@ -18,164 +35,736 @@
                 </div>
                 <div class="mt-3">
                     <div class="card-value">@s.Value</div>
-                    <div class="text-muted small mt-1">@s.Note</div>
+                    @if (!string.IsNullOrEmpty(s.Note))
+                    {
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    }
                 </div>
             </div>
         </div>
     }
 </div>
 
-<!-- TOOLBAR -->
-<div class="toolbar mb-3">
+<!-- TOOLBAR WITH TABS -->
+<div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+
+    <!-- ACTIVE / ARCHIVED FARM TABS -->
+    <div class="btn-group shadow-sm" role="group" aria-label="Farm View Tabs">
+        <input type="radio" class="btn-check" name="farmViewTabs" id="tabFarmActive" autocomplete="off"
+               checked="@(!showArchivedFarms)" @onchange="() => ToggleFarmTab(false)">
+        <label class="btn btn-outline-success fw-bold" for="tabFarmActive">
+            <i class="bi bi-check-circle me-1"></i> Active
+        </label>
+
+        <input type="radio" class="btn-check" name="farmViewTabs" id="tabFarmArchived" autocomplete="off"
+               checked="@showArchivedFarms" @onchange="() => ToggleFarmTab(true)">
+        <label class="btn btn-outline-secondary fw-bold" for="tabFarmArchived">
+            <i class="bi bi-archive me-1"></i> Archived
+        </label>
+    </div>
+
+    <!-- SEARCH BOX -->
     <div class="search-box">
         <i class="bi bi-search"></i>
-        <input type="text" placeholder="Search plots..." @bind="searchText" @bind:event="oninput" />
+        <input type="text" placeholder="Search farms or branches..."
+               @bind="searchText"
+               @bind:event="oninput"
+               @bind:after="ResetPagination" />
     </div>
-    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "plot" : "plots")</span>
-    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
-        <i class="bi bi-plus-lg"></i> New plot
+
+    <span class="badge rounded-pill px-3 py-2 fw-semibold count-label" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+        <i class="bi bi-geo-alt me-1 text-success"></i>@FilteredFarms.Count @(FilteredFarms.Count == 1 ? "farm" : "farms")
+    </span>
+
+    <!-- NEW FARM BUTTON -->
+    <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNewFarm">
+        <i class="bi bi-plus-lg"></i> New farm
     </button>
 </div>
 
-<!-- TABLE -->
-<div class="panel">
-    <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
-            <thead>
+<!-- FARMS TABLE -->
+<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 280px); overflow: hidden;">
+
+    <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+            <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                 <tr>
-                    <th>Plot</th>
-                    <th>Branch</th>
-                    <th>Area (ha)</th>
-                    <th>Irrigation</th>
-                    <th>Current crop</th>
-                    <th>Status</th>
-                    <th></th>
+                    <th class="text-muted small fw-bold text-uppercase py-3 px-4">Farm</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Branch</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Location</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Total Area</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Plots</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Status</th>
+                    <th class="py-3"></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var p in Filtered)
+                @foreach (var f in PaginatedFarms)
                 {
-                    <tr>
-                        <td>
-                            <div class="fw-semibold">@p.Name</div>
-                            <div class="sub">@(string.IsNullOrWhiteSpace(p.Soil) ? "—" : p.Soil)</div>
+                    var isArch = string.Equals(f.Status, "Archived", StringComparison.OrdinalIgnoreCase);
+                    var plotCount = plots.Count(p => p.FarmId == f.FarmId && !string.Equals(p.Status, "Archived", StringComparison.OrdinalIgnoreCase));
+
+                    <tr style="cursor: pointer;" @onclick="() => OpenFarmDetails(f)">
+                        <td class="px-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="branch-avatar">
+                                    <i class="bi bi-geo-alt"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: #0A2B1D;">@f.FarmName</div>
+                                    <div class="text-muted small mt-1">
+                                        <span class="fw-semibold" style="color: #1B5E34;">Farm #@f.FarmId</span>
+                                    </div>
+                                </div>
+                            </div>
                         </td>
-                        <td>@p.Branch</td>
-                        <td>@p.Area.ToString("0.##", Inv)</td>
-                        <td>@Cap(p.Irrigation)</td>
-                        <td>
-                            @if (HasCrop(p))
-                            {
-                                <span>@p.Crop · @p.Variety</span>
-                            }
-                            else
-                            {
-                                <span class="muted">No active cycle</span>
-                            }
+                        <td class="fw-semibold text-dark">@GetBranchName(f.BranchId)</td>
+                        <td class="text-dark fw-medium">
+                            @(string.IsNullOrWhiteSpace(f.Location) ? "—" : f.Location)
                         </td>
-                        <td><span class="pill @StatusClass(p.Status)">@Cap(p.Status)</span></td>
-                        <td class="text-end action-cell">
-                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(p.Id)" aria-label="Actions">
+                        <td class="text-nowrap fw-semibold text-dark">
+                            @f.TotalArea.ToString("0.##", Inv) @f.AreaUnit
+                        </td>
+                        <td class="fw-semibold text-dark">@plotCount</td>
+                        <td>
+                            <span class="pill @(isArch ? "pill-earth" : "pill-forest")">
+                                <i class="bi @(isArch ? "bi-archive" : "bi-check-circle") me-1"></i>@Cap(f.Status)
+                            </span>
+                        </td>
+                        <td class="text-end px-4 action-cell">
+                            <button type="button" class="btn-dots"
+                                    @onclick="(e) => ToggleFarmMenuAsync(e, f.FarmId)"
+                                    @onclick:stopPropagation="true" aria-label="Actions">
                                 <i class="bi bi-three-dots"></i>
                             </button>
-                            @if (openMenuId == p.Id)
-                            {
-                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                <div class="row-menu">
-                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(p)">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </button>
-                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(p)">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </div>
-                            }
                         </td>
                     </tr>
                 }
-                @if (Filtered.Count == 0)
+                @if (FilteredFarms.Count == 0)
                 {
-                    <tr><td colspan="7" class="text-center text-muted py-5">No plots found.</td></tr>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                            @(showArchivedFarms ? "No archived farms found." : "No farms found.")
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
     </div>
+
+    <!-- PAGINATION FOOTER -->
+    @if (FilteredFarms.Count > 0)
+    {
+        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+            <div class="text-muted small mb-2 mb-md-0">
+                Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@FilteredFarms.Count</span> farms
+            </div>
+
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                    <i class="bi bi-chevron-left me-1"></i>Previous
+                </button>
+
+                @for (int i = 1; i <= TotalPages; i++)
+                {
+                    var pageNumber = i;
+                    <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                            @onclick="() => GoToPage(pageNumber)">
+                        @pageNumber
+                    </button>
+                }
+
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                    Next<i class="bi bi-chevron-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    }
 </div>
 
-<!-- MODAL -->
-@if (showModal)
+<!-- FLOATING FARM ACTION MENU (Edit, + Plots, Archive / Restore) -->
+@if (openFarmMenuId != null)
 {
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New plot" : "Edit plot")</h5>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    var menuFarm = farms.FirstOrDefault(x => x.FarmId == openFarmMenuId);
+    if (menuFarm != null)
+    {
+        var isArch = string.Equals(menuFarm.Status, "Archived", StringComparison.OrdinalIgnoreCase);
+
+        <div class="menu-backdrop" @onclick="CloseMenus" @onclick:stopPropagation="true"></div>
+
+        <div class="vertical-action-menu shadow-lg" style="top:@(menuTop)px; left:@(menuLeft)px;">
+            @if (!isArch)
+            {
+                <button type="button" class="action-item"
+                        @onclick="() => OpenEditFarm(menuFarm)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-pencil-square text-success"></i> Edit
+                </button>
+                <button type="button" class="action-item"
+                        @onclick="() => OpenNewPlotForFarm(menuFarm)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-plus-lg text-success"></i> Plots
+                </button>
+                <button type="button" class="action-item text-earth"
+                        @onclick="() => PromptArchiveFarm(menuFarm)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-archive"></i> Archive
+                </button>
+            }
+            else
+            {
+                <button type="button" class="action-item text-success"
+                        @onclick="() => RestoreFarmAsync(menuFarm)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-arrow-counterclockwise"></i> Restore
+                </button>
+            }
+        </div>
+    }
+}
+
+<!-- FARM DETAILS MODAL (WITH "VIEW PLOTS" BUTTON & PLOTS TABLE) -->
+@if (showFarmDetailsModal && selectedFarm != null)
+{
+    var detBranch = GetBranchName(selectedFarm.BranchId);
+    var detArch = string.Equals(selectedFarm.Status, "Archived", StringComparison.OrdinalIgnoreCase);
+    var farmPlotsAll = plots.Where(p => p.FarmId == selectedFarm.FarmId).ToList();
+    var farmPlotsActive = farmPlotsAll.Where(p => !string.Equals(p.Status, "Archived", StringComparison.OrdinalIgnoreCase)).ToList();
+    var farmPlotsArchived = farmPlotsAll.Where(p => string.Equals(p.Status, "Archived", StringComparison.OrdinalIgnoreCase)).ToList();
+    var displayedFarmPlots = showArchivedPlotsInModal ? farmPlotsArchived : farmPlotsActive;
+
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-xl" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <!-- Header -->
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi bi-geo-alt fs-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedFarm.FarmName</h4>
+                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                <i class="bi bi-shop me-1"></i>@detBranch
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseFarmDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 72vh; overflow-y: auto;">
+                    <!-- Farm Info -->
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-info-circle me-2 text-success"></i>Farm Details
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="text-muted small fw-bold text-uppercase">Location</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    @(string.IsNullOrWhiteSpace(selectedFarm.Location) ? "Not specified" : selectedFarm.Location)
+                                </p>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="text-muted small fw-bold text-uppercase">Total Area</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    @selectedFarm.TotalArea.ToString("0.##", Inv) @selectedFarm.AreaUnit
+                                </p>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Status</label>
+                                <span class="pill @(detArch ? "pill-earth" : "pill-forest")">
+                                    <i class="bi @(detArch ? "bi-archive" : "bi-check-circle") me-1"></i>@Cap(selectedFarm.Status)
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary + View Plots Button -->
+                    <div class="p-4 rounded-4 mb-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 border-bottom pb-2">
+                            <h6 class="text-uppercase text-muted fw-bold mb-0" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-grid-1x2 me-2 text-success"></i>Plots Summary
+                            </h6>
+                            <div class="d-flex gap-2">
+                                @if (!detArch)
+                                {
+                                    <button type="button" class="btn btn-sm btn-light border fw-bold px-3 rounded-3" @onclick="() => OpenNewPlotForFarm(selectedFarm)">
+                                        <i class="bi bi-plus-lg me-1 text-success"></i>Add Plot
+                                    </button>
+                                }
+                                <button type="button" class="btn-save btn-sm px-3 rounded-3" @onclick="ToggleViewPlotsInModal">
+                                    <i class="bi @(showPlotsInDetails ? "bi-eye-slash" : "bi-eye") me-1"></i>
+                                    @(showPlotsInDetails ? "Hide Plots" : $"View Plots ({farmPlotsActive.Count})")
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 text-center">
+                            <div class="col-6">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #1B5E34;">@farmPlotsActive.Count</h4>
+                                    <small class="text-muted fw-medium">Active Plots</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #7A5230;">@farmPlotsArchived.Count</h4>
+                                    <small class="text-muted fw-medium">Archived Plots</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PLOTS TABLE INSIDE DETAILS MODAL (WHEN "VIEW PLOTS" IS CLICKED) -->
+                    @if (showPlotsInDetails)
+                    {
+                        <div class="border rounded-4 p-3 bg-white" style="border-color: #E2ECE6 !important;">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                <h6 class="fw-bold mb-0" style="color: #0A2B1D;">
+                                    <i class="bi bi-map me-1 text-success"></i>Plots under @selectedFarm.FarmName
+                                </h6>
+
+                                <!-- ACTIVE / ARCHIVED PLOTS TABS -->
+                                <div class="btn-group btn-group-sm" role="group" aria-label="Plot Status Tabs">
+                                    <input type="radio" class="btn-check" name="modalPlotTabs" id="modalPlotActive" autocomplete="off"
+                                           checked="@(!showArchivedPlotsInModal)" @onchange="() => showArchivedPlotsInModal = false">
+                                    <label class="btn btn-outline-success fw-bold" for="modalPlotActive">
+                                        <i class="bi bi-check-circle me-1"></i>Active (@farmPlotsActive.Count)
+                                    </label>
+
+                                    <input type="radio" class="btn-check" name="modalPlotTabs" id="modalPlotArchived" autocomplete="off"
+                                           checked="@showArchivedPlotsInModal" @onchange="() => showArchivedPlotsInModal = true">
+                                    <label class="btn btn-outline-secondary fw-bold" for="modalPlotArchived">
+                                        <i class="bi bi-archive me-1"></i>Archived (@farmPlotsArchived.Count)
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0 biz-table">
+                                    <thead style="background-color: #F7FAF8;">
+                                        <tr>
+                                            <th class="text-muted small fw-bold text-uppercase py-2">Plot</th>
+                                            <th class="text-muted small fw-bold text-uppercase py-2">Area</th>
+                                            <th class="text-muted small fw-bold text-uppercase py-2">Irrigation</th>
+                                            <th class="text-muted small fw-bold text-uppercase py-2">Current Crop</th>
+                                            <th class="text-muted small fw-bold text-uppercase py-2">Status</th>
+                                            <th class="text-end text-muted small fw-bold text-uppercase py-2">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var p in displayedFarmPlots)
+                                        {
+                                            var pArch = string.Equals(p.Status, "Archived", StringComparison.OrdinalIgnoreCase);
+                                            <tr>
+                                                <td>
+                                                    <div class="fw-bold" style="color: #0A2B1D;">@p.PlotName</div>
+                                                    <div class="text-muted small">@(string.IsNullOrWhiteSpace(p.SoilType) ? "—" : p.SoilType)</div>
+                                                </td>
+                                                <td class="fw-semibold text-dark">@p.PlotArea.ToString("0.##", Inv) @selectedFarm.AreaUnit</td>
+                                                <td class="text-dark">@(string.IsNullOrWhiteSpace(p.IrrigationType) ? "—" : Cap(p.IrrigationType))</td>
+                                                <td>
+                                                    @if (!string.IsNullOrWhiteSpace(p.CurrentCrop))
+                                                    {
+                                                        <span class="fw-semibold text-dark">@p.CurrentCrop</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">No active cycle</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <span class="pill @(pArch ? "pill-earth" : "pill-forest")">
+                                                        <i class="bi @(pArch ? "bi-archive" : "bi-check-circle") me-1"></i>@Cap(p.Status)
+                                                    </span>
+                                                </td>
+                                                <td class="text-end">
+                                                    <div class="d-inline-flex gap-1">
+                                                        @if (!pArch)
+                                                        {
+                                                            <button type="button" class="btn btn-sm btn-light border rounded-2 fw-semibold"
+                                                                    @onclick="() => OpenEditPlot(p)">
+                                                                <i class="bi bi-pencil-square text-success me-1"></i>Edit
+                                                            </button>
+                                                            <button type="button" class="btn btn-sm btn-light border rounded-2 fw-semibold" style="color: #7A5230;"
+                                                                    @onclick="() => PromptArchivePlot(p)">
+                                                                <i class="bi bi-archive me-1"></i>Archive
+                                                            </button>
+                                                        }
+                                                        else
+                                                        {
+                                                            <button type="button" class="btn btn-sm btn-light border rounded-2 fw-semibold text-success"
+                                                                    @onclick="() => RestorePlotAsync(p)">
+                                                                <i class="bi bi-arrow-counterclockwise me-1"></i>Restore
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                        @if (displayedFarmPlots.Count == 0)
+                                        {
+                                            <tr>
+                                                <td colspan="6" class="text-center text-muted py-4">
+                                                    @(showArchivedPlotsInModal ? "No archived plots for this farm." : "No active plots for this farm.")
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Footer -->
+                <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseFarmDetailsModal">Close</button>
+                    @if (!detArch)
+                    {
+                        <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEditFarm(selectedFarm)">
+                            <i class="bi bi-pencil-square me-2"></i>Edit Farm
+                        </button>
+                    }
+                </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Plot name <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
-                    {
-                        <div class="err">Plot name is required.</div>
-                    }
-                    @if (showErrors && NameTaken)
-                    {
-                        <div class="err">This plot name is already used.</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Area (hectares)</label>
-                    <input type="number" min="0" step="0.1" class="form-control @(showErrors && AreaInvalid ? "is-invalid" : "")" @bind="areaInput" />
-                    @if (showErrors && AreaInvalid)
-                    {
-                        <div class="err">Area can’t be negative.</div>
-                    }
-                </div>
+<!-- ADD / EDIT FARM MODAL -->
+@if (showFarmModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
-                <div class="col-md-6">
-                    <label class="form-label">Soil type</label>
-                    <input class="form-control" placeholder="Clay loam" @bind="form.Soil" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Irrigation</label>
-                    <select class="form-select" @bind="form.Irrigation">
-                        @foreach (var i in IrrigationOptions)
-                        {
-                            <option value="@i">@i</option>
-                        }
-                    </select>
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(editingFarmId == null ? "bi-geo-alt" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingFarmId == null ? "Register New Farm" : "Edit Farm Details")
+                            </h4>
+                            <p class="text-muted small mb-0">Fill in the farm information below to @(editingFarmId == null ? "create a new farm" : "update the farm").</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseFarmModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
                 </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" @bind="form.Status">
-                        @foreach (var s in StatusOptions)
-                        {
-                            <option value="@s">@s</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Branch</label>
-                    <select class="form-select" @bind="form.Branch">
-                        @foreach (var b in branchNames)
-                        {
-                            <option value="@b">@b</option>
-                        }
-                    </select>
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-geo-alt me-2 text-success"></i>Farm Identification
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Farm Name <span class="text-danger">*</span></label>
+                                    <input class="form-control @(showFarmErrors && (string.IsNullOrWhiteSpace(farmForm.FarmName) || FarmNameTaken) ? "border-danger" : "")"
+                                           placeholder="e.g. North Gate Farm"
+                                           @bind="farmForm.FarmName"
+                                           @bind:after="() => farmForm.FarmName = CapitalizeWords(farmForm.FarmName)" />
+                                    @if (showFarmErrors && string.IsNullOrWhiteSpace(farmForm.FarmName))
+                                    {
+                                        <div class="err">Farm name is required.</div>
+                                    }
+                                    @if (showFarmErrors && FarmNameTaken)
+                                    {
+                                        <div class="err">This farm name is already used.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Branch <span class="text-danger">*</span></label>
+                                    <select class="form-select @(showFarmErrors && farmForm.BranchId <= 0 ? "border-danger" : "")" @bind="farmForm.BranchId">
+                                        <option value="0">-- Select Branch --</option>
+                                        @foreach (var b in branches)
+                                        {
+                                            <option value="@b.BranchId">@b.BranchName</option>
+                                        }
+                                    </select>
+                                    @if (showFarmErrors && farmForm.BranchId <= 0)
+                                    {
+                                        <div class="err">Please select a branch.</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-sliders me-2 text-success"></i>Location &amp; Land Area
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Total Area (ha) <span class="text-danger">*</span></label>
+                                    <input type="number" min="0" step="0.1" class="form-control border-0 shadow-sm @(showFarmErrors && FarmAreaInvalid ? "border border-danger" : "")"
+                                           @bind="farmAreaInput" />
+                                    @if (showFarmErrors && FarmAreaInvalid)
+                                    {
+                                        <div class="err">Total area must be greater than 0.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Region</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="selectedRegionCode" @bind:after="OnRegionChanged">
+                                        <option value="">Select Region...</option>
+                                        @foreach (var r in regions)
+                                        {
+                                            <option value="@r.Code">@r.Name</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Province</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="selectedProvinceCode">
+                                        <option value="">Select Province...</option>
+                                        @foreach (var p in provinces)
+                                        {
+                                            <option value="@p.Code">@p.Name</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="col-12 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Barangay / Sitio / Specific Location</label>
+                                    <input class="form-control border-0 shadow-sm" placeholder="e.g. Barangay Labugon"
+                                           @bind="locationDetail"
+                                           @bind:after="() => locationDetail = CapitalizeWords(locationDetail)" />
+                                </div>
+                            </div>
+                        </div>
+                    </form>
                 </div>
 
-                <div class="col-12">
-                    <label class="form-label">Notes</label>
-                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseFarmModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="PromptSaveFarm" disabled="@isSaving">
+                        <i class="bi bi-check2 me-2"></i>
+                        <span>@(editingFarmId == null ? "Save Farm" : "Update Farm")</span>
+                    </button>
                 </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
+<!-- SAVE FARM CONFIRMATION MODAL -->
+@if (showConfirmSaveFarmModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1060;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #E8F3EC; color: #1B5E34;">
+                        <i class="bi bi-check2" style="font-size: 2.3rem;"></i>
+                    </div>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">@(editingFarmId == null ? "Create New Farm?" : "Save Farm Changes?")</h4>
+                    <p class="text-muted small mb-4">
+                        @(editingFarmId == null
+                            ? $"Are you sure you want to register farm \"{farmForm.FarmName.Trim()}\"?"
+                            : $"Are you sure you want to update farm \"{farmForm.FarmName.Trim()}\" details?")
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelSaveFarmConfirm">Cancel</button>
+                        <button type="button" class="btn-save rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmSaveFarmAsync">
+                            @(isSaving ? "Saving..." : "Yes, Save")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ARCHIVE FARM CONFIRMATION MODAL -->
+@if (showConfirmArchiveFarmModal && farmToArchive != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1060;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #F5EFEA; color: #7A5230;">
+                        <i class="bi bi-archive" style="font-size: 2.3rem;"></i>
+                    </div>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Archive Farm?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to archive <strong>@farmToArchive.FarmName</strong>?<br />
+                        It will be moved to the Archived tab and can be restored anytime.
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelArchiveFarmConfirm">Cancel</button>
+                        <button type="button" class="btn-earth rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmArchiveFarmAsync">
+                            <i class="bi bi-archive me-1"></i> Yes, Archive
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ADD / EDIT PLOT MODAL -->
+@if (showPlotModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1055;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(editingPlotId == null ? "bi-map" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingPlotId == null ? "Add New Plot" : "Edit Plot Details")
+                            </h4>
+                            <p class="text-muted small mb-0">
+                                Farm: <strong>@(GetFarm(plotForm.FarmId)?.FarmName ?? "Selected Farm")</strong>
+                            </p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="ClosePlotModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Plot Name <span class="text-danger">*</span></label>
+                                <input class="form-control @(showPlotErrors && (string.IsNullOrWhiteSpace(plotForm.PlotName) || PlotNameTaken) ? "border-danger" : "")"
+                                       placeholder="e.g. North Plot A"
+                                       @bind="plotForm.PlotName"
+                                       @bind:after="() => plotForm.PlotName = CapitalizeWords(plotForm.PlotName)" />
+                                @if (showPlotErrors && string.IsNullOrWhiteSpace(plotForm.PlotName))
+                                {
+                                    <div class="err">Plot name is required.</div>
+                                }
+                                @if (showPlotErrors && PlotNameTaken)
+                                {
+                                    <div class="err">This plot name is already used in this farm.</div>
+                                }
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted">Plot Area (ha) <span class="text-danger">*</span></label>
+                                <input type="number" min="0" step="0.01" class="form-control @(showPlotErrors && PlotAreaInvalid ? "border-danger" : "")"
+                                       @bind="plotAreaInput" />
+                                @if (showPlotErrors && PlotAreaInvalid)
+                                {
+                                    <div class="err">Plot area must be greater than 0.</div>
+                                }
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-muted">Soil Type</label>
+                                <input class="form-control" placeholder="e.g. Clay loam"
+                                       @bind="plotForm.SoilType"
+                                       @bind:after="() => plotForm.SoilType = CapitalizeWords(plotForm.SoilType)" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-muted">Irrigation Type</label>
+                                <select class="form-select" @bind="plotForm.IrrigationType">
+                                    @foreach (var irr in IrrigationOptions)
+                                    {
+                                        <option value="@irr">@Cap(irr)</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small text-muted">Status</label>
+                                <select class="form-select" @bind="plotForm.Status">
+                                    @foreach (var st in PlotStatusOptions)
+                                    {
+                                        <option value="@st">@Cap(st)</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="ClosePlotModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="PromptSavePlot" disabled="@isSaving">
+                        <i class="bi bi-check2 me-2"></i>
+                        <span>@(editingPlotId == null ? "Save Plot" : "Update Plot")</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- SAVE PLOT CONFIRMATION MODAL -->
+@if (showConfirmSavePlotModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1065;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #E8F3EC; color: #1B5E34;">
+                        <i class="bi bi-check2" style="font-size: 2.3rem;"></i>
+                    </div>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">@(editingPlotId == null ? "Create New Plot?" : "Save Plot Changes?")</h4>
+                    <p class="text-muted small mb-4">
+                        @(editingPlotId == null
+                            ? $"Are you sure you want to add plot \"{plotForm.PlotName.Trim()}\"?"
+                            : $"Are you sure you want to update plot \"{plotForm.PlotName.Trim()}\" details?")
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelSavePlotConfirm">Cancel</button>
+                        <button type="button" class="btn-save rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmSavePlotAsync">
+                            @(isSaving ? "Saving..." : "Yes, Save")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ARCHIVE PLOT CONFIRMATION MODAL -->
+@if (showConfirmArchivePlotModal && plotToArchive != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1065;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #F5EFEA; color: #7A5230;">
+                        <i class="bi bi-archive" style="font-size: 2.3rem;"></i>
+                    </div>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Archive Plot?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to archive <strong>@plotToArchive.PlotName</strong>?<br />
+                        It will be moved to the Archived plots tab and can be restored anytime.
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelArchivePlotConfirm">Cancel</button>
+                        <button type="button" class="btn-earth rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmArchivePlotAsync">
+                            <i class="bi bi-archive me-1"></i> Yes, Archive
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -183,172 +772,650 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+    <div class="toast-note shadow-lg">
+        <i class="bi @(toastIsWarning ? "bi-exclamation-circle" : "bi-check2")"></i>
+        <span>@toast</span>
+    </div>
 }
 
 @code {
-    // ---------- MODELS ----------
-    class PlotRec
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = "";
-        public string Soil { get; set; } = "";
-        public string Branch { get; set; } = "";
-        public double Area { get; set; }
-        public string Irrigation { get; set; } = "rainfed";
-        public string Crop { get; set; } = "";      // gikan sa Crop Planning module
-        public string Variety { get; set; } = "";   // gikan sa Crop Planning module
-        public string Status { get; set; } = "idle";
-        public string Notes { get; set; } = "";
-
-        public PlotRec Clone() => (PlotRec)MemberwiseClone();
-    }
-
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
 
+    class Viewport
+    {
+        public double W { get; set; }
+        public double H { get; set; }
+    }
+
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
-
     static readonly string[] IrrigationOptions = { "rainfed", "drip", "canal", "sprinkler" };
-    static readonly string[] StatusOptions = { "idle", "preparing", "planted", "harvesting", "fallow" };
+    static readonly string[] PlotStatusOptions = { "Vacant", "Preparing", "Planted", "Harvesting", "Fallow" };
 
-    // TODO: kuhaa gikan sa naka-login nga tenant ug sa Branches module
-    const string ActiveBranch = "North Field Branch";
-    readonly string[] branchNames = { "North Field Branch", "South Valley Branch", "Central Packing Branch" };
+    long currentBusinessId;
+    string businessName = "AgriNexus Farm Operations";
 
-    // Temporary: gidaghanon sa crop cycles nga na-record (i-compute gikan sa Crop Planning kung naa na)
-    const int CyclesRecorded = 5;
+    List<Branch> branches = new();
+    List<Farm> farms = new();
+    List<Plot> plots = new();
 
-    // ---------- STATE ----------
+    bool showArchivedFarms = false;
     string searchText = "";
     string toast = "";
-    bool showModal;
-    bool showErrors;
-    int? editingId;
-    int? openMenuId;
-    PlotRec form = new();
-    double? areaInput;
+    bool toastIsWarning = false;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    readonly List<PlotRec> plots = new()
+    bool showFarmModal;
+    bool showFarmErrors;
+    bool isSaving;
+    int? editingFarmId;
+    int? openFarmMenuId;
+    Farm farmForm = new();
+    double? farmAreaInput;
+
+    bool showFarmDetailsModal;
+    Farm? selectedFarm;
+    bool showPlotsInDetails;
+    bool showArchivedPlotsInModal;
+
+    bool showConfirmSaveFarmModal;
+    bool showConfirmArchiveFarmModal;
+    Farm? farmToArchive;
+
+    bool showPlotModal;
+    bool showPlotErrors;
+    int? editingPlotId;
+    Plot plotForm = new();
+    double? plotAreaInput;
+
+    bool showConfirmSavePlotModal;
+    bool showConfirmArchivePlotModal;
+    Plot? plotToArchive;
+
+    private int currentPage = 1;
+    private int pageSize = 5;
+    private double menuTop;
+    private double menuLeft;
+
+    private List<Region> regions = new();
+    private List<Province> provinces = new();
+    private string selectedRegionCode = "";
+    private string selectedProvinceCode = "";
+    private string locationDetail = "";
+
+private async Task OnRegionChanged()
+{
+    if (!string.IsNullOrEmpty(selectedRegionCode))
     {
-        new() { Id = 1, Name = "North Plot A",   Soil = "Clay loam",  Branch = "North Field Branch",     Area = 1.5, Irrigation = "drip",      Crop = "Rice",     Variety = "NSIC Rc222", Status = "planted" },
-        new() { Id = 2, Name = "North Plot B",   Soil = "Loam",       Branch = "North Field Branch",     Area = 2,   Irrigation = "canal",     Crop = "Corn",     Variety = "Pioneer 30T80", Status = "planted" },
-        new() { Id = 3, Name = "North Plot C",   Soil = "Sandy loam", Branch = "North Field Branch",     Area = 1.2, Irrigation = "sprinkler", Status = "preparing" },
-        new() { Id = 4, Name = "South Plot D",   Soil = "Silt loam",  Branch = "South Valley Branch",    Area = 2.5, Irrigation = "rainfed",   Crop = "Cabbage",  Variety = "Scorpio",    Status = "planted" },
-        new() { Id = 5, Name = "South Plot E",   Soil = "Clay",       Branch = "South Valley Branch",    Area = 1.8, Irrigation = "canal",     Crop = "Ampalaya", Variety = "Galaxy",     Status = "harvesting" },
-        new() { Id = 6, Name = "Central Plot F", Soil = "Loam",       Branch = "Central Packing Branch", Area = 1,   Irrigation = "drip",      Status = "fallow" },
-    };
+        provinces = (await AddressProvider.GetProvincesByRegionCodeAsync(selectedRegionCode)).ToList();
+    }
+    else
+    {
+        provinces.Clear();
+    }
+    selectedProvinceCode = "";
+}
 
-    // ---------- COMPUTED ----------
-    List<PlotRec> Filtered => string.IsNullOrWhiteSpace(searchText)
-        ? plots
-        : plots.Where(p =>
-            p.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            p.Branch.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            p.Soil.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            p.Crop.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            User? currentUser = null;
+
+            if (Auth.CurrentUserId > 0)
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+            {
+                var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                           || u.FName == Auth.CurrentUserName);
+            }
+
+            if (currentUser?.BusinessId != null)
+            {
+                currentBusinessId = currentUser.BusinessId.Value;
+                if (currentUser.Business != null)
+                {
+                    businessName = currentUser.Business.BusinessName;
+                }
+            }
+            else
+            {
+                var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+                if (firstBiz != null)
+                {
+                    currentBusinessId = firstBiz.BusinessId;
+                    businessName = firstBiz.BusinessName;
+                }
+            }
+
+            regions = (await AddressProvider.GetRegionsAsync()).ToList();
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            toast = "Error loading page: " + ex.Message;
+            toastIsWarning = true;
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            branches = await DbContext.Branches
+                .Where(b => b.BusinessId == currentBusinessId)
+                .OrderBy(b => b.BranchName)
+                .ToListAsync();
+
+            var branchIds = branches.Select(b => b.BranchId).ToList();
+
+            farms = await DbContext.Farms
+                .Where(f => branchIds.Contains(f.BranchId))
+                .OrderBy(f => f.FarmId)
+                .ToListAsync();
+
+            var farmIds = farms.Select(f => f.FarmId).ToList();
+
+            plots = await DbContext.Plots
+                .Where(p => farmIds.Contains(p.FarmId))
+                .OrderBy(p => p.PlotId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            toast = "Database load error: " + ex.Message;
+            toastIsWarning = true;
+        }
+    }
+
+    List<Farm> FilteredFarms
+    {
+        get
+        {
+            var baseList = farms
+                .Where(f =>
+                {
+                    var isArch = string.Equals(f.Status, "Archived", StringComparison.OrdinalIgnoreCase);
+                    return showArchivedFarms ? isArch : !isArch;
+                })
+                .ToList();
+
+            if (string.IsNullOrWhiteSpace(searchText))
+                return baseList;
+
+            return baseList.Where(f =>
+                f.FarmName.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                || f.Location.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                || GetBranchName(f.BranchId).Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)FilteredFarms.Count / pageSize));
+    private int StartItem => FilteredFarms.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, FilteredFarms.Count);
+    private IEnumerable<Farm> PaginatedFarms => FilteredFarms.Skip((currentPage - 1) * pageSize).Take(pageSize);
 
     List<Stat> Stats
     {
         get
         {
-            var planted = plots.Count(p => p.Status == "planted");
-            var totalHa = plots.Sum(p => p.Area);
-            var active = plots.Count(p => p.Status == "planted" || p.Status == "harvesting");
+            var activeFarms = farms.Where(f => !string.Equals(f.Status, "Archived", StringComparison.OrdinalIgnoreCase)).ToList();
+            var totalArea = activeFarms.Sum(f => f.TotalArea);
+            var activeFarmIds = activeFarms.Select(f => f.FarmId).ToHashSet();
+            var activePlotsCount = plots.Count(p => activeFarmIds.Contains(p.FarmId) && !string.Equals(p.Status, "Archived", StringComparison.OrdinalIgnoreCase));
+
             return new()
             {
-                new("PLOTS", plots.Count.ToString(), planted + " currently planted", "bi-map", ""),
-                new("TOTAL AREA", totalHa.ToString("0.##", Inv) + " ha", "Across managed plots", "bi-water", "stat-icon-plain"),
-                new("ACTIVE CROP CYCLES", active.ToString(), CyclesRecorded + " cycles recorded", "bi-flower1", "stat-icon-plain"),
+                new("TOTAL FARMS", activeFarms.Count.ToString(), $"Across {branches.Count} branch(es)", "bi-geo-alt", ""),
+                new("TOTAL FARM AREA", totalArea.ToString("0.##", Inv) + " ha", "Combined active farm land", "bi-map", "stat-icon-leaf"),
+                new("ACTIVE PLOTS", activePlotsCount.ToString(), "Across active farms", "bi-grid-1x2", "stat-icon-earth"),
             };
         }
     }
 
-    bool NameTaken => !string.IsNullOrWhiteSpace(form.Name) &&
-        plots.Any(p => p.Id != (editingId ?? -1) &&
-                       string.Equals(p.Name, form.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+    bool FarmNameTaken => !string.IsNullOrWhiteSpace(farmForm.FarmName) &&
+        farms.Any(f => f.FarmId != (editingFarmId ?? -1)
+            && string.Equals(f.FarmName.Trim(), farmForm.FarmName.Trim(), StringComparison.OrdinalIgnoreCase));
 
-    bool AreaInvalid => areaInput.HasValue && areaInput.Value < 0;
+    bool FarmAreaInvalid => !farmAreaInput.HasValue || farmAreaInput.Value <= 0;
 
-    static bool HasCrop(PlotRec p) => !string.IsNullOrWhiteSpace(p.Crop);
+    bool PlotNameTaken => !string.IsNullOrWhiteSpace(plotForm.PlotName) &&
+        plots.Any(p => p.PlotId != (editingPlotId ?? -1)
+            && p.FarmId == plotForm.FarmId
+            && string.Equals(p.PlotName.Trim(), plotForm.PlotName.Trim(), StringComparison.OrdinalIgnoreCase));
 
-    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+    bool PlotAreaInvalid => !plotAreaInput.HasValue || plotAreaInput.Value <= 0;
 
-    static string StatusClass(string s) => s switch
+    Farm? GetFarm(int farmId) => farms.FirstOrDefault(f => f.FarmId == farmId);
+
+    string GetBranchName(long? branchId)
     {
-        "preparing" or "harvesting" => "pill-yellow",
-        "planted" => "pill-green",
-        _ => "pill-gray"
-    };
-
-    // ---------- ACTIONS ----------
-    void OpenNew()
-    {
-        form = new PlotRec { Irrigation = "rainfed", Status = "idle", Branch = ActiveBranch };
-        areaInput = null;
-        editingId = null;
-        showErrors = false;
-        showModal = true;
+        if (branchId == null) return "Unassigned";
+        return branches.FirstOrDefault(b => b.BranchId == branchId)?.BranchName ?? "Unassigned";
     }
 
-    void OpenEdit(PlotRec p)
+    static string Cap(string? s) => string.IsNullOrWhiteSpace(s) ? "" : char.ToUpper(s[0]) + s.Substring(1);
+
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
+
+    private async Task ToggleFarmTab(bool archived)
     {
-        form = p.Clone();
-        areaInput = p.Area;
-        editingId = p.Id;
-        showErrors = false;
-        openMenuId = null;
-        showModal = true;
+        showArchivedFarms = archived;
+        currentPage = 1;
+        openFarmMenuId = null;
+        await Task.CompletedTask;
     }
 
-    void CloseModal() => showModal = false;
-
-    void Save()
+    private async Task ToggleFarmMenuAsync(MouseEventArgs e, int farmId)
     {
-        showErrors = true;
-        if (string.IsNullOrWhiteSpace(form.Name) || NameTaken || AreaInvalid) return;
-
-        form.Name = form.Name.Trim();
-        form.Area = areaInput ?? 0;
-
-        if (editingId == null)
+        if (openFarmMenuId == farmId)
         {
-            form.Id = plots.Count == 0 ? 1 : plots.Max(p => p.Id) + 1;
-            plots.Add(form);
-        }
-        else
-        {
-            var idx = plots.FindIndex(p => p.Id == editingId);
-            if (idx >= 0)
-            {
-                // Ang crop ug variety gikan sa Crop Planning, dili sa modal
-                form.Crop = plots[idx].Crop;
-                form.Variety = plots[idx].Variety;
-                plots[idx] = form;
-            }
-        }
-        showModal = false;
-    }
-
-    async Task Delete(PlotRec p)
-    {
-        openMenuId = null;
-        if (HasCrop(p))
-        {
-            await ShowToast(p.Name + " still has an active crop cycle. Close the cycle first before deleting the plot.");
+            openFarmMenuId = null;
             return;
         }
-        plots.Remove(p);
+
+        var target = farms.FirstOrDefault(x => x.FarmId == farmId);
+        var isArch = target != null && string.Equals(target.Status, "Archived", StringComparison.OrdinalIgnoreCase);
+
+        const double itemHeight = 42;
+        const double padding = 16;
+        const double menuWidth = 170;
+        int itemCount = isArch ? 1 : 3;
+        double menuHeight = (itemCount * itemHeight) + padding;
+
+        var viewport = await JS.InvokeAsync<Viewport>("eval", "({ w: window.innerWidth, h: window.innerHeight })");
+
+        menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewport.W - menuWidth - 10);
+        menuTop = (e.ClientY + menuHeight > viewport.H) ? e.ClientY - menuHeight - 5 : e.ClientY + 15;
+
+        openFarmMenuId = farmId;
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
-    void CloseMenu() => openMenuId = null;
+    void CloseMenus() => openFarmMenuId = null;
 
-    async Task ShowToast(string message)
+    private string CapitalizeWords(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input ?? "";
+        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input.ToLower().Trim());
+    }
+
+    void OpenFarmDetails(Farm f)
+    {
+        selectedFarm = f;
+        showPlotsInDetails = false;
+        showArchivedPlotsInModal = false;
+        showFarmDetailsModal = true;
+    }
+
+    void CloseFarmDetailsModal()
+    {
+        showFarmDetailsModal = false;
+        selectedFarm = null;
+        showPlotsInDetails = false;
+    }
+
+    void ToggleViewPlotsInModal() => showPlotsInDetails = !showPlotsInDetails;
+
+void OpenNewFarm()
+{
+    openFarmMenuId = null;
+    farmForm = new Farm
+    {
+        BranchId = branches.FirstOrDefault()?.BranchId ?? 0,
+        AreaUnit = "Hectares",
+        Status = "Active"
+    };
+    farmAreaInput = null;
+    selectedRegionCode = "";
+    selectedProvinceCode = "";
+    provinces.Clear();
+    locationDetail = "";
+    editingFarmId = null;
+    showFarmErrors = false;
+    showFarmModal = true;
+}
+
+void OpenEditFarm(Farm f)
+{
+    showFarmDetailsModal = false;
+    openFarmMenuId = null;
+    farmForm = new Farm
+    {
+        FarmId = f.FarmId,
+        BranchId = f.BranchId,
+        FarmName = f.FarmName,
+        Location = f.Location,
+        TotalArea = f.TotalArea,
+        AreaUnit = f.AreaUnit,
+        Status = f.Status
+    };
+    farmAreaInput = (double)f.TotalArea;
+    selectedRegionCode = "";
+    selectedProvinceCode = "";
+    provinces.Clear();
+    locationDetail = f.Location ?? "";
+    editingFarmId = f.FarmId;
+    showFarmErrors = false;
+    showFarmModal = true;
+}
+
+    void CloseFarmModal() => showFarmModal = false;
+
+    void PromptSaveFarm()
+    {
+        showFarmErrors = true;
+        if (string.IsNullOrWhiteSpace(farmForm.FarmName) || farmForm.BranchId <= 0 || FarmNameTaken || FarmAreaInvalid)
+            return;
+
+        showConfirmSaveFarmModal = true;
+    }
+
+    void CancelSaveFarmConfirm() => showConfirmSaveFarmModal = false;
+
+async Task ConfirmSaveFarmAsync()
+    {
+        isSaving = true;
+        try
+        {
+            var selectedProvName = provinces.FirstOrDefault(p => p.Code == selectedProvinceCode)?.Name;
+            var cleanLocDetail = CapitalizeWords(locationDetail).Trim();
+            var finalLocation = !string.IsNullOrWhiteSpace(selectedProvName) && !string.IsNullOrWhiteSpace(cleanLocDetail)
+                ? $"{cleanLocDetail}, {selectedProvName}"
+                : (!string.IsNullOrWhiteSpace(cleanLocDetail) ? cleanLocDetail : (selectedProvName ?? ""));
+
+            var areaVal = Convert.ToDecimal(farmAreaInput ?? 0, Inv);
+            if (editingFarmId == null)
+            {
+                var created = new Farm
+                {
+                    BranchId = farmForm.BranchId,
+                    FarmName = farmForm.FarmName.Trim(),
+                    Location = finalLocation,
+                    TotalArea = areaVal,
+                    AreaUnit = "Hectares",
+                    Status = "Active"
+                };
+                DbContext.Farms.Add(created);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Farm registered successfully.");
+            }
+            else
+            {
+                var existing = await DbContext.Farms.FindAsync(editingFarmId.Value);
+                if (existing != null)
+                {
+                    existing.FarmName = farmForm.FarmName.Trim();
+                    existing.BranchId = farmForm.BranchId;
+                    existing.Location = finalLocation;
+                    existing.TotalArea = areaVal;
+                    DbContext.Farms.Update(existing);
+                    await DbContext.SaveChangesAsync();
+                    await ShowToast("Farm details updated.");
+                }
+            }
+
+            showConfirmSaveFarmModal = false;
+            showFarmModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error saving farm: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    void PromptArchiveFarm(Farm f)
+    {
+        openFarmMenuId = null;
+        var hasActivePlots = plots.Any(p => p.FarmId == f.FarmId && !string.Equals(p.Status, "Archived", StringComparison.OrdinalIgnoreCase));
+        if (hasActivePlots)
+        {
+            _ = ShowToast(f.FarmName + " still has active plots. Archive or reassign its plots first.", isWarning: true);
+            return;
+        }
+        farmToArchive = f;
+        showConfirmArchiveFarmModal = true;
+    }
+
+    void CancelArchiveFarmConfirm()
+    {
+        showConfirmArchiveFarmModal = false;
+        farmToArchive = null;
+    }
+
+    async Task ConfirmArchiveFarmAsync()
+    {
+        if (farmToArchive == null) return;
+        isSaving = true;
+        try
+        {
+            var existing = await DbContext.Farms.FindAsync(farmToArchive.FarmId);
+            if (existing != null)
+            {
+                existing.Status = "Archived";
+                DbContext.Farms.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast($"{farmToArchive.FarmName} moved to Archived.");
+            }
+
+            showConfirmArchiveFarmModal = false;
+            farmToArchive = null;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error archiving farm: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    async Task RestoreFarmAsync(Farm f)
+    {
+        openFarmMenuId = null;
+        var existing = await DbContext.Farms.FindAsync(f.FarmId);
+        if (existing != null)
+        {
+            existing.Status = "Active";
+            DbContext.Farms.Update(existing);
+            await DbContext.SaveChangesAsync();
+            await ShowToast($"{f.FarmName} restored.");
+        }
+
+        await LoadDataAsync();
+    }
+
+    // ---------- PLOT ACTIONS ----------
+    void OpenNewPlotForFarm(Farm f)
+    {
+        openFarmMenuId = null;
+        plotForm = new Plot
+        {
+            FarmId = f.FarmId,
+            IrrigationType = "rainfed",
+            Status = "Vacant"
+        };
+        plotAreaInput = null;
+        editingPlotId = null;
+        showPlotErrors = false;
+        showPlotModal = true;
+    }
+
+    void OpenEditPlot(Plot p)
+    {
+        plotForm = new Plot
+        {
+            PlotId = p.PlotId,
+            FarmId = p.FarmId,
+            PlotName = p.PlotName,
+            PlotArea = p.PlotArea,
+            SoilType = p.SoilType,
+            IrrigationType = string.IsNullOrWhiteSpace(p.IrrigationType) ? "rainfed" : p.IrrigationType,
+            CurrentCrop = p.CurrentCrop,
+            Status = p.Status
+        };
+        plotAreaInput = (double)p.PlotArea;
+        editingPlotId = p.PlotId;
+        showPlotErrors = false;
+        showPlotModal = true;
+    }
+
+    void ClosePlotModal() => showPlotModal = false;
+
+    void PromptSavePlot()
+    {
+        showPlotErrors = true;
+        if (plotForm.FarmId <= 0 || string.IsNullOrWhiteSpace(plotForm.PlotName) || PlotNameTaken || PlotAreaInvalid)
+            return;
+
+        showConfirmSavePlotModal = true;
+    }
+
+    void CancelSavePlotConfirm() => showConfirmSavePlotModal = false;
+
+    async Task ConfirmSavePlotAsync()
+    {
+        isSaving = true;
+        try
+        {
+            plotForm.PlotName = plotForm.PlotName.Trim();
+            plotForm.SoilType = (plotForm.SoilType ?? "").Trim();
+            plotForm.PlotArea = Convert.ToDecimal(plotAreaInput ?? 0, Inv);
+
+            if (editingPlotId == null)
+            {
+                var entity = new Plot
+                {
+                    FarmId = plotForm.FarmId,
+                    PlotName = plotForm.PlotName,
+                    PlotArea = plotForm.PlotArea,
+                    SoilType = plotForm.SoilType,
+                    IrrigationType = plotForm.IrrigationType,
+                    CurrentCrop = "",
+                    Status = plotForm.Status
+                };
+                DbContext.Plots.Add(entity);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Plot added successfully.");
+            }
+            else
+            {
+                var existing = await DbContext.Plots.FindAsync(editingPlotId.Value);
+                if (existing != null)
+                {
+                    existing.PlotName = plotForm.PlotName;
+                    existing.PlotArea = plotForm.PlotArea;
+                    existing.SoilType = plotForm.SoilType;
+                    existing.IrrigationType = plotForm.IrrigationType;
+                    existing.Status = plotForm.Status;
+                    DbContext.Plots.Update(existing);
+                    await DbContext.SaveChangesAsync();
+                    await ShowToast("Plot details updated.");
+                }
+            }
+
+            showConfirmSavePlotModal = false;
+            showPlotModal = false;
+            showPlotsInDetails = true;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error saving plot: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    void PromptArchivePlot(Plot p)
+    {
+        if (!string.IsNullOrWhiteSpace(p.CurrentCrop))
+        {
+            _ = ShowToast(p.PlotName + " still has an active crop cycle. Clear the cycle first before archiving.", isWarning: true);
+            return;
+        }
+        plotToArchive = p;
+        showConfirmArchivePlotModal = true;
+    }
+
+    void CancelArchivePlotConfirm()
+    {
+        showConfirmArchivePlotModal = false;
+        plotToArchive = null;
+    }
+
+    async Task ConfirmArchivePlotAsync()
+    {
+        if (plotToArchive == null) return;
+        isSaving = true;
+        try
+        {
+            var existing = await DbContext.Plots.FindAsync(plotToArchive.PlotId);
+            if (existing != null)
+            {
+                existing.Status = "Archived";
+                DbContext.Plots.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast($"{plotToArchive.PlotName} moved to Archived.");
+            }
+
+            showConfirmArchivePlotModal = false;
+            plotToArchive = null;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error archiving plot: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    async Task RestorePlotAsync(Plot p)
+    {
+        var existing = await DbContext.Plots.FindAsync(p.PlotId);
+        if (existing != null)
+        {
+            existing.Status = "Vacant";
+            DbContext.Plots.Update(existing);
+            await DbContext.SaveChangesAsync();
+            await ShowToast($"{p.PlotName} restored.");
+        }
+
+        await LoadDataAsync();
+    }
+
+    async Task ShowToast(string message, bool isWarning = false)
     {
         toast = message;
+        toastIsWarning = isWarning;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3500);
+        await Task.Delay(3200);
         toast = "";
         await InvokeAsync(StateHasChanged);
     }

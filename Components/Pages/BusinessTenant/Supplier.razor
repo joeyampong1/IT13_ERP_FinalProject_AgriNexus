@@ -1,9 +1,24 @@
 ﻿@page "/suppliers"
+@layout MainLayout
 @using System.Globalization
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Web
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
+@inject AgriNexus.Services.AuthService Auth
+@inject IJSRuntime JS
 
-<div class="mb-4">
-    <h2 class="page-title">Supplier Records</h2>
-    <p class="text-muted mb-0 page-sub">@BusinessName · who supplies seeds, fertilizer, pesticides, tools and fuel.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="page-title">Supplier Records</h2>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@BusinessName</strong> · who supplies seeds, fertilizer, pesticides, tools and fuel.
+        </p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-truck me-1"></i> Supplier Directory
+    </span>
 </div>
 
 <!-- STAT CARDS -->
@@ -28,152 +43,485 @@
     }
 </div>
 
-<!-- TOOLBAR -->
-<div class="toolbar mb-3">
+<!-- TOOLBAR WITH TABS -->
+<div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+
+    <!-- ACTIVE / ARCHIVED TABS -->
+    <div class="btn-group shadow-sm" role="group" aria-label="View Tabs">
+        <input type="radio" class="btn-check" name="supplierViewTabs" id="tabSupActive" autocomplete="off"
+               checked="@(!showArchived)" @onchange="() => ToggleTab(false)">
+        <label class="btn btn-outline-success fw-bold" for="tabSupActive">
+            <i class="bi bi-check-circle me-1"></i> Active
+        </label>
+
+        <input type="radio" class="btn-check" name="supplierViewTabs" id="tabSupArchived" autocomplete="off"
+               checked="@showArchived" @onchange="() => ToggleTab(true)">
+        <label class="btn btn-outline-secondary fw-bold" for="tabSupArchived">
+            <i class="bi bi-archive me-1"></i> Archived
+        </label>
+    </div>
+
+    <!-- SEARCH BOX -->
     <div class="search-box">
         <i class="bi bi-search"></i>
-        <input type="text" placeholder="Search suppliers..." @bind="searchText" @bind:event="oninput" />
+        <input type="text" placeholder="Search suppliers..."
+               @bind="searchText"
+               @bind:event="oninput"
+               @bind:after="ResetPagination" />
     </div>
-    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "supplier" : "suppliers")</span>
-    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
-        <i class="bi bi-plus-lg"></i> New supplier
-    </button>
+
+    <span class="badge rounded-pill px-3 py-2 fw-semibold count-label" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+        <i class="bi bi-truck me-1 text-success"></i>@Filtered.Count @(Filtered.Count == 1 ? "supplier" : "suppliers")
+    </span>
+
+    @if (!showArchived)
+    {
+        <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNew">
+            <i class="bi bi-plus-lg"></i> New supplier
+        </button>
+    }
 </div>
 
-<!-- TABLE -->
-<div class="panel">
-    <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
-            <thead>
+<!-- TABLE (WITH SCROLL, PAGINATION & ROUNDED CORNERS) -->
+<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 280px); overflow: hidden;">
+
+    <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+            <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                 <tr>
-                    <th>Supplier</th>
-                    <th>Contact<br />person</th>
-                    <th>Contact</th>
-                    <th>Supplies</th>
-                    <th>Terms</th>
-                    <th>Status</th>
-                    <th></th>
+                    <th class="text-muted small fw-bold text-uppercase py-3 px-4">Supplier</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Contact<br />person</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Contact</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Supplies</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Terms</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Status</th>
+                    <th class="py-3"></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var s in Filtered)
+                @foreach (var s in PaginatedSuppliers)
                 {
-                    <tr>
-                        <td class="col-name">
-                            <div class="fw-semibold">@s.Name</div>
-                            <div class="sub">@Cap(s.Category)</div>
+                    <tr style="cursor: pointer;" @onclick="() => OpenDetails(s)">
+                        <td class="col-name px-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="biz-avatar">
+                                    <i class="bi bi-truck"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: #0A2B1D;">@s.Name</div>
+                                    <div class="text-muted small mt-1">@Cap(s.Category)</div>
+                                </div>
+                            </div>
                         </td>
-                        <td class="col-person">@(string.IsNullOrWhiteSpace(s.Person) ? "—" : s.Person)</td>
-                        <td class="col-contact">@(string.IsNullOrWhiteSpace(s.Contact) ? "—" : s.Contact)</td>
-                        <td class="col-supplies">@(string.IsNullOrWhiteSpace(s.Supplies) ? "—" : s.Supplies)</td>
-                        <td class="col-terms">@(string.IsNullOrWhiteSpace(s.Terms) ? "—" : s.Terms)</td>
-                        <td><span class="pill @(s.Status == "active" ? "pill-green" : "pill-gray")">@Cap(s.Status)</span></td>
-                        <td class="text-end action-cell">
-                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(s.Id)" aria-label="Actions">
+                        <td class="col-person text-dark fw-medium">@(string.IsNullOrWhiteSpace(s.ContactPerson) ? "—" : s.ContactPerson)</td>
+                        <td class="col-contact text-nowrap text-dark fw-medium">
+                            @if (string.IsNullOrWhiteSpace(s.ContactNumber))
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                            else
+                            {
+                                <span><i class="bi bi-telephone text-success me-1"></i>@s.ContactNumber</span>
+                            }
+                        </td>
+                        <td class="col-supplies text-dark">@(string.IsNullOrWhiteSpace(s.ItemsSupplied) ? "—" : s.ItemsSupplied)</td>
+                        <td class="col-terms text-dark fw-medium">@(string.IsNullOrWhiteSpace(s.PaymentTerms) ? "—" : s.PaymentTerms)</td>
+                        <td>
+                            <span class="pill @StatusClass(s.Status)">
+                                <i class="bi @StatusIcon(s.Status) me-1"></i>@Cap(s.Status)
+                            </span>
+                        </td>
+                        <td class="text-end px-4 action-cell">
+                            <button type="button" class="btn-dots"
+                                    @onclick="(e) => ToggleMenuAsync(e, s.SupplierId)"
+                                    @onclick:stopPropagation="true" aria-label="Actions">
                                 <i class="bi bi-three-dots"></i>
                             </button>
-                            @if (openMenuId == s.Id)
-                            {
-                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                <div class="row-menu">
-                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(s)">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </button>
-                                    <div class="menu-sep"></div>
-                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(s)">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </div>
-                            }
                         </td>
                     </tr>
                 }
                 @if (Filtered.Count == 0)
                 {
-                    <tr><td colspan="7" class="text-center text-muted py-5">No suppliers found.</td></tr>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                            @(showArchived ? "No archived suppliers found." : "No suppliers found.")
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
     </div>
+
+    <!-- PAGINATION FOOTER -->
+    @if (Filtered.Count > 0)
+    {
+        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+            <div class="text-muted small mb-2 mb-md-0">
+                Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> suppliers
+            </div>
+
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                    <i class="bi bi-chevron-left me-1"></i>Previous
+                </button>
+
+                @for (int p = 1; p <= TotalPages; p++)
+                {
+                    var pageNumber = p;
+                    <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                            @onclick="() => GoToPage(pageNumber)">
+                        @pageNumber
+                    </button>
+                }
+
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                    Next<i class="bi bi-chevron-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    }
 </div>
 
-<!-- MODAL -->
+<!-- FLOATING ACTION MENU -->
+@if (openMenuId != null)
+{
+    var menuSup = suppliers.FirstOrDefault(x => x.SupplierId == openMenuId);
+    if (menuSup != null)
+    {
+        <div class="menu-backdrop" @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
+
+        <div class="vertical-action-menu shadow-lg" style="top:@(menuTop)px; left:@(menuLeft)px;">
+            @if (!showArchived)
+            {
+                <button type="button" class="action-item"
+                        @onclick="() => OpenEdit(menuSup)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-pencil-square text-success"></i> Edit
+                </button>
+                <button type="button" class="action-item text-danger"
+                        @onclick="() => PromptArchive(menuSup)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-archive"></i> Archive
+                </button>
+            }
+            else
+            {
+                <button type="button" class="action-item text-success"
+                        @onclick="() => RestoreSupplierAsync(menuSup)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-arrow-counterclockwise"></i> Restore
+                </button>
+            }
+        </div>
+    }
+}
+
+<!-- DETAILS MODAL -->
+@if (showDetailsModal && selectedSupplier != null)
+{
+    var linkedCount = linkedItemCounts.TryGetValue(selectedSupplier.SupplierId, out var c) ? c : 0;
+
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi bi-truck fs-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedSupplier.Name</h4>
+                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                <i class="bi bi-tag me-1"></i>@Cap(selectedSupplier.Category)
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-person-badge me-2 text-success"></i>Contact &amp; Supply Info
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Contact Person</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    @(string.IsNullOrWhiteSpace(selectedSupplier.ContactPerson) ? "Not assigned" : selectedSupplier.ContactPerson)
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Contact Number</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    @(string.IsNullOrWhiteSpace(selectedSupplier.ContactNumber) ? "N/A" : selectedSupplier.ContactNumber)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Email Address</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-envelope text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedSupplier.Email) ? "N/A" : selectedSupplier.Email)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Payment Terms</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-card-checklist text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedSupplier.PaymentTerms) ? "—" : selectedSupplier.PaymentTerms)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Account Status</label>
+                                <span class="pill @StatusClass(selectedSupplier.Status)">
+                                    <i class="bi @StatusIcon(selectedSupplier.Status) me-1"></i>@Cap(selectedSupplier.Status)
+                                </span>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Linked Inventory Items</label>
+                                <p class="mb-0 fw-semibold text-dark">@linkedCount @(linkedCount == 1 ? "item" : "items")</p>
+                            </div>
+                            <div class="col-12 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Items Supplied</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    @(string.IsNullOrWhiteSpace(selectedSupplier.ItemsSupplied) ? "—" : selectedSupplier.ItemsSupplied)
+                                </p>
+                            </div>
+                            <div class="col-12 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Complete Address</label>
+                                <p class="mb-0 text-muted fst-italic">
+                                    @(string.IsNullOrWhiteSpace(selectedSupplier.Address) ? "No address provided." : selectedSupplier.Address)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                    @if (!string.Equals(selectedSupplier.Status, "archived", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedSupplier)">
+                            <i class="bi bi-pencil-square me-2"></i>Edit Details
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ADD / EDIT MODAL -->
 @if (showModal)
 {
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New supplier" : "Edit supplier")</h5>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(editingId == null ? "bi-truck" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingId == null ? "Register New Supplier" : "Edit Supplier Details")
+                            </h4>
+                            <p class="text-muted small mb-0">Fill in the information below to @(editingId == null ? "add a new supplier" : "update the supplier").</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-truck me-2 text-success"></i>Supplier Information
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Supplier Name <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && (string.IsNullOrWhiteSpace(form.Name) || NameTaken) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-truck text-success"></i></span>
+                                        <input class="form-control" placeholder="e.g. Central Luzon Agri Supply"
+                                               @bind="form.Name"
+                                               @bind:after="() => form.Name = CapitalizeWords(form.Name)" />
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>Supplier name is required.</div>
+                                    }
+                                    @if (showErrors && NameTaken)
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>This supplier already exists.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Category</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-tag text-success"></i></span>
+                                        <select class="form-select" @bind="form.Category">
+                                            @foreach (var c in CategoryOptions)
+                                            {
+                                                <option value="@c">@c</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-person-badge me-2 text-success"></i>Contact &amp; Terms
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Contact Person</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                                        <input class="form-control" placeholder="Full name"
+                                               @bind="form.ContactPerson"
+                                               @bind:after="() => form.ContactPerson = CapitalizeWords(form.ContactPerson)" />
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Contact Number</label>
+                                    <div class="input-group modern-input @(showErrors && !string.IsNullOrEmpty(contactError) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-telephone text-success"></i></span>
+                                        <input type="tel"
+                                               inputmode="numeric"
+                                               maxlength="13"
+                                               class="form-control"
+                                               @bind="form.ContactNumber"
+                                               @bind:event="oninput"
+                                               @bind:after="FormatContactNumber"
+                                               placeholder="09XX XXX XXXX"
+                                               spellcheck="false" />
+                                    </div>
+                                    @if (showErrors && !string.IsNullOrEmpty(contactError))
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>@contactError</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6 mt-4">
+                                    <label class="form-label fw-bold small text-muted">Email Address</label>
+                                    <div class="input-group modern-input @(showErrors && !EmailValid ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-envelope text-success"></i></span>
+                                        <input type="email" class="form-control" placeholder="owner@email.com" @bind="form.Email" />
+                                    </div>
+                                    @if (showErrors && !EmailValid)
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>Enter a valid email address.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6 mt-4">
+                                    <label class="form-label fw-bold small text-muted">Payment Terms</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-card-checklist text-success"></i></span>
+                                        <input class="form-control" placeholder="30 days / COD" @bind="form.PaymentTerms" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-geo-alt me-2 text-success"></i>Supplies, Address &amp; Status
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small text-muted">Items Supplied</label>
+                                    <input class="form-control border-0 shadow-sm" placeholder="Urea, complete fertilizer, hybrid seeds" @bind="form.ItemsSupplied" />
+                                </div>
+                                <div class="col-12 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Complete Address</label>
+                                    <input class="form-control border-0 shadow-sm" placeholder="Barangay, Municipality, Province"
+                                           @bind="form.Address"
+                                           @bind:after="() => form.Address = CapitalizeWords(form.Address)" />
+                                </div>
+                                <div class="col-md-6 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Account Status</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="form.Status">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="PromptSave" disabled="@isSaving">
+                        <i class="bi bi-check2-circle me-2"></i>@(editingId == null ? "Save Supplier" : "Update Supplier")
+                    </button>
+                </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Supplier name <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && (string.IsNullOrWhiteSpace(form.Name) || NameTaken) ? "is-invalid" : "")" @bind="form.Name" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
-                    {
-                        <div class="err">Supplier name is required.</div>
-                    }
-                    @if (showErrors && NameTaken)
-                    {
-                        <div class="err">This supplier already exists.</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Category</label>
-                    <select class="form-select" @bind="form.Category">
-                        @foreach (var c in CategoryOptions)
-                        {
-                            <option value="@c">@c</option>
-                        }
-                    </select>
-                </div>
+<!-- SAVE CONFIRMATION MODAL -->
+@if (showConfirmSaveModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1060;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #E8F3EC; color: #1B5E34;">
+                        <i class="bi bi-check2" style="font-size: 2.5rem;"></i>
+                    </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Contact person</label>
-                    <input class="form-control" @bind="form.Person" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Contact number</label>
-                    <input class="form-control" @bind="form.Contact" />
-                </div>
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">@(editingId == null ? "Register New Supplier?" : "Update Supplier Details?")</h4>
+                    <p class="text-muted small mb-4">
+                        @(editingId == null
+                            ? $"Are you sure you want to register supplier \"{form.Name.Trim()}\"?"
+                            : $"Are you sure you want to save changes to supplier \"{form.Name.Trim()}\"?" )
+                    </p>
 
-                <div class="col-md-6">
-                    <label class="form-label">Email address</label>
-                    <input type="email" class="form-control @(showErrors && !EmailValid ? "is-invalid" : "")" @bind="form.Email" />
-                    @if (showErrors && !EmailValid)
-                    {
-                        <div class="err">Enter a valid email address.</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Payment terms</label>
-                    <input class="form-control" placeholder="30 days / COD" @bind="form.Terms" />
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label">Items supplied</label>
-                    <input class="form-control" placeholder="Urea, complete fertilizer, hybrid seeds" @bind="form.Supplies" />
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label">Address</label>
-                    <input class="form-control" @bind="form.Address" />
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" @bind="form.Status">
-                        <option value="active">active</option>
-                        <option value="inactive">inactive</option>
-                    </select>
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelSaveConfirm">Cancel</button>
+                        <button type="button" class="btn-save rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmSaveAsync">
+                            @(isSaving ? "Saving..." : "Yes, Save")
+                        </button>
+                    </div>
                 </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
+<!-- ARCHIVE CONFIRMATION MODAL -->
+@if (showConfirmArchiveModal && supplierToArchive != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1060;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
+                        <i class="bi bi-archive" style="font-size: 2.5rem;"></i>
+                    </div>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Archive Supplier?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to archive <strong>@supplierToArchive.Name</strong>?<br />
+                        It will be hidden from the active list, but the data will be safely kept in the database.
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelArchiveConfirm">Cancel</button>
+                        <button type="button" class="btn btn-danger rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmArchiveAsync">
+                            <i class="bi bi-archive me-1"></i> Yes, Archive
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -181,146 +529,481 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+    <div class="toast-note shadow-lg">
+        <i class="bi @(toastIsWarning ? "bi-exclamation-triangle" : "bi-check2")"></i>
+        <span>@toast</span>
+    </div>
 }
 
 @code {
-    // ---------- MODELS ----------
-    class SupplierRec
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = "";
-        public string Category { get; set; } = "general";
-        public string Person { get; set; } = "";
-        public string Contact { get; set; } = "";
-        public string Email { get; set; } = "";
-        public string Terms { get; set; } = "";
-        public string Supplies { get; set; } = "";
-        public string Address { get; set; } = "";
-        public string Status { get; set; } = "active";
-
-        public SupplierRec Clone() => (SupplierRec)MemberwiseClone();
-    }
-
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+
+    class Viewport
+    {
+        public double W { get; set; }
+        public double H { get; set; }
+    }
 
     static readonly string[] CategoryOptions = { "general", "seeds", "fertilizer", "pesticide", "tools", "fuel", "packaging" };
 
-    // TODO: kuhaa gikan sa naka-login nga tenant
-    const string BusinessName = "Verdant Agri Ventures";
+    long currentBusinessId;
+    string BusinessName = "AgriNexus Farm Operations";
 
-    // ---------- STATE ----------
+    List<AgriNexus.DataLayer.Models.Supplier> suppliers = new();
+    Dictionary<int, int> linkedItemCounts = new();
+
+    bool showArchived = false;
     string searchText = "";
+    string contactError = "";
     string toast = "";
+    bool toastIsWarning = false;
+
     bool showModal;
     bool showErrors;
+    bool isSaving;
     int? editingId;
     int? openMenuId;
-    SupplierRec form = new();
+    AgriNexus.DataLayer.Models.Supplier form = new();
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // Ang mga ngalan mohaum sa Supplier column sa Inventory page
-    readonly List<SupplierRec> suppliers = new()
+    bool showDetailsModal;
+    AgriNexus.DataLayer.Models.Supplier? selectedSupplier;
+
+    bool showConfirmSaveModal;
+    bool showConfirmArchiveModal;
+    AgriNexus.DataLayer.Models.Supplier? supplierToArchive;
+
+    private int currentPage = 1;
+    private int pageSize = 5;
+    private double menuTop;
+    private double menuLeft;
+
+    protected override async Task OnInitializedAsync()
     {
-        new() { Id = 1, Name = "Central Luzon Agri Supply",     Category = "fertilizer", Person = "Rodolfo Tiongson", Contact = "0917 443 2210", Email = "sales@clagrisupply.ph",     Terms = "30 days",         Supplies = "Urea, complete fertilizer, organic compost",       Address = "Cabanatuan City, Nueva Ecija", Status = "active" },
-        new() { Id = 2, Name = "Pioneer Seeds Depot",           Category = "seeds",      Person = "Marilou Sison",    Contact = "0918 220 7788", Email = "orders@pioneerseeds.ph",     Terms = "COD",             Supplies = "Hybrid corn seeds, certified rice seeds, vegetable seeds", Address = "San Jose City, Nueva Ecija", Status = "active" },
-        new() { Id = 3, Name = "GreenShield Crop Protection",   Category = "pesticide",  Person = "Edwin Lim",        Contact = "0920 554 9911", Email = "edwin@greenshield.ph",       Terms = "15 days",         Supplies = "Insecticides, herbicides, fungicides",             Address = "Angeles City, Pampanga",       Status = "active" },
-        new() { Id = 4, Name = "FarmTech Machinery & Tools",    Category = "tools",      Person = "Ariel Dizon",      Contact = "0917 889 1145", Email = "ariel@farmtech.ph",          Terms = "50% downpayment", Supplies = "Knapsack sprayers, hand tools, irrigation fittings", Address = "Tarlac City, Tarlac",          Status = "active" },
-        new() { Id = 5, Name = "Valley Fuel Station",           Category = "fuel",       Person = "Gregorio Tan",     Contact = "0919 332 6670", Email = "gregorio@valleyfuel.ph",     Terms = "COD",             Supplies = "Diesel, gasoline",                                 Address = "Cabanatuan City, Nueva Ecija", Status = "inactive" },
-    };
+        try
+        {
+            User? currentUser = null;
 
-    // ---------- COMPUTED ----------
-    List<SupplierRec> Filtered => string.IsNullOrWhiteSpace(searchText)
-        ? suppliers
-        : suppliers.Where(s =>
-            s.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            s.Person.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            s.Category.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            s.Supplies.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (Auth.CurrentUserId > 0)
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+            {
+                var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                           || u.FName == Auth.CurrentUserName);
+            }
+
+            if (currentUser?.BusinessId != null)
+            {
+                currentBusinessId = currentUser.BusinessId.Value;
+                if (currentUser.Business != null && !string.IsNullOrWhiteSpace(currentUser.Business.BusinessName))
+                    BusinessName = currentUser.Business.BusinessName;
+            }
+            else
+            {
+                var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+                if (firstBiz != null)
+                {
+                    currentBusinessId = firstBiz.BusinessId;
+                    BusinessName = firstBiz.BusinessName;
+                }
+            }
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading suppliers: " + ex.Message, isWarning: true);
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            suppliers = await DbContext.Suppliers
+                .Where(s => s.BusinessId == currentBusinessId)
+                .OrderBy(s => s.Name)
+                .ToListAsync();
+
+            linkedItemCounts = await DbContext.InventoryItems
+                .Where(i => i.BusinessId == currentBusinessId && !i.IsArchived && i.SupplierId != null)
+                .GroupBy(i => i.SupplierId!.Value)
+                .Select(g => new { SupplierId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.SupplierId, x => x.Count);
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Database load error: " + ex.Message, isWarning: true);
+        }
+    }
+
+    List<AgriNexus.DataLayer.Models.Supplier> NonArchivedSuppliers => suppliers
+        .Where(s => !string.Equals(s.Status, "archived", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    List<AgriNexus.DataLayer.Models.Supplier> Filtered
+    {
+        get
+        {
+            var baseList = suppliers
+                .Where(s => showArchived
+                    ? string.Equals(s.Status, "archived", StringComparison.OrdinalIgnoreCase)
+                    : !string.Equals(s.Status, "archived", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (string.IsNullOrWhiteSpace(searchText))
+                return baseList;
+
+            return baseList.Where(s =>
+                s.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                (s.ContactPerson ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                (s.Category ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                (s.ItemsSupplied ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Filtered.Count / pageSize));
+    private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<AgriNexus.DataLayer.Models.Supplier> PaginatedSuppliers => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
 
     List<Stat> Stats
     {
         get
         {
-            var active = suppliers.Count(s => s.Status == "active");
-            var seedFert = suppliers.Count(s => s.Category == "seeds" || s.Category == "fertilizer");
-            var withContact = suppliers.Count(s => !string.IsNullOrWhiteSpace(s.Contact) || !string.IsNullOrWhiteSpace(s.Email));
+            var active = NonArchivedSuppliers.Count(s => string.Equals(s.Status, "active", StringComparison.OrdinalIgnoreCase));
+            var seedFert = NonArchivedSuppliers.Count(s => s.Category == "seeds" || s.Category == "fertilizer");
+            var withContact = NonArchivedSuppliers.Count(s => !string.IsNullOrWhiteSpace(s.ContactNumber) || !string.IsNullOrWhiteSpace(s.Email));
+
             return new()
             {
-                new("SUPPLIERS", suppliers.Count.ToString(), active + " active", "bi-truck", ""),
-                new("SEED & FERTILIZER SUPPLIERS", seedFert.ToString(), "", "bi-layers", "stat-icon-plain"),
-                new("WITH CONTACT DETAILS", withContact.ToString(), "", "bi-telephone", "stat-icon-blue"),
+                new("SUPPLIERS", NonArchivedSuppliers.Count.ToString(), active + " active", "bi-truck", ""),
+                new("SEED & FERTILIZER SUPPLIERS", seedFert.ToString(), "", "bi-layers", "stat-icon-leaf"),
+                new("WITH CONTACT DETAILS", withContact.ToString(), "", "bi-telephone", "stat-icon-earth"),
             };
         }
     }
 
     bool NameTaken => !string.IsNullOrWhiteSpace(form.Name) &&
-        suppliers.Any(s => s.Id != (editingId ?? -1) &&
+        suppliers.Any(s => s.SupplierId != (editingId ?? -1) &&
                            string.Equals(s.Name, form.Name.Trim(), StringComparison.OrdinalIgnoreCase));
 
     bool EmailValid => string.IsNullOrWhiteSpace(form.Email) ||
         System.Text.RegularExpressions.Regex.IsMatch(form.Email.Trim(), @"^[^@\s]+@[^@\s]+\.[^@\s]+$");
 
-    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+    static string Cap(string? s) => string.IsNullOrWhiteSpace(s) ? "" : char.ToUpper(s[0]) + s.Substring(1);
 
-    // ---------- ACTIONS ----------
+    static string StatusClass(string? status) =>
+        string.Equals(status, "active", StringComparison.OrdinalIgnoreCase) ? "pill-green" : "pill-gray";
+
+    static string StatusIcon(string? status) =>
+        string.Equals(status, "active", StringComparison.OrdinalIgnoreCase) ? "bi-check-circle" : "bi-archive";
+
+    private string CapitalizeWords(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input ?? "";
+        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input.ToLower().Trim());
+    }
+
+    private void FormatContactNumber()
+    {
+        if (string.IsNullOrEmpty(form.ContactNumber)) return;
+
+        var digits = new string(form.ContactNumber.Where(char.IsDigit).ToArray());
+
+        if (string.IsNullOrEmpty(digits))
+        {
+            form.ContactNumber = "";
+            return;
+        }
+
+        if (digits.StartsWith("63") && digits.Length > 2)
+        {
+            digits = "0" + digits.Substring(2);
+        }
+        else if (digits.StartsWith("9"))
+        {
+            digits = "0" + digits;
+        }
+
+        if (digits.Length > 11)
+        {
+            digits = digits.Substring(0, 11);
+        }
+
+        if (digits.Length > 7)
+        {
+            form.ContactNumber = $"{digits.Substring(0, 4)} {digits.Substring(4, 3)} {digits.Substring(7)}";
+        }
+        else if (digits.Length > 4)
+        {
+            form.ContactNumber = $"{digits.Substring(0, 4)} {digits.Substring(4)}";
+        }
+        else
+        {
+            form.ContactNumber = digits;
+        }
+    }
+
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
+
+    private async Task ToggleTab(bool archived)
+    {
+        showArchived = archived;
+        currentPage = 1;
+        openMenuId = null;
+        await Task.CompletedTask;
+    }
+
+    private async Task ToggleMenuAsync(MouseEventArgs e, int id)
+    {
+        if (openMenuId == id)
+        {
+            openMenuId = null;
+            return;
+        }
+
+        var target = suppliers.FirstOrDefault(x => x.SupplierId == id);
+        int itemCount = string.Equals(target?.Status, "archived", StringComparison.OrdinalIgnoreCase) ? 1 : 2;
+        const double itemHeight = 42;
+        const double padding = 16;
+        const double menuWidth = 175;
+        double menuHeight = (itemCount * itemHeight) + padding;
+
+        var viewport = await JS.InvokeAsync<Viewport>("eval", "({ w: window.innerWidth, h: window.innerHeight })");
+
+        menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewport.W - menuWidth - 10);
+        menuTop = (e.ClientY + menuHeight > viewport.H) ? e.ClientY - menuHeight - 5 : e.ClientY + 15;
+
+        openMenuId = id;
+    }
+
+    void CloseMenu() => openMenuId = null;
+
+    void OpenDetails(AgriNexus.DataLayer.Models.Supplier s)
+    {
+        selectedSupplier = s;
+        showDetailsModal = true;
+    }
+
+    void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedSupplier = null;
+    }
+
     void OpenNew()
     {
-        form = new SupplierRec { Category = "general", Status = "active" };
+        openMenuId = null;
+        form = new AgriNexus.DataLayer.Models.Supplier
+        {
+            BusinessId = currentBusinessId,
+            Category = "general",
+            Status = "active"
+        };
         editingId = null;
         showErrors = false;
+        contactError = "";
         showModal = true;
     }
 
-    void OpenEdit(SupplierRec s)
+    void OpenEdit(AgriNexus.DataLayer.Models.Supplier s)
     {
-        form = s.Clone();
-        editingId = s.Id;
-        showErrors = false;
+        showDetailsModal = false;
         openMenuId = null;
+        form = new AgriNexus.DataLayer.Models.Supplier
+        {
+            SupplierId = s.SupplierId,
+            BusinessId = s.BusinessId,
+            Name = s.Name,
+            Category = s.Category,
+            ContactPerson = s.ContactPerson,
+            ContactNumber = s.ContactNumber,
+            Email = s.Email,
+            PaymentTerms = s.PaymentTerms,
+            ItemsSupplied = s.ItemsSupplied,
+            Address = s.Address,
+            Status = s.Status
+        };
+        editingId = s.SupplierId;
+        showErrors = false;
+        contactError = "";
         showModal = true;
     }
 
     void CloseModal() => showModal = false;
 
-    void Save()
+    void PromptSave()
     {
         showErrors = true;
-        if (string.IsNullOrWhiteSpace(form.Name) || NameTaken || !EmailValid) return;
+        contactError = "";
 
-        form.Name = form.Name.Trim();
-        form.Email = (form.Email ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(form.Name) || NameTaken || !EmailValid)
+            return;
 
-        if (editingId == null)
+        if (!string.IsNullOrWhiteSpace(form.ContactNumber))
         {
-            form.Id = suppliers.Count == 0 ? 1 : suppliers.Max(s => s.Id) + 1;
-            suppliers.Add(form);
+            var rawContact = new string(form.ContactNumber.Where(char.IsDigit).ToArray());
+            if (rawContact.Length != 11)
+            {
+                contactError = "Contact number must be 11 digits (e.g., 09XX XXX XXXX).";
+                return;
+            }
         }
-        else
-        {
-            var idx = suppliers.FindIndex(s => s.Id == editingId);
-            if (idx >= 0) suppliers[idx] = form;
-        }
-        showModal = false;
+
+        showConfirmSaveModal = true;
     }
 
-    async Task Delete(SupplierRec s)
+    void CancelSaveConfirm() => showConfirmSaveModal = false;
+
+    async Task ConfirmSaveAsync()
+    {
+        isSaving = true;
+        try
+        {
+            var cleanName = form.Name.Trim();
+            var cleanEmail = (form.Email ?? "").Trim();
+
+            if (editingId == null)
+            {
+                var created = new AgriNexus.DataLayer.Models.Supplier
+                {
+                    BusinessId = currentBusinessId,
+                    Name = cleanName,
+                    Category = string.IsNullOrWhiteSpace(form.Category) ? "general" : form.Category.Trim(),
+                    ContactPerson = (form.ContactPerson ?? "").Trim(),
+                    ContactNumber = (form.ContactNumber ?? "").Trim(),
+                    Email = cleanEmail,
+                    PaymentTerms = (form.PaymentTerms ?? "").Trim(),
+                    ItemsSupplied = (form.ItemsSupplied ?? "").Trim(),
+                    Address = (form.Address ?? "").Trim(),
+                    Status = string.IsNullOrWhiteSpace(form.Status) ? "active" : form.Status.Trim()
+                };
+
+                DbContext.Suppliers.Add(created);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Supplier registered successfully.");
+            }
+            else
+            {
+                var existing = await DbContext.Suppliers.FindAsync(editingId.Value);
+                if (existing != null)
+                {
+                    existing.Name = cleanName;
+                    existing.Category = string.IsNullOrWhiteSpace(form.Category) ? "general" : form.Category.Trim();
+                    existing.ContactPerson = (form.ContactPerson ?? "").Trim();
+                    existing.ContactNumber = (form.ContactNumber ?? "").Trim();
+                    existing.Email = cleanEmail;
+                    existing.PaymentTerms = (form.PaymentTerms ?? "").Trim();
+                    existing.ItemsSupplied = (form.ItemsSupplied ?? "").Trim();
+                    existing.Address = (form.Address ?? "").Trim();
+                    existing.Status = string.IsNullOrWhiteSpace(form.Status) ? "active" : form.Status.Trim();
+
+                    DbContext.Suppliers.Update(existing);
+                    await DbContext.SaveChangesAsync();
+                    await ShowToast("Supplier details updated.");
+                }
+            }
+
+            showConfirmSaveModal = false;
+            showModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error saving supplier: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    void PromptArchive(AgriNexus.DataLayer.Models.Supplier s)
     {
         openMenuId = null;
-        // TODO: kung naa nay inventory items o stock movements nga naka-link sa supplier,
-        // i-set sa inactive imbes i-delete aron dili madaot ang history
-        suppliers.Remove(s);
-        await ShowToast(s.Name + " was removed.");
+        supplierToArchive = s;
+        showConfirmArchiveModal = true;
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
-    void CloseMenu() => openMenuId = null;
+    void CancelArchiveConfirm()
+    {
+        showConfirmArchiveModal = false;
+        supplierToArchive = null;
+    }
 
-    async Task ShowToast(string message)
+    async Task ConfirmArchiveAsync()
+    {
+        if (supplierToArchive == null) return;
+        isSaving = true;
+        try
+        {
+            var existing = await DbContext.Suppliers.FindAsync(supplierToArchive.SupplierId);
+            if (existing != null)
+            {
+                existing.Status = "archived";
+                DbContext.Suppliers.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast($"{supplierToArchive.Name} archived.");
+            }
+
+            showConfirmArchiveModal = false;
+            supplierToArchive = null;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error archiving supplier: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    async Task RestoreSupplierAsync(AgriNexus.DataLayer.Models.Supplier s)
+    {
+        openMenuId = null;
+        try
+        {
+            var existing = await DbContext.Suppliers.FindAsync(s.SupplierId);
+            if (existing != null)
+            {
+                existing.Status = "active";
+                DbContext.Suppliers.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast($"{s.Name} restored to Active.");
+            }
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error restoring supplier: " + ex.Message, isWarning: true);
+        }
+    }
+
+    async Task ShowToast(string message, bool isWarning = false)
     {
         toast = message;
+        toastIsWarning = isWarning;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3000);
+        await Task.Delay(3200);
         toast = "";
         await InvokeAsync(StateHasChanged);
     }

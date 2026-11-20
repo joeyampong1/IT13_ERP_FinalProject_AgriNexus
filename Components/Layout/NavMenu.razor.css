@@ -1,5 +1,5 @@
 /* =========================================
-   NAVMENU - EXECUTIVE FOREST & EMERALD THEME
+   NAVMENU - EXACT LOGIN DOTS & GRADIENT + HAIRLINE ACCENT
    ========================================= */
 
 .navbar-toggler {
@@ -21,14 +21,53 @@
 
 .top-row {
     min-height: 3.5rem;
-    background-color: rgba(7, 30, 20, 0.5);
+    background-color: rgba(7, 30, 20, 0.45);
+    position: relative;
+    z-index: 2;
 }
 
-/* Profile Card */
+/* Login Gradient + Dot Grid on Sidebar / NavMenu */
+:host,
+.sidebar,
+.nav-menu {
+    position: relative;
+    background: linear-gradient(145deg, #071E14 0%, #0A2B1D 52%, #164A2B 100%) !important;
+    overflow: hidden;
+}
+
+    :host::before,
+    .sidebar::before,
+    .nav-menu::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(rgba(110, 231, 183, 0.14) 1px, transparent 1px);
+        background-size: 26px 26px;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+.navbar-brand,
+.user-profile-box,
+.nav-scrollable,
+.sidebar-footer {
+    position: relative;
+    z-index: 2;
+}
+
+/* Brand "Nexus" in subtle leaf accent */
+.brand-nexus {
+    color: #78BE3F !important;
+    font-weight: 800;
+}
+
+/* Profile Card with Hairline Yellow-Green Border */
+::deep .user-profile-box,
 .user-profile-box {
-    background: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(120, 190, 63, 0.45) !important;
     border-radius: 12px !important;
+    transition: border-color 0.18s ease, background-color 0.18s ease;
 }
 
 .profile-label {
@@ -46,22 +85,90 @@
     color: #B7C9BF !important;
 }
 
-    .profile-role i {
-        color: #A7F3D0 !important;
+    .profile-role .shield-leaf {
+        color: #78BE3F !important;
     }
 
-/* Section Headers (OVERVIEW, PLATFORM, BUSINESS, etc.) */
+/* Section Header (OVERVIEW) */
 .nav-section-title {
     color: #8CA396 !important;
     font-size: 0.65rem !important;
     font-weight: 700 !important;
     letter-spacing: 1.4px !important;
-    opacity: 0.9 !important;
+    opacity: 0.85 !important;
+    margin-top: 0.45rem;
+    margin-bottom: 0.25rem;
+}
+
+/* Clean Collapsible Group Row (Icon + Label >) */
+.nav-group {
+    margin-top: 0.4rem;
+}
+
+.nav-group-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.46rem 0.65rem;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: #AEC2B7;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-align: left;
+    transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+    .nav-group-toggle:hover {
+        background: rgba(255, 255, 255, 0.035);
+        color: #FFFFFF;
+    }
+
+    .nav-group-toggle .group-icon {
+        color: rgba(120, 190, 63, 0.78);
+        font-size: 0.9rem;
+        flex-shrink: 0;
+    }
+
+    .nav-group-toggle .group-chevron {
+        margin-left: auto;
+        font-size: 0.72rem;
+        color: #7E9689;
+        transition: transform 0.2s ease, color 0.2s ease;
+    }
+
+.nav-group.is-open .nav-group-toggle .group-chevron {
+    transform: rotate(90deg);
+    color: rgba(120, 190, 63, 0.85);
+}
+
+.nav-group-toggle.has-active {
+    color: #FFFFFF;
+}
+
+    .nav-group-toggle.has-active .group-icon,
+    .nav-group-toggle.has-active .group-chevron {
+        color: #78BE3F;
+    }
+
+.nav-group-items {
+    margin-top: 0.2rem;
+    padding-left: 0.55rem;
+    margin-left: 0.92rem;
+    border-left: 1px solid rgba(120, 190, 63, 0.18);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 /* Menu Links */
 .nav-item {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     padding-bottom: 2px;
 }
 
@@ -70,36 +177,37 @@
         background: transparent !important;
         border: 1px solid transparent !important;
         border-radius: 10px !important;
-        padding: 0.62rem 0.95rem !important;
+        padding: 0.56rem 0.85rem !important;
         display: flex !important;
         align-items: center !important;
         width: 100%;
         font-weight: 500;
-        transition: all 0.2s ease-in-out;
+        transition: all 0.18s ease-in-out;
     }
 
         .nav-item ::deep .nav-link i {
             color: #8CA396 !important;
-            transition: color 0.2s ease-in-out;
+            transition: color 0.18s ease-in-out;
         }
 
-        /* Hover State */
+        /* Hover State — subtle 1px hairline accent */
         .nav-item ::deep .nav-link:hover {
-            background-color: rgba(255, 255, 255, 0.07) !important;
+            background-color: rgba(255, 255, 255, 0.05) !important;
+            border-color: rgba(120, 190, 63, 0.28) !important;
             color: #FFFFFF !important;
         }
 
             .nav-item ::deep .nav-link:hover i {
-                color: #FFFFFF !important;
+                color: #78BE3F !important;
             }
 
-    /* Active State — Matches Signature AgriNexus Forest Green (#1B5E34) */
+    /* Active State — Forest Green Fill + Thin 1px Leaf Hairline Border */
     .nav-item ::deep a.active {
-        background: linear-gradient(135deg, #1B5E34 0%, #237542 100%) !important;
+        background: linear-gradient(135deg, #164E2B 0%, #1E6438 100%) !important;
         color: #FFFFFF !important;
         font-weight: 600 !important;
-        border: 1px solid rgba(255, 255, 255, 0.16) !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+        border: 1px solid rgba(120, 190, 63, 0.55) !important;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22) !important;
     }
 
         .nav-item ::deep a.active i {
@@ -118,12 +226,12 @@
 }
 
 .nav-scrollable::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.15);
     border-radius: 4px;
 }
 
     .nav-scrollable::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
+        background: rgba(120, 190, 63, 0.35);
     }
 
 .nav-scrollable {
@@ -145,3 +253,37 @@
         overflow-y: auto;
     }
 }
+
+.nav-group-toggle .group-chevron {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: #7E9689;
+    transition: transform 0.12s ease, color 0.12s ease;
+}
+
+    ::deep .user-profile-box:hover,
+    .user-profile-box:hover {
+        background: rgba(255, 255, 255, 0.07) !important;
+        border-color: rgba(120, 190, 63, 0.8) !important;
+    }
+
+.sidebar {
+    position: relative;
+    background: linear-gradient(145deg, #071E14 0%, #0A2B1D 52%, #164A2B 100%) !important;
+    overflow: hidden;
+}
+
+    .sidebar::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(rgba(110, 231, 183, 0.14) 1px, transparent 1px);
+        background-size: 26px 26px;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    .sidebar > * {
+        position: relative;
+        z-index: 1;
+    }

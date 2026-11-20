@@ -459,7 +459,7 @@
         await LoadSubscriptionDataAsync();
     }
 
-    private async Task LoadSubscriptionDataAsync()
+private async Task LoadSubscriptionDataAsync()
     {
         var business = await DbContext.Businesses.FindAsync(currentBusinessId);
         if (business == null) return;
@@ -476,7 +476,10 @@
             .CountAsync(b => b.BusinessId == currentBusinessId && b.Status == "active");
 
         staffUsed = await DbContext.Users
-            .CountAsync(u => u.BusinessId == currentBusinessId && u.Role != "SuperAdmin" && u.Status == "Active");
+            .CountAsync(u => u.BusinessId == currentBusinessId
+                          && u.Role != "SuperAdmin"
+                          && u.Role != "TenantAdmin"
+                          && u.Status == "Active");
 
         var subs = await DbContext.Subscriptions
             .Include(s => s.SubscriptionPlan)

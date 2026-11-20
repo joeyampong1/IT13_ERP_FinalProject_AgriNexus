@@ -568,6 +568,8 @@
     // ---------- STATE ----------
     long currentBusinessId;
     string businessName = "AgriNexus Farm Operations";
+    string currentPlanName = "Starter";
+    int maxBranchLimit = int.MaxValue;
     int unassignedStaffCount = 0;
 
     string searchText = "";
@@ -597,6 +599,8 @@
     private double menuTop;
     private double menuLeft;
 
+    int CurrentBranchCount => branches.Count(b => string.Equals(b.Status, "active", StringComparison.OrdinalIgnoreCase));
+
     protected override async Task OnInitializedAsync()
     {
         // Resolve logged-in tenant's BusinessId
@@ -611,6 +615,7 @@
             if (currentUser.Business != null)
             {
                 businessName = currentUser.Business.BusinessName;
+                currentPlanName = currentUser.Business.PlanName ?? "Starter";
             }
         }
         else
@@ -621,10 +626,33 @@
             {
                 currentBusinessId = firstBiz.BusinessId;
                 businessName = firstBiz.BusinessName;
+                currentPlanName = firstBiz.PlanName ?? "Starter";
             }
         }
 
+        await ResolvePlanBranchLimitAsync();
         await LoadBranchesAsync();
+    }
+
+    private async Task ResolvePlanBranchLimitAsync()
+    {
+        var activeSub = await DbContext.Subscriptions
+            .Include(s => s.SubscriptionPlan)
+            .Where(s => s.BusinessId == currentBusinessId && s.Status == "Active")
+            .OrderByDescending(s => s.SubscriptionId)
+            .FirstOrDefaultAsync();
+
+        var planLabel = activeSub?.SubscriptionPlan?.Name ?? currentPlanName;
+        var normalized = (planLabel ?? "").ToLower();
+
+        if (normalized.Contains("enterprise") || normalized.Contains("unlimited"))
+            maxBranchLimit = int.MaxValue;
+        else if (normalized.Contains("growth") || normalized.Contains("pro") || normalized.Contains("professional"))
+            maxBranchLimit = 5;
+        else if (normalized.Contains("trial"))
+            maxBranchLimit = 1;
+        else
+            maxBranchLimit = 2; // Starter default
     }
 
     private async Task LoadBranchesAsync()
@@ -640,9 +668,9 @@
             .OrderBy(b => b.BranchId)
             .ToListAsync();
 
-            availableManagers = await DbContext.Users
-            .Where(u => u.BusinessId == currentBusinessId 
-                     && u.Role == "BranchManager" 
+        availableManagers = await DbContext.Users
+            .Where(u => u.BusinessId == currentBusinessId
+                     && u.Role == "BranchManager"
                      && u.Status == "Active")
             .OrderBy(u => u.FName)
             .ToListAsync();
@@ -694,7 +722,7 @@
         }
     }
 
-    private int TotalPages => (int)Math.Ceiling((double)Filtered.Count / pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Filtered.Count / pageSize));
     private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
     private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
     private IEnumerable<BranchRec> PaginatedBranches => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
@@ -707,10 +735,13 @@
             var plots = branches.Sum(b => b.Plots);
             var ha = branches.Sum(b => b.Hectares);
             var staff = branches.Sum(b => b.Staff) + unassignedStaffCount;
+            var limitNote = maxBranchLimit == int.MaxValue
+                ? $"{active} active · {currentPlanName} (Unlimited)"
+                : $"{active} active · Limit {CurrentBranchCount}/{maxBranchLimit} ({currentPlanName})";
 
             return new()
             {
-                new("TOTAL BRANCHES", branches.Count.ToString(), active + " active branches", "bi-shop", ""),
+                new("TOTAL BRANCHES", branches.Count.ToString(), limitNote, "bi-shop", ""),
                 new("PLOTS ACROSS BRANCHES", plots.ToString(), ha.ToString("0.##", Inv) + " hectares total", "bi-map-fill", "stat-icon-leaf"),
                 new("STAFF ASSIGNED", staff.ToString(), unassignedStaffCount + " tenant-wide admin", "bi-people-fill", "stat-icon-earth"),
             };
@@ -781,7 +812,6 @@
     {
         if (string.IsNullOrEmpty(form.Contact)) return;
 
-        // 1. Extract digits only (strip letters and symbols)
         var digits = new string(form.Contact.Where(char.IsDigit).ToArray());
 
         if (string.IsNullOrEmpty(digits))
@@ -790,7 +820,6 @@
             return;
         }
 
-        // 2. Smart prefix handling (+63 / 63 or 9 -> 09)
         if (digits.StartsWith("63") && digits.Length > 2)
         {
             digits = "0" + digits.Substring(2);
@@ -800,13 +829,11 @@
             digits = "0" + digits;
         }
 
-        // 3. Limit to 11 digits
         if (digits.Length > 11)
         {
             digits = digits.Substring(0, 11);
         }
 
-        // 4. Auto-format to "09XX XXX XXXX"
         if (digits.Length > 7)
         {
             form.Contact = $"{digits.Substring(0, 4)} {digits.Substring(4, 3)} {digits.Substring(7)}";
@@ -824,6 +851,12 @@
     // ---------- CRUD ACTIONS ----------
     void OpenNew()
     {
+        if (CurrentBranchCount >= maxBranchLimit)
+        {
+            _ = ShowToast($"Branch limit reached ({maxBranchLimit}) for your {currentPlanName} plan. Upgrade your plan to add more branches.", isWarning: true);
+            return;
+        }
+
         form = new BranchRec
         {
             BusinessId = currentBusinessId,
@@ -870,7 +903,6 @@
         if (string.IsNullOrWhiteSpace(form.Name) || string.IsNullOrWhiteSpace(form.Code) || CodeTaken)
             return;
 
-        // Validate 11-digit contact number if provided
         if (!string.IsNullOrWhiteSpace(form.Contact))
         {
             var rawContact = new string(form.Contact.Where(char.IsDigit).ToArray());
@@ -881,13 +913,18 @@
             }
         }
 
+        if (editingId == null && CurrentBranchCount >= maxBranchLimit)
+        {
+            await ShowToast($"Branch limit reached ({maxBranchLimit}) for your {currentPlanName} plan.", isWarning: true);
+            return;
+        }
+
         isSaving = true;
 
         try
         {
             if (editingId == null)
             {
-                // CREATE
                 var entity = new Branch
                 {
                     BusinessId = currentBusinessId,
@@ -906,7 +943,6 @@
             }
             else
             {
-                // UPDATE
                 var existing = await DbContext.Branches.FindAsync(editingId.Value);
                 if (existing != null)
                 {

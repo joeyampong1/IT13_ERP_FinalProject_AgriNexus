@@ -1,13 +1,21 @@
 ﻿@page "/harvest"
+@layout MainLayout
 @using System.Globalization
+@using System.Reflection
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
 @inject AgriNexus.Services.AuthService Auth
 
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <h2 class="page-title">Harvest Recording</h2>
-        <p class="text-muted mb-0 page-sub">@ActiveBranch · record harvested lots, grade quality, and post approved quantities into produce stock.</p>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@ActiveBranch</strong> · record harvested lots, grade quality, and post approved quantities into produce stock.
+        </p>
     </div>
-    <button type="button" class="btn-solid" @onclick="OpenNew">
+    <button type="button" class="btn-solid shadow-sm" @onclick="OpenNew">
         <i class="bi bi-basket"></i> Record harvest
     </button>
 </div>
@@ -41,17 +49,32 @@
 <!-- ======================= RECORDING & APPROVAL ======================= -->
 @if (activeTab == "record")
 {
-    <div class="toolbar mb-3">
+    <div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+        <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" placeholder="Search lot, crop, plot..."
+                   @bind="searchText"
+                   @bind:event="oninput" />
+        </div>
+
+        <select class="filter-select" @bind="dateRangeFilter">
+            <option value="all">All Time</option>
+            <option value="month">This Month</option>
+            <option value="90days">Last 90 Days</option>
+            <option value="year">This Year</option>
+        </select>
+
         <select class="filter-select" @bind="statusFilter">
             <option value="">All statuses</option>
             <option value="pending">Pending approval</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
         </select>
+
         <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "record" : "records")</span>
     </div>
 
-    <div class="panel">
+    <div class="panel shadow-sm">
         <div class="table-wrap">
             <table class="table data-table align-middle mb-0">
                 <thead>
@@ -70,22 +93,23 @@
                 <tbody>
                     @foreach (var h in Filtered)
                     {
+                        var st = NormalizeStatus(h.Status);
                         <tr>
-                            <td class="fw-bold text-nowrap">@h.Lot</td>
-                            <td class="col-date">@h.Date.ToString("MMM d, yyyy", Inv)</td>
-                            <td>@h.Crop</td>
-                            <td class="col-plot">@(string.IsNullOrWhiteSpace(h.Plot) ? "—" : h.Plot)</td>
-                            <td class="text-nowrap">@Qty(h.Qty) @h.Unit</td>
-                            <td>@h.Grade</td>
+                            <td class="fw-bold text-nowrap">@h.LotNumber</td>
+                            <td class="col-date text-nowrap">@h.HarvestDate.ToString("MMM d, yyyy", Inv)</td>
+                            <td class="fw-semibold">@h.CropName</td>
+                            <td class="col-plot">@PlotNameOf(h.PlotId)</td>
+                            <td class="text-nowrap">@Qty(h.QuantityKg) @h.Unit</td>
+                            <td>@h.QualityGrade</td>
                             <td class="text-nowrap">@Peso(h.UnitValue)</td>
-                            <td><span class="pill @StatusClass(h.Status)">@Label(h.Status)</span></td>
+                            <td><span class="pill @StatusClass(st)">@Label(st)</span></td>
                             <td class="text-end text-nowrap col-actions">
-                                @if (h.Status == "pending")
+                                @if (IsBusinessTenant && st == "pending")
                                 {
-                                    <button type="button" class="btn-approve" @onclick="() => Approve(h)">
+                                    <button type="button" class="btn-approve" @onclick="() => ApproveAsync(h)">
                                         <i class="bi bi-check-circle"></i> Approve
                                     </button>
-                                    <button type="button" class="btn-reject" @onclick="() => Reject(h)">
+                                    <button type="button" class="btn-reject" @onclick="() => RejectAsync(h)">
                                         <i class="bi bi-x-circle"></i> Reject
                                     </button>
                                 }
@@ -105,7 +129,7 @@
 <!-- ======================= HARVEST LOTS ======================= -->
 @if (activeTab == "lots")
 {
-    <div class="panel">
+    <div class="panel shadow-sm">
         <div class="panel-head">
             <div class="panel-title">Harvest lot management</div>
             <div class="panel-sub mb-0">Quantities grouped per lot number for traceability</div>
@@ -128,11 +152,15 @@
                         <tr>
                             <td class="fw-bold text-nowrap">@l.Lot</td>
                             <td>@l.Crop</td>
-                            <td>@(string.IsNullOrWhiteSpace(l.Plot) ? "—" : l.Plot)</td>
+                            <td>@l.Plot</td>
                             <td class="text-nowrap">@l.Date.ToString("MMM d, yyyy", Inv)</td>
                             <td class="text-nowrap">@Qty(l.Qty) @l.Unit</td>
                             <td><span class="pill @StatusClass(l.Status)">@Label(l.Status)</span></td>
                         </tr>
+                    }
+                    @if (Lots.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center text-muted py-5">No harvest lots found.</td></tr>
                     }
                 </tbody>
             </table>
@@ -149,29 +177,41 @@
                 <div class="panel-title">Harvest output by crop</div>
                 <div class="panel-sub">Approved quantities</div>
 
-                <svg viewBox="0 0 640 300" class="w-100" style="max-height:340px" role="img" aria-label="Harvest output by crop">
-                    @for (int i = 0; i <= 4; i++)
-                    {
-                        var y = 20 + i * 60;
-                        var val = AxisMax / 4 * (4 - i);
-                        <g>
-                            <line x1="50" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
-                            <text x="40" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@val.ToString("0", Inv)</text>
-                        </g>
-                    }
-                    @for (int i = 0; i < CropOutput.Count; i++)
-                    {
-                        var c = CropOutput[i];
-                        var slot = 580.0 / CropOutput.Count;
-                        var w = slot * 0.8;
-                        var x = 50 + i * slot + (slot - w) / 2;
-                        var h = (double)c.Qty / AxisMax * 240;
-                        <g>
-                            <rect x="@F(x)" y="@F(260 - h)" width="@F(w)" height="@F(h)" rx="5" fill="#86C440" />
-                            <text x="@F(x + w / 2)" y="282" text-anchor="middle" font-size="11" fill="#475569">@c.Crop</text>
-                        </g>
-                    }
-                </svg>
+                    <svg viewBox="0 0 640 300" class="w-100" style="max-height:340px" role="img" aria-label="Harvest output by crop">
+                        <defs>
+                            <linearGradient id="leafBarGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#62A834" />
+                                <stop offset="100%" stop-color="#4E8D2A" />
+                            </linearGradient>
+                        </defs>
+
+                        @for (int i = 0; i <= 4; i++)
+                        {
+                            var y = 20 + i * 60;
+                            var val = AxisMax / 4 * (4 - i);
+                            <g>
+                                <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2ECE6" stroke-dasharray="3 4" />
+                                <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@val.ToString("0", Inv)</text>
+                            </g>
+                        }
+                        @for (int i = 0; i < CropOutput.Count; i++)
+                        {
+                            var c = CropOutput[i];
+                            var slot = 568.0 / CropOutput.Count;
+                            var w = slot * 0.76;
+                            var x = 62 + i * slot + (slot - w) / 2;
+                            var h = (double)c.Qty / AxisMax * 240;
+                            var barY = 260 - h;
+                            <g>
+                                @if (h > 0)
+                                {
+                                    <rect x="@F(x)" y="@F(barY)" width="@F(w)" height="@F(h)" rx="6" fill="url(#leafBarGrad)" />
+                                    @((MarkupString)$"<text x=\"{F(x + w / 2)}\" y=\"{F(barY - 6)}\" text-anchor=\"middle\" font-size=\"10.5\" font-weight=\"700\" fill=\"#1B5E34\">{Qty(c.Qty)} kg</text>")
+                                }
+                                <text x="@F(x + w / 2)" y="282" text-anchor="middle" font-size="11" font-weight="600" fill="#475569">@c.Crop</text>
+                            </g>
+                        }
+                    </svg>
 
                 @if (CropOutput.Count == 0)
                 {
@@ -180,37 +220,39 @@
             </div>
         </div>
 
-        <div class="col-12 col-lg-4">
-            <div class="stat-card h-100">
-                <div class="panel-title">Quality grade mix</div>
-                <div class="panel-sub">Share of approved harvest</div>
+<div class="col-12 col-lg-4">
+    <div class="stat-card h-100">
+        <div class="panel-title">Quality grade mix</div>
+        <div class="panel-sub">Share of approved harvest</div>
 
-                <div class="d-flex justify-content-center my-3">
-                    <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Quality grade mix">
-                        @{
-                            double offset = 0;
-                        }
-                        @foreach (var g in GradeMix)
-                        {
-                            var len = (double)(g.Qty / GradeTotal) * Circ;
-                            var dash = GradeMix.Count == 1 ? len : Math.Max(len - 2, 0.5);
-                            <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@GradeColor(g.Grade)" stroke-width="30"
-                                    stroke-dasharray="@F(dash) @F(Circ - dash)"
-                                    stroke-dashoffset="@F(-offset)"
-                                    transform="rotate(-90 100 100)" />
-                            offset += len;
-                        }
-                    </svg>
-                </div>
-
-                <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
-                    @foreach (var g in GradeMix)
-                    {
-                        <span><span class="legend-dot" style="background:@GradeColor(g.Grade)"></span>Grade @g.Grade · @Pct(g.Qty)%</span>
-                    }
-                </div>
-            </div>
+        <div class="d-flex justify-content-center my-3">
+            <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Quality grade mix">
+                @{
+                    double offset = 0;
+                }
+                @foreach (var g in TwoColorGradeMix)
+                {
+                    var len = (double)(g.Qty / TwoColorGradeTotal) * Circ;
+                    var dash = TwoColorGradeMix.Count == 1 ? len : Math.Max(len - 2, 0.5);
+                    <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@g.Color" stroke-width="30"
+                            stroke-dasharray="@F(dash) @F(Circ - dash)"
+                            stroke-dashoffset="@F(-offset)"
+                            transform="rotate(-90 100 100)" />
+                    offset += len;
+                }
+            </svg>
         </div>
+
+        <div class="d-flex justify-content-center gap-4 small text-muted flex-wrap">
+            @foreach (var g in TwoColorGradeMix)
+            {
+                <span class="fw-medium" style="color: #0A2B1D;">
+                    <span class="legend-dot" style="background:@g.Color"></span>@g.Label · @PctOf(g.Qty, TwoColorGradeTotal)%
+                </span>
+            }
+        </div>
+    </div>
+</div>
     </div>
 }
 
@@ -222,7 +264,16 @@
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <h5 class="modal-heading mb-1">Record harvest</h5>
-                    <div class="modal-sub">Harvests are recorded as pending until approved; approval posts the quantity into produce stock.</div>
+                    <div class="modal-sub">
+                        @if (IsBusinessTenant)
+                        {
+                            <span>Recording as Business Tenant posts approved harvest quantities directly into produce stock.</span>
+                        }
+                        else
+                        {
+                            <span>Harvests recorded by staff are submitted as pending for Business Tenant approval.</span>
+                        }
+                    </div>
                 </div>
                 <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
             </div>
@@ -230,33 +281,43 @@
             <div class="row g-3 mt-1">
                 <div class="col-md-6">
                     <label class="form-label">Crop <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Crop) ? "is-invalid" : "")" list="cropList" @bind="form.Crop" />
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.CropName) ? "is-invalid" : "")"
+                           list="cropList" @bind="form.CropName" />
                     <datalist id="cropList">
                         @foreach (var c in CropSuggestions)
                         {
                             <option value="@c"></option>
                         }
                     </datalist>
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Crop))
+                    @if (showErrors && string.IsNullOrWhiteSpace(form.CropName))
                     {
                         <div class="err">Crop is required.</div>
                     }
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Plot</label>
-                    <select class="form-select" @bind="form.Plot">
-                        <option value="">Select...</option>
-                        @foreach (var p in plotOptions)
-                        {
-                            <option value="@p">@p</option>
-                        }
-                    </select>
+                    @if (plotOptions.Count > 0)
+                    {
+                        <select class="form-select" @bind="selectedPlotIdStr">
+                            <option value="">Select...</option>
+                            @foreach (var p in plotOptions)
+                            {
+                                <option value="@p.Id">@p.Name</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <input type="number" class="form-control" placeholder="Plot ID (optional)" @bind="form.PlotId" />
+                    }
                 </div>
 
                 <div class="col-md-6">
                     <label class="form-label">Harvest date</label>
-                    <input type="date" class="form-control" @bind="form.Date" />
+                    <input type="date" class="form-control" @bind="form.HarvestDate" />
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Quantity harvested <span class="req">*</span></label>
                     <input type="number" min="0" step="any" class="form-control @(showErrors && QtyInvalid ? "is-invalid" : "")" @bind="qtyInput" />
@@ -275,9 +336,10 @@
                         }
                     </select>
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Quality grade</label>
-                    <select class="form-select" @bind="form.Grade">
+                    <select class="form-select" @bind="form.QualityGrade">
                         <option value="A">A</option>
                         <option value="B">B</option>
                         <option value="C">C</option>
@@ -292,9 +354,10 @@
                         <div class="err">Value can’t be negative.</div>
                     }
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Lot number</label>
-                    <input class="form-control @(showErrors && LotTaken ? "is-invalid" : "")" @bind="form.Lot" />
+                    <input class="form-control @(showErrors && LotTaken ? "is-invalid" : "")" @bind="form.LotNumber" />
                     @if (showErrors && LotTaken)
                     {
                         <div class="err">This lot number is already used.</div>
@@ -314,7 +377,9 @@
 
             <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
                 <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Record harvest</button>
+                <button type="button" class="btn-save" @onclick="SaveAsync" disabled="@isSaving">
+                    @(IsBusinessTenant ? "Record harvest" : "Submit to admin")
+                </button>
             </div>
         </div>
     </div>
@@ -326,98 +391,236 @@
 }
 
 @code {
-    // ---------- MODELS ----------
-    class HarvestRec
-    {
-        public int Id { get; set; }
-        public string Lot { get; set; } = "";
-        public DateTime Date { get; set; } = DateTime.Today;
-        public string Crop { get; set; } = "";
-        public string Plot { get; set; } = "";
-        public decimal Qty { get; set; }
-        public string Unit { get; set; } = "kg";
-        public string Grade { get; set; } = "A";
-        public decimal UnitValue { get; set; }
-        public string Status { get; set; } = "pending";   // pending | approved | rejected
-        public string RecordedBy { get; set; } = "";
-        public string Notes { get; set; } = "";
-    }
-
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
     record LotRow(string Lot, string Crop, string Plot, DateTime Date, decimal Qty, string Unit, string Status);
     record CropQty(string Crop, decimal Qty);
-    record GradeQty(string Grade, decimal Qty);
+    record GradeSlice(string Label, decimal Qty, string Color);
+    record PlotOption(int Id, string Name);
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     const double Radius = 70;
     static readonly double Circ = 2 * Math.PI * Radius;
     static readonly string[] UnitOptions = { "kg", "sack", "piece", "bundle" };
 
-    // TODO: kuhaa gikan sa naka-login nga tenant ug sa Farms & Plots module
-    const string ActiveBranch = "North Field Branch";
-    readonly string[] plotOptions =
-    {
-        "North Plot A", "North Plot B", "North Plot C", "South Plot D", "South Plot E", "Central Plot F",
-    };
+    long currentBusinessId;
+    long? currentBranchId;
+    string ActiveBranch = "All Branches";
+    string currentUserRole = "";
 
-    // ---------- STATE ----------
+    List<Branch> branches = new();
+    List<PlotOption> plotOptions = new();
+    List<HarvestRecord> harvests = new();
+
     string activeTab = "record";
+    string searchText = "";
+    string dateRangeFilter = "all"; // all | month | 90days | year
     string statusFilter = "";
+    string selectedPlotIdStr = "";
     string toast = "";
     bool showModal;
     bool showErrors;
-    HarvestRec form = new();
+    bool isSaving;
+    HarvestRecord form = new();
     decimal? qtyInput;
     decimal? valueInput;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    readonly List<HarvestRec> harvests = new()
+    bool IsBusinessTenant
     {
-        new() { Id = 1, Lot = "LOT-006", Date = new(2026, 10, 22), Crop = "Ampalaya", Plot = "South Plot E", Qty = 140,  Grade = "B", UnitValue = 32, Status = "pending"  },
-        new() { Id = 2, Lot = "LOT-005", Date = new(2026, 10, 20), Crop = "Cabbage",  Plot = "South Plot D", Qty = 320,  Grade = "A", UnitValue = 38, Status = "pending"  },
-        new() { Id = 3, Lot = "LOT-007", Date = new(2026, 10, 19), Crop = "Corn",     Plot = "North Plot B", Qty = 90,   Grade = "C", UnitValue = 18, Status = "rejected" },
-        new() { Id = 4, Lot = "LOT-004", Date = new(2026, 10, 12), Crop = "Cabbage",  Plot = "South Plot D", Qty = 180,  Grade = "B", UnitValue = 30, Status = "approved" },
-        new() { Id = 5, Lot = "LOT-002", Date = new(2026, 10, 5),  Crop = "Cabbage",  Plot = "South Plot D", Qty = 610,  Grade = "A", UnitValue = 38, Status = "approved" },
-        new() { Id = 6, Lot = "LOT-001", Date = new(2026, 9, 28),  Crop = "Ampalaya", Plot = "South Plot E", Qty = 520,  Grade = "A", UnitValue = 45, Status = "approved" },
-        new() { Id = 7, Lot = "LOT-003", Date = new(2026, 6, 22),  Crop = "Rice",     Plot = "North Plot A", Qty = 1450, Grade = "A", UnitValue = 22, Status = "approved" },
+        get
+        {
+            var r = (currentUserRole ?? "").Trim().ToLower();
+            if (string.IsNullOrEmpty(r)) return true;
+            return r.Contains("tenant") || r.Contains("owner") || r.Contains("admin");
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            User? currentUser = null;
+
+            if (Auth.CurrentUserId > 0)
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+            {
+                var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                           || u.FName == Auth.CurrentUserName);
+            }
+
+            currentUserRole = currentUser?.Role ?? "";
+
+            if (currentUser?.BusinessId != null)
+            {
+                currentBusinessId = currentUser.BusinessId.Value;
+                currentBranchId = currentUser.BranchId;
+            }
+            else
+            {
+                var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+                if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+            }
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading harvest records: " + ex.Message);
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            branches = await DbContext.Branches
+                .Where(b => b.BusinessId == currentBusinessId)
+                .OrderBy(b => b.BranchName)
+                .ToListAsync();
+
+            if (currentBranchId.HasValue)
+            {
+                var matched = branches.FirstOrDefault(b => b.BranchId == currentBranchId.Value);
+                if (matched != null) ActiveBranch = matched.BranchName;
+            }
+            else if (branches.Count > 0)
+            {
+                ActiveBranch = branches[0].BranchName;
+            }
+
+            plotOptions = await TryLoadPlotsAsync();
+
+            harvests = await DbContext.HarvestRecords
+                .Where(h => h.BusinessId == currentBusinessId)
+                .OrderByDescending(h => h.HarvestDate)
+                .ThenByDescending(h => h.HarvestId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Database load error: " + ex.Message);
+        }
+    }
+
+    private async Task<List<PlotOption>> TryLoadPlotsAsync()
+    {
+        var result = new List<PlotOption>();
+        try
+        {
+            var prop = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .FirstOrDefault(p => p.Name.Equals("Plots", StringComparison.OrdinalIgnoreCase)
+                                  || p.Name.Equals("FarmPlots", StringComparison.OrdinalIgnoreCase));
+
+            if (prop?.GetValue(DbContext) is System.Collections.IEnumerable rawSet)
+            {
+                foreach (var entity in rawSet)
+                {
+                    if (entity == null) continue;
+                    var t = entity.GetType();
+                    var idProp = t.GetProperty("PlotId") ?? t.GetProperty("Id");
+                    var nameProp = t.GetProperty("PlotName") ?? t.GetProperty("Name") ?? t.GetProperty("Code");
+                    if (idProp != null && nameProp != null)
+                    {
+                        if (int.TryParse(idProp.GetValue(entity)?.ToString(), out var id))
+                        {
+                            var name = nameProp.GetValue(entity)?.ToString() ?? $"Plot #{id}";
+                            result.Add(new PlotOption(id, name));
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Ignore if plots DbSet is not present yet
+        }
+        return await Task.FromResult(result.OrderBy(p => p.Name).ToList());
+    }
+
+    static string NormalizeStatus(string? s) => (s ?? "pending").Trim().ToLowerInvariant();
+    static decimal Kg(HarvestRecord h) => string.Equals(h.Unit, "kg", StringComparison.OrdinalIgnoreCase) ? h.QuantityKg : 0;
+
+    string PlotNameOf(int plotId)
+    {
+        if (plotId <= 0) return "—";
+        var matched = plotOptions.FirstOrDefault(p => p.Id == plotId);
+        return matched != null ? matched.Name : $"Plot #{plotId}";
+    }
+
+    DateTime? DateCutoff => dateRangeFilter switch
+    {
+        "month" => new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
+        "90days" => DateTime.Today.AddDays(-90),
+        "year" => new DateTime(DateTime.Today.Year, 1, 1),
+        _ => null
     };
 
-    // ---------- COMPUTED ----------
-    // Ang totals kay kg ra ang giapil, aron dili madugtong ang lahi-lahi nga units
-    static decimal Kg(HarvestRec h) => h.Unit == "kg" ? h.Qty : 0;
+    IEnumerable<HarvestRecord> Approved => harvests.Where(h => NormalizeStatus(h.Status) == "approved");
 
-    IEnumerable<HarvestRec> Approved => harvests.Where(h => h.Status == "approved");
+    List<HarvestRecord> Filtered
+    {
+        get
+        {
+            IEnumerable<HarvestRecord> query = harvests;
 
-    List<HarvestRec> Filtered => harvests
-        .Where(h => string.IsNullOrEmpty(statusFilter) || h.Status == statusFilter)
-        .OrderByDescending(h => h.Date).ThenByDescending(h => h.Id)
-        .ToList();
+            var cutoff = DateCutoff;
+            if (cutoff.HasValue)
+                query = query.Where(h => h.HarvestDate.Date >= cutoff.Value);
+
+            if (!string.IsNullOrEmpty(statusFilter))
+                query = query.Where(h => NormalizeStatus(h.Status) == statusFilter);
+
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                query = query.Where(h =>
+                    (h.LotNumber ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    (h.CropName ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    PlotNameOf(h.PlotId).Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    (h.RecordedBy ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return query.OrderByDescending(h => h.HarvestDate).ThenByDescending(h => h.HarvestId).ToList();
+        }
+    }
 
     List<Stat> Stats => new()
     {
-        new("HARVEST RECORDS", harvests.Count.ToString(), harvests.Select(h => h.Lot).Distinct().Count() + " lots created", "bi-flower2", ""),
+        new("HARVEST RECORDS", harvests.Count.ToString(), harvests.Select(h => h.LotNumber).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().Count() + " lots created", "bi-flower2", ""),
         new("APPROVED QUANTITY", Qty(Approved.Sum(Kg)) + " kg", "Posted to produce stock", "bi-check-circle", ""),
-        new("AWAITING APPROVAL", harvests.Count(h => h.Status == "pending").ToString(), "Not yet in inventory", "bi-flower2", "stat-icon-warn"),
-        new("ESTIMATED VALUE", Peso(Approved.Sum(h => h.Qty * h.UnitValue)), "Quantity × unit value", "bi-flower2", "stat-icon-plain"),
+        new("AWAITING APPROVAL", harvests.Count(h => NormalizeStatus(h.Status) == "pending").ToString(), "Not yet in inventory", "bi-hourglass-split", "stat-icon-warn"),
+        new("ESTIMATED VALUE", Peso(Approved.Sum(h => h.QuantityKg * h.UnitValue)), "Quantity × unit value", "bi-cash-coin", "stat-icon-plain"),
     };
 
     List<LotRow> Lots => harvests
-        .GroupBy(h => h.Lot)
+        .GroupBy(h => h.LotNumber)
         .Select(g => new LotRow(
             g.Key,
-            g.First().Crop,
-            g.First().Plot,
-            g.Max(x => x.Date),
-            g.Sum(x => x.Qty),
+            g.First().CropName,
+            PlotNameOf(g.First().PlotId),
+            g.Max(x => x.HarvestDate),
+            g.Sum(x => x.QuantityKg),
             g.First().Unit,
-            g.Any(x => x.Status == "pending") ? "pending"
-                : g.All(x => x.Status == "rejected") ? "rejected" : "approved"))
+            g.Any(x => NormalizeStatus(x.Status) == "pending") ? "pending"
+                : g.All(x => NormalizeStatus(x.Status) == "rejected") ? "rejected" : "approved"))
         .OrderByDescending(l => l.Date).ThenByDescending(l => l.Lot)
         .ToList();
 
     List<CropQty> CropOutput => Approved
-        .OrderByDescending(h => h.Date).ThenByDescending(h => h.Id)
-        .GroupBy(h => h.Crop)
+        .OrderByDescending(h => h.HarvestDate).ThenByDescending(h => h.HarvestId)
+        .GroupBy(h => h.CropName)
         .Select(g => new CropQty(g.Key, g.Sum(Kg)))
         .Where(c => c.Qty > 0)
         .ToList();
@@ -431,22 +634,35 @@
         }
     }
 
-    List<GradeQty> GradeMix => Approved
-        .GroupBy(h => h.Grade)
-        .Select(g => new GradeQty(g.Key, g.Sum(Kg)))
-        .Where(g => g.Qty > 0)
-        .OrderBy(g => g.Grade)
-        .ToList();
+    List<GradeSlice> TwoColorGradeMix
+    {
+        get
+        {
+            var gradeA = Approved.Where(h => string.Equals(h.QualityGrade, "A", StringComparison.OrdinalIgnoreCase)).Sum(Kg);
+            var otherGrades = Approved.Where(h => !string.Equals(h.QualityGrade, "A", StringComparison.OrdinalIgnoreCase)).Sum(Kg);
 
-    decimal GradeTotal => Math.Max(1, GradeMix.Sum(g => g.Qty));
+            var list = new List<GradeSlice>();
+            if (gradeA > 0) list.Add(new GradeSlice("Grade A", gradeA, "#1B5E34"));
+            if (otherGrades > 0) list.Add(new GradeSlice("Grade B & C", otherGrades, "#4E8D2A"));
 
-    IEnumerable<string> CropSuggestions => harvests.Select(h => h.Crop).Distinct()
+            if (list.Count == 0)
+            {
+                list.Add(new GradeSlice("Grade A", 1, "#1B5E34"));
+                list.Add(new GradeSlice("Grade B & C", 1, "#4E8D2A"));
+            }
+            return list;
+        }
+    }
+
+    decimal TwoColorGradeTotal => Math.Max(1m, TwoColorGradeMix.Sum(g => g.Qty));
+
+    IEnumerable<string> CropSuggestions => harvests.Select(h => h.CropName).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct()
         .Concat(new[] { "Rice", "Corn", "Cabbage", "Ampalaya" }).Distinct();
 
     bool QtyInvalid => !qtyInput.HasValue || qtyInput.Value <= 0;
 
-    bool LotTaken => !string.IsNullOrWhiteSpace(form.Lot) &&
-        harvests.Any(h => string.Equals(h.Lot, form.Lot.Trim(), StringComparison.OrdinalIgnoreCase));
+    bool LotTaken => !string.IsNullOrWhiteSpace(form.LotNumber) &&
+        harvests.Any(h => string.Equals(h.LotNumber, form.LotNumber.Trim(), StringComparison.OrdinalIgnoreCase));
 
     string NextLot
     {
@@ -455,41 +671,47 @@
             var max = 0;
             foreach (var h in harvests)
             {
-                var p = h.Lot.Split('-');
+                var p = (h.LotNumber ?? "").Split('-');
                 if (p.Length == 2 && p[0] == "LOT" && int.TryParse(p[1], out var n)) max = Math.Max(max, n);
             }
             return "LOT-" + (max + 1).ToString("000");
         }
     }
 
-    // ---------- HELPERS ----------
     static string F(double d) => d.ToString("0.##", Inv);
     static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
-    int Pct(decimal qty) => (int)Math.Round(qty * 100 / GradeTotal);
+    int PctOf(decimal qty, decimal total) => (int)Math.Round(qty * 100m / Math.Max(1m, total));
 
-    static string Label(string s) => s switch { "pending" => "Pending", "approved" => "Approved", "rejected" => "Rejected", _ => s };
+    static string Label(string s) => NormalizeStatus(s) switch
+    {
+        "pending" => "Pending",
+        "approved" => "Approved",
+        "rejected" => "Rejected",
+        _ => s
+    };
 
-    static string StatusClass(string s) => s switch
+    static string StatusClass(string s) => NormalizeStatus(s) switch
     {
         "approved" => "pill-green",
         "rejected" => "pill-red",
         _ => "pill-yellow"
     };
 
-    static string GradeColor(string g) => g switch
-    {
-        "A" => "#206A3B",
-        "B" => "#62A834",
-        _ => "#A8D86B"
-    };
-
-    // ---------- ACTIONS ----------
     void SetTab(string key) => activeTab = key;
 
     void OpenNew()
     {
-        form = new HarvestRec { Date = DateTime.Today, Unit = "kg", Grade = "A", Lot = NextLot };
+        form = new HarvestRecord
+        {
+            BusinessId = currentBusinessId,
+            HarvestDate = DateTime.Today,
+            Unit = "kg",
+            QualityGrade = "A",
+            LotNumber = NextLot,
+            RecordedBy = Auth.CurrentUserName ?? ""
+        };
+        selectedPlotIdStr = plotOptions.FirstOrDefault()?.Id.ToString() ?? "";
         qtyInput = null;
         valueInput = null;
         showErrors = false;
@@ -498,39 +720,101 @@
 
     void CloseModal() => showModal = false;
 
-    async Task Save()
+    async Task SaveAsync()
     {
         showErrors = true;
-        if (string.IsNullOrWhiteSpace(form.Crop) || QtyInvalid || (valueInput.HasValue && valueInput < 0)) return;
-        if (string.IsNullOrWhiteSpace(form.Lot)) form.Lot = NextLot;
-        if (LotTaken) return;
+        if (string.IsNullOrWhiteSpace(form.CropName) || QtyInvalid || (valueInput.HasValue && valueInput < 0)) return;
 
-        form.Id = harvests.Count == 0 ? 1 : harvests.Max(h => h.Id) + 1;
-        form.Crop = form.Crop.Trim();
-        form.Lot = form.Lot.Trim().ToUpperInvariant();
-        form.Qty = qtyInput!.Value;
-        form.UnitValue = valueInput ?? 0;
-        form.RecordedBy = string.IsNullOrWhiteSpace(form.RecordedBy) ? (Auth.CurrentUserName ?? "") : form.RecordedBy.Trim();
-        form.Status = "pending";
+        var lot = string.IsNullOrWhiteSpace(form.LotNumber) ? NextLot : form.LotNumber.Trim().ToUpperInvariant();
+        if (harvests.Any(h => string.Equals(h.LotNumber, lot, StringComparison.OrdinalIgnoreCase))) return;
 
-        harvests.Add(form);
-        var lot = form.Lot;
-        showModal = false;
-        await ShowToast(lot + " recorded as pending approval.");
+        isSaving = true;
+        try
+        {
+            int plotId = int.TryParse(selectedPlotIdStr, out var pId) && pId > 0
+                ? pId
+                : (form.PlotId > 0 ? form.PlotId : (plotOptions.FirstOrDefault()?.Id ?? 0));
+
+            string finalStatus = IsBusinessTenant ? "Approved" : "Pending";
+
+            var entity = new HarvestRecord
+            {
+                BusinessId = currentBusinessId,
+                PlotId = plotId,
+                WorkerId = form.WorkerId,
+                LotNumber = lot,
+                CropName = form.CropName.Trim(),
+                QuantityKg = qtyInput!.Value,
+                Unit = string.IsNullOrWhiteSpace(form.Unit) ? "kg" : form.Unit.Trim(),
+                QualityGrade = string.IsNullOrWhiteSpace(form.QualityGrade) ? "A" : form.QualityGrade.Trim(),
+                UnitValue = valueInput ?? 0,
+                Status = finalStatus,
+                RecordedBy = string.IsNullOrWhiteSpace(form.RecordedBy) ? (Auth.CurrentUserName ?? "") : form.RecordedBy.Trim(),
+                Notes = (form.Notes ?? "").Trim(),
+                HarvestDate = form.HarvestDate
+            };
+
+            DbContext.HarvestRecords.Add(entity);
+            await DbContext.SaveChangesAsync();
+
+            showModal = false;
+            await LoadDataAsync();
+
+            if (IsBusinessTenant)
+                await ShowToast(lot + " recorded and approved.");
+            else
+                await ShowToast(lot + " submitted to admin for approval.");
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error saving harvest: " + ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
-    async Task Approve(HarvestRec h)
+    async Task ApproveAsync(HarvestRecord h)
     {
-        h.Status = "approved";
-        // TODO: i-post ang quantity sa Produce stock (Inventory) ug i-log sa Audit Logs
-        await ShowToast(h.Lot + " approved and posted to produce stock.");
+        if (!IsBusinessTenant) return;
+        try
+        {
+            var existing = await DbContext.HarvestRecords.FindAsync(h.HarvestId);
+            if (existing != null)
+            {
+                existing.Status = "Approved";
+                DbContext.HarvestRecords.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await LoadDataAsync();
+                await ShowToast(h.LotNumber + " approved and posted to produce stock.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error approving harvest: " + ex.Message);
+        }
     }
 
-    async Task Reject(HarvestRec h)
+    async Task RejectAsync(HarvestRecord h)
     {
-        h.Status = "rejected";
-        // TODO: i-log sa Audit Logs
-        await ShowToast(h.Lot + " was rejected. Nothing was added to inventory.");
+        if (!IsBusinessTenant) return;
+        try
+        {
+            var existing = await DbContext.HarvestRecords.FindAsync(h.HarvestId);
+            if (existing != null)
+            {
+                existing.Status = "Rejected";
+                DbContext.HarvestRecords.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await LoadDataAsync();
+                await ShowToast(h.LotNumber + " was rejected. Nothing was added to inventory.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error rejecting harvest: " + ex.Message);
+        }
     }
 
     async Task ShowToast(string message)

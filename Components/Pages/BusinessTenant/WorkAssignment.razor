@@ -1,9 +1,25 @@
 ﻿@page "/assignments"
+@layout MainLayout
 @using System.Globalization
+@using System.Reflection
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Web
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
+@inject AgriNexus.Services.AuthService Auth
+@inject IJSRuntime JS
 
-<div class="mb-4">
-    <h2 class="page-title">Work Assignments</h2>
-    <p class="text-muted mb-0 page-sub">Daily task assignments per worker and plot, from land preparation through harvest.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="page-title">Work Assignments</h2>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@ActiveBranch</strong> · daily task assignments per worker and plot, from land preparation through harvest.
+        </p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-clipboard-check me-1"></i> Assignment Board
+    </span>
 </div>
 
 <!-- STAT CARDS -->
@@ -24,146 +40,434 @@
     }
 </div>
 
-<!-- TOOLBAR -->
-<div class="toolbar mb-3">
+<!-- TOOLBAR WITH ACTIVE / ARCHIVED TOGGLE -->
+<div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+
+    <div class="btn-group shadow-sm" role="group" aria-label="View Tabs">
+        <input type="radio" class="btn-check" name="assignViewTabs" id="tabAssignActive" autocomplete="off"
+               checked="@(!showArchived)" @onchange="() => ToggleTab(false)">
+        <label class="btn btn-outline-success fw-bold" for="tabAssignActive">
+            <i class="bi bi-check-circle me-1"></i> Active
+        </label>
+
+        <input type="radio" class="btn-check" name="assignViewTabs" id="tabAssignArchived" autocomplete="off"
+               checked="@showArchived" @onchange="() => ToggleTab(true)">
+        <label class="btn btn-outline-secondary fw-bold" for="tabAssignArchived">
+            <i class="bi bi-archive me-1"></i> Archived
+        </label>
+    </div>
+
     <div class="search-box">
         <i class="bi bi-search"></i>
-        <input type="text" placeholder="Search assignments..." @bind="searchText" @bind:event="oninput" />
+        <input type="text" placeholder="Search assignments..."
+               @bind="searchText"
+               @bind:event="oninput"
+               @bind:after="ResetPagination" />
     </div>
-    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "assignment" : "assignments")</span>
-    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
-        <i class="bi bi-plus-lg"></i> New assignment
-    </button>
+
+    <span class="badge rounded-pill px-3 py-2 fw-semibold count-label" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+        <i class="bi bi-clipboard-check me-1 text-success"></i>@Filtered.Count @(Filtered.Count == 1 ? "assignment" : "assignments")
+    </span>
+
+    @if (!showArchived)
+    {
+        <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNew">
+            <i class="bi bi-plus-lg"></i> New assignment
+        </button>
+    }
 </div>
 
 <!-- TABLE -->
-<div class="panel">
-    <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
-            <thead>
+<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 280px); overflow: hidden;">
+    <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+            <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                 <tr>
-                    <th>Worker</th>
-                    <th>Task</th>
-                    <th>Plot</th>
-                    <th>Assigned</th>
-                    <th>Status</th>
-                    <th></th>
+                    <th class="text-muted small fw-bold text-uppercase py-3 px-4">Worker</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Task</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Plot</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Assigned</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Status</th>
+                    <th class="py-3"></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var a in Filtered)
+                @foreach (var a in PaginatedAssignments)
                 {
-                    <tr>
-                        <td class="col-worker fw-semibold">@(string.IsNullOrWhiteSpace(a.WorkerName) ? "—" : a.WorkerName)</td>
-                        <td class="col-task">@a.Task</td>
-                        <td class="col-plot">@(string.IsNullOrWhiteSpace(a.Plot) ? "—" : a.Plot)</td>
-                        <td class="text-nowrap">@a.Assigned.ToString("MMM d, yyyy", Inv)</td>
-                        <td><span class="pill @StatusClass(a.Status)">@Cap(a.Status)</span></td>
-                        <td class="text-end action-cell">
-                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(a.Id)" aria-label="Actions">
+                    var wName = WorkerNameOf(a.WorkerId);
+                    var pName = PlotNameOf(a.PlotId);
+
+                    <tr style="cursor: pointer;" @onclick="() => OpenDetails(a)">
+                        <td class="col-worker px-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="biz-avatar">
+                                    <i class="bi bi-person"></i>
+                                </div>
+                                <span class="fw-bold" style="color: #0A2B1D;">@(string.IsNullOrWhiteSpace(wName) ? "—" : wName)</span>
+                            </div>
+                        </td>
+                        <td class="col-task text-dark fw-medium">@a.Task</td>
+                        <td class="col-plot text-dark">@(string.IsNullOrWhiteSpace(pName) ? "—" : pName)</td>
+                        <td class="text-nowrap text-muted small fw-medium">
+                            <i class="bi bi-calendar3 text-success me-1"></i>@a.AssignedDate.ToString("MMM d, yyyy", Inv)
+                        </td>
+                        <td>
+                            <span class="pill @StatusPillClass(a.Status)">
+                                <i class="bi @StatusIcon(a.Status) me-1"></i>@Cap(a.Status)
+                            </span>
+                        </td>
+                        <td class="text-end px-4 action-cell">
+                            <button type="button" class="btn-dots"
+                                    @onclick="(e) => ToggleMenuAsync(e, a)"
+                                    @onclick:stopPropagation="true" aria-label="Actions">
                                 <i class="bi bi-three-dots"></i>
                             </button>
-                            @if (openMenuId == a.Id)
-                            {
-                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                <div class="row-menu">
-                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(a)">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </button>
-                                    <button type="button" class="row-menu-item plain" @onclick='() => SetStatus(a, "ongoing")'>
-                                        Start (ongoing)
-                                    </button>
-                                    <button type="button" class="row-menu-item" @onclick='() => SetStatus(a, "completed")'>
-                                        <i class="bi bi-check-circle"></i> Mark completed
-                                    </button>
-                                    <div class="menu-sep"></div>
-                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(a)">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </div>
-                            }
                         </td>
                     </tr>
                 }
                 @if (Filtered.Count == 0)
                 {
-                    <tr><td colspan="6" class="text-center text-muted py-5">No assignments found.</td></tr>
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                            @(showArchived ? "No archived assignments found." : "No assignments found.")
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
     </div>
+
+    @if (Filtered.Count > 0)
+    {
+        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+            <div class="text-muted small mb-2 mb-md-0">
+                Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> assignments
+            </div>
+
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                    <i class="bi bi-chevron-left me-1"></i>Previous
+                </button>
+
+                @for (int p = 1; p <= TotalPages; p++)
+                {
+                    var pageNumber = p;
+                    <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                            @onclick="() => GoToPage(pageNumber)">
+                        @pageNumber
+                    </button>
+                }
+
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                    Next<i class="bi bi-chevron-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    }
 </div>
 
-<!-- MODAL -->
-@if (showModal)
+<!-- FLOATING ACTION MENU (AT MOST 3 ACTIONS) -->
+@if (openMenuId != null)
 {
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New assignment" : "Edit assignment")</h5>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
-            </div>
+    var menuAssign = assignments.FirstOrDefault(x => x.AssignmentId == openMenuId);
+    if (menuAssign != null)
+    {
+        var st = (menuAssign.Status ?? "pending").ToLower();
 
-            <div class="row g-3">
-                <div class="col-12">
-                    <label class="form-label">Worker</label>
-                    <select class="form-select" value="@form.WorkerRef" @onchange="OnWorkerChanged">
-                        <option value="">Select...</option>
-                        @foreach (var w in workerOptions)
-                        {
-                            <option value="@w" selected="@(form.WorkerRef == w)">@w</option>
-                        }
-                    </select>
+        <div class="menu-backdrop" @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
+
+        <div class="vertical-action-menu shadow-lg" style="top:@(menuTop)px; left:@(menuLeft)px;">
+            @if (st != "archived")
+            {
+                <button type="button" class="action-item"
+                        @onclick="() => OpenEdit(menuAssign)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-pencil-square text-success"></i> Edit
+                </button>
+
+                @if (st == "pending")
+                {
+                    <button type="button" class="action-item"
+                            @onclick='() => SetStatusAsync(menuAssign, "ongoing")'
+                            @onclick:stopPropagation="true">
+                        <i class="bi bi-play-circle text-success"></i> Start (ongoing)
+                    </button>
+                }
+                else if (st != "completed")
+                {
+                    <button type="button" class="action-item"
+                            @onclick='() => SetStatusAsync(menuAssign, "completed")'
+                            @onclick:stopPropagation="true">
+                        <i class="bi bi-check-circle text-success"></i> Mark completed
+                    </button>
+                }
+
+                <button type="button" class="action-item text-earth"
+                        @onclick="() => PromptArchive(menuAssign)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-archive"></i> Archive
+                </button>
+            }
+            else
+            {
+                <button type="button" class="action-item text-success"
+                        @onclick="() => RestoreAssignmentAsync(menuAssign)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-arrow-counterclockwise"></i> Restore
+                </button>
+            }
+        </div>
+    }
+}
+
+<!-- DETAILS MODAL (ROW CLICK) -->
+@if (showDetailsModal && selectedAssignment != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi bi-clipboard-check fs-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedAssignment.Task</h4>
+                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                <i class="bi bi-person me-1"></i>@WorkerNameOf(selectedAssignment.WorkerId)
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
                 </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Worker name (as displayed)</label>
-                    <input class="form-control" placeholder="Auto-filled from selection" @bind="form.WorkerName" />
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-info-circle me-2 text-success"></i>Assignment Details
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Assigned Worker</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">@WorkerNameOf(selectedAssignment.WorkerId)</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Target Plot</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">@PlotNameOf(selectedAssignment.PlotId)</p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Date Assigned</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-calendar3 text-success me-2"></i>@selectedAssignment.AssignedDate.ToString("MMMM d, yyyy", Inv)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Status</label>
+                                <span class="pill @StatusPillClass(selectedAssignment.Status)">
+                                    <i class="bi @StatusIcon(selectedAssignment.Status) me-1"></i>@Cap(selectedAssignment.Status)
+                                </span>
+                            </div>
+                            <div class="col-12 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Notes</label>
+                                <p class="mb-0 text-muted fst-italic">
+                                    @(string.IsNullOrWhiteSpace(selectedAssignment.Notes) ? "No notes provided." : selectedAssignment.Notes)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">Task <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Task) ? "is-invalid" : "")"
-                           placeholder="Land preparation, transplanting, spraying..." @bind="form.Task" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Task))
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                    @if (!string.Equals(selectedAssignment.Status, "archived", StringComparison.OrdinalIgnoreCase))
                     {
-                        <div class="err">Task is required.</div>
+                        <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedAssignment)">
+                            <i class="bi bi-pencil-square me-2"></i>Edit Details
+                        </button>
                     }
                 </div>
+            </div>
+        </div>
+    </div>
+}
 
-                <div class="col-md-6">
-                    <label class="form-label">Plot</label>
-                    <select class="form-select" @bind="form.Plot">
-                        <option value="">Select...</option>
-                        @foreach (var p in plotOptions)
-                        {
-                            <option value="@p">@p</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Assigned date</label>
-                    <input type="date" class="form-control" @bind="form.Assigned" />
+<!-- ADD / EDIT MODAL -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(editingId == null ? "bi-clipboard-plus" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingId == null ? "Register New Assignment" : "Edit Assignment Details")
+                            </h4>
+                            <p class="text-muted small mb-0">Fill in the task assignment details below to @(editingId == null ? "create a new assignment" : "update the assignment").</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
                 </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" @bind="form.Status">
-                        @foreach (var s in StatusOptions)
-                        {
-                            <option value="@s">@s</option>
-                        }
-                    </select>
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-person-badge me-2 text-success"></i>Worker &amp; Task
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Worker <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(selectedWorkerIdStr) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                                        <select class="form-select" @bind="selectedWorkerIdStr">
+                                            <option value="">-- Select Worker --</option>
+                                            @foreach (var w in workers)
+                                            {
+                                                <option value="@w.WorkerId">@w.FullName (@Cap(w.Skill))</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(selectedWorkerIdStr))
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>Please select a worker.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Task <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.Task) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-list-task text-success"></i></span>
+                                        <input class="form-control" placeholder="Land preparation, transplanting, spraying..."
+                                               @bind="form.Task"
+                                               @bind:after="() => form.Task = CapitalizeWords(form.Task)" />
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(form.Task))
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>Task is required.</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-geo-alt me-2 text-success"></i>Plot, Schedule &amp; Notes
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Plot</label>
+                                    @if (plotOptions.Count > 0)
+                                    {
+                                        <select class="form-select border-0 shadow-sm" @bind="selectedPlotIdStr">
+                                            <option value="">-- Select Plot --</option>
+                                            @foreach (var p in plotOptions)
+                                            {
+                                                <option value="@p.Id">@p.Name</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <input type="number" class="form-control border-0 shadow-sm" placeholder="Plot ID (optional)" @bind="form.PlotId" />
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Assigned Date</label>
+                                    <input type="date" class="form-control border-0 shadow-sm" @bind="form.AssignedDate" />
+                                </div>
+
+                                <div class="col-md-6 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Status</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="form.Status">
+                                        @foreach (var s in StatusOptions)
+                                        {
+                                            <option value="@s">@s</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="col-12 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Notes</label>
+                                    <textarea class="form-control border-0 shadow-sm" rows="3" @bind="form.Notes"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
                 </div>
 
-                <div class="col-12">
-                    <label class="form-label">Notes</label>
-                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="PromptSave" disabled="@isSaving">
+                        <i class="bi bi-check2-circle me-2"></i>@(editingId == null ? "Save Assignment" : "Update Assignment")
+                    </button>
                 </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
+<!-- SAVE CONFIRMATION MODAL -->
+@if (showConfirmSaveModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1060;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #E8F3EC; color: #1B5E34;">
+                        <i class="bi bi-check2" style="font-size: 2.5rem;"></i>
+                    </div>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">@(editingId == null ? "Register New Assignment?" : "Update Assignment Details?")</h4>
+                    <p class="text-muted small mb-4">
+                        @(editingId == null
+                            ? $"Are you sure you want to assign task \"{form.Task.Trim()}\"?"
+                            : $"Are you sure you want to save changes to task \"{form.Task.Trim()}\"?" )
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelSaveConfirm">Cancel</button>
+                        <button type="button" class="btn-save rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmSaveAsync">
+                            @(isSaving ? "Saving..." : "Yes, Save")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ARCHIVE CONFIRMATION MODAL -->
+@if (showConfirmArchiveModal && assignmentToArchive != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1060;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #F5EFEA; color: #7A5230;">
+                        <i class="bi bi-archive" style="font-size: 2.5rem;"></i>
+                    </div>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Archive Assignment?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to archive <strong>@assignmentToArchive.Task</strong> for <strong>@WorkerNameOf(assignmentToArchive.WorkerId)</strong>?<br />
+                        It will be moved to the Archived tab while keeping all records safe.
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelArchiveConfirm">Cancel</button>
+                        <button type="button" class="btn-earth rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmArchiveAsync">
+                            <i class="bi bi-archive me-1"></i> Yes, Archive
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -171,159 +475,505 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+    <div class="toast-note shadow-lg">
+        <i class="bi @(toastIsWarning ? "bi-exclamation-circle" : "bi-check2")"></i>
+        <span>@toast</span>
+    </div>
 }
 
 @code {
-    // ---------- MODELS ----------
-    class AssignRec
-    {
-        public int Id { get; set; }
-        public string WorkerRef { get; set; } = "";    // worker nga gipili gikan sa Workers
-        public string WorkerName { get; set; } = "";   // ngalan nga makita sa table
-        public string Task { get; set; } = "";
-        public string Plot { get; set; } = "";
-        public DateTime Assigned { get; set; } = DateTime.Today;
-        public string Status { get; set; } = "pending";   // pending | ongoing | completed
-        public string Notes { get; set; } = "";
-
-        public AssignRec Clone() => (AssignRec)MemberwiseClone();
-    }
-
     record Stat(string Title, string Value, string Icon, string IconClass);
+    record PlotOption(int Id, string Name);
+
+    class Viewport
+    {
+        public double W { get; set; }
+        public double H { get; set; }
+    }
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     static readonly string[] StatusOptions = { "pending", "ongoing", "completed" };
 
-    // TODO: kuhaa ang active workers gikan sa Workers module ug ang plots gikan sa Farms & Plots
-    readonly string[] workerOptions =
-    {
-        "Ernesto Bacani", "Ronnie Aquino", "Jomar Salvador", "Lito Marasigan", "Avelino Dungca",
-        "Marilou Pangan", "Rolando Espino", "Danilo Roque",
-    };
+    long currentBusinessId;
+    long? currentBranchId;
+    string ActiveBranch = "All Branches";
 
-    readonly string[] plotOptions =
-    {
-        "North Plot A", "North Plot B", "North Plot C", "South Plot D", "South Plot E", "Central Plot F",
-    };
+    List<Branch> branches = new();
+    List<AgriNexus.DataLayer.Models.Worker> workers = new();
+    List<PlotOption> plotOptions = new();
+    List<AgriNexus.DataLayer.Models.WorkAssignment> assignments = new();
 
-    // ---------- STATE ----------
+    bool showArchived = false;
     string searchText = "";
+    string selectedWorkerIdStr = "";
+    string selectedPlotIdStr = "";
     string toast = "";
+    bool toastIsWarning = false;
+
     bool showModal;
     bool showErrors;
+    bool isSaving;
     int? editingId;
     int? openMenuId;
-    AssignRec form = new();
+    AgriNexus.DataLayer.Models.WorkAssignment form = new();
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    readonly List<AssignRec> assignments = new()
+    bool showDetailsModal;
+    AgriNexus.DataLayer.Models.WorkAssignment? selectedAssignment;
+
+    bool showConfirmSaveModal;
+    bool showConfirmArchiveModal;
+    AgriNexus.DataLayer.Models.WorkAssignment? assignmentToArchive;
+
+    private int currentPage = 1;
+    private int pageSize = 5;
+    private double menuTop;
+    private double menuLeft;
+
+    protected override async Task OnInitializedAsync()
     {
-        new() { Id = 1, WorkerRef = "Jomar Salvador",  WorkerName = "Jomar Salvador",  Task = "Harvest preparation — sacks and twine",     Plot = "North Plot A",   Assigned = new(2026, 10, 23), Status = "ongoing" },
-        new() { Id = 2, WorkerRef = "Lito Marasigan",  WorkerName = "Lito Marasigan",  Task = "Land preparation for next vegetable cycle", Plot = "North Plot C",   Assigned = new(2026, 10, 22), Status = "ongoing" },
-        new() { Id = 3, WorkerRef = "Marilou Pangan",  WorkerName = "Marilou Pangan",  Task = "Ampalaya picking and packing",              Plot = "South Plot E",   Assigned = new(2026, 10, 24), Status = "ongoing" },
-        new() { Id = 4, WorkerRef = "Avelino Dungca",  WorkerName = "Avelino Dungca",  Task = "Fertilizer application — side dressing",    Plot = "South Plot D",   Assigned = new(2026, 10, 21), Status = "completed" },
-        new() { Id = 5, WorkerRef = "Rolando Espino",  WorkerName = "Rolando Espino",  Task = "Weeding and cultivation",                   Plot = "South Plot D",   Assigned = new(2026, 10, 20), Status = "completed" },
-        new() { Id = 6, WorkerRef = "Danilo Roque",    WorkerName = "Danilo Roque",    Task = "Storage cleanup and stock arrangement",     Plot = "Central Plot F", Assigned = new(2026, 10, 19), Status = "completed" },
-        new() { Id = 7, WorkerRef = "Ernesto Bacani",  WorkerName = "Ernesto Bacani",  Task = "Irrigation scheduling and canal check",     Plot = "North Plot A",   Assigned = new(2026, 10, 24), Status = "ongoing" },
-        new() { Id = 8, WorkerRef = "Ronnie Aquino",   WorkerName = "Ronnie Aquino",   Task = "Pest monitoring and spraying",              Plot = "North Plot B",   Assigned = new(2026, 10, 24), Status = "pending" },
-    };
+        try
+        {
+            User? currentUser = null;
 
-    // ---------- COMPUTED ----------
-    List<AssignRec> Filtered => string.IsNullOrWhiteSpace(searchText)
-        ? assignments
-        : assignments.Where(a =>
-            a.WorkerName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            a.Task.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            a.Plot.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            a.Status.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (Auth.CurrentUserId > 0)
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+            {
+                var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                           || u.FName == Auth.CurrentUserName);
+            }
+
+            if (currentUser?.BusinessId != null)
+            {
+                currentBusinessId = currentUser.BusinessId.Value;
+                currentBranchId = currentUser.BranchId;
+            }
+            else
+            {
+                var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+                if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+            }
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading assignments: " + ex.Message, isWarning: true);
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            branches = await DbContext.Branches
+                .Where(b => b.BusinessId == currentBusinessId)
+                .OrderBy(b => b.BranchName)
+                .ToListAsync();
+
+            if (currentBranchId.HasValue)
+            {
+                var matched = branches.FirstOrDefault(b => b.BranchId == currentBranchId.Value);
+                if (matched != null) ActiveBranch = matched.BranchName;
+            }
+            else if (branches.Count > 0)
+            {
+                ActiveBranch = branches[0].BranchName;
+            }
+
+            var branchIds = branches.Select(b => b.BranchId).ToHashSet();
+
+            var allBranchWorkers = await DbContext.Workers
+                .Where(w => branchIds.Contains(w.BranchId))
+                .ToListAsync();
+
+            var workerIds = allBranchWorkers.Select(w => w.WorkerId).ToHashSet();
+            workers = allBranchWorkers
+                .Where(w => !string.Equals(w.Status, "archived", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(w => w.FullName)
+                .ToList();
+
+            plotOptions = await TryLoadPlotsAsync();
+
+            assignments = await DbContext.WorkAssignments
+                .Where(a => workerIds.Contains(a.WorkerId))
+                .OrderByDescending(a => a.AssignedDate)
+                .ThenByDescending(a => a.AssignmentId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Database load error: " + ex.Message, isWarning: true);
+        }
+    }
+
+    private async Task<List<PlotOption>> TryLoadPlotsAsync()
+    {
+        var result = new List<PlotOption>();
+        try
+        {
+            var prop = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .FirstOrDefault(p => p.Name.Equals("Plots", StringComparison.OrdinalIgnoreCase)
+                                  || p.Name.Equals("FarmPlots", StringComparison.OrdinalIgnoreCase));
+
+            if (prop?.GetValue(DbContext) is System.Collections.IEnumerable rawSet)
+            {
+                foreach (var entity in rawSet)
+                {
+                    if (entity == null) continue;
+                    var t = entity.GetType();
+                    var idProp = t.GetProperty("PlotId") ?? t.GetProperty("Id");
+                    var nameProp = t.GetProperty("PlotName") ?? t.GetProperty("Name") ?? t.GetProperty("Code");
+                    if (idProp != null && nameProp != null)
+                    {
+                        if (int.TryParse(idProp.GetValue(entity)?.ToString(), out var id))
+                        {
+                            var name = nameProp.GetValue(entity)?.ToString() ?? $"Plot #{id}";
+                            result.Add(new PlotOption(id, name));
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Ignore if plots DbSet is not present yet
+        }
+        return await Task.FromResult(result.OrderBy(p => p.Name).ToList());
+    }
+
+    List<AgriNexus.DataLayer.Models.WorkAssignment> NonArchivedAssignments => assignments
+        .Where(a => !string.Equals(a.Status, "archived", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    string WorkerNameOf(int workerId) =>
+        workers.FirstOrDefault(w => w.WorkerId == workerId)?.FullName
+        ?? DbContext.Workers.Local.FirstOrDefault(w => w.WorkerId == workerId)?.FullName
+        ?? "—";
+
+    string PlotNameOf(int? plotId)
+    {
+        if (!plotId.HasValue) return "—";
+        var matched = plotOptions.FirstOrDefault(p => p.Id == plotId.Value);
+        return matched != null ? matched.Name : $"Plot #{plotId.Value}";
+    }
+
+    List<AgriNexus.DataLayer.Models.WorkAssignment> Filtered
+    {
+        get
+        {
+            var baseList = assignments
+                .Where(a => showArchived
+                    ? string.Equals(a.Status, "archived", StringComparison.OrdinalIgnoreCase)
+                    : !string.Equals(a.Status, "archived", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (string.IsNullOrWhiteSpace(searchText))
+                return baseList;
+
+            return baseList.Where(a =>
+                WorkerNameOf(a.WorkerId).Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                (a.Task ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                PlotNameOf(a.PlotId).Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                (a.Status ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Filtered.Count / pageSize));
+    private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<AgriNexus.DataLayer.Models.WorkAssignment> PaginatedAssignments => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
 
     List<Stat> Stats => new()
     {
-        new("ASSIGNMENTS", assignments.Count.ToString(), "bi-clipboard-check", ""),
-        new("ONGOING", assignments.Count(a => a.Status == "ongoing").ToString(), "bi-clock-history", "stat-icon-warn"),
-        new("COMPLETED", assignments.Count(a => a.Status == "completed").ToString(), "bi-check-circle", ""),
+        new("ASSIGNMENTS", NonArchivedAssignments.Count.ToString(), "bi-clipboard-check", ""),
+        new("ONGOING", NonArchivedAssignments.Count(a => string.Equals(a.Status, "ongoing", StringComparison.OrdinalIgnoreCase)).ToString(), "bi-clock-history", "stat-icon-earth"),
+        new("COMPLETED", NonArchivedAssignments.Count(a => string.Equals(a.Status, "completed", StringComparison.OrdinalIgnoreCase)).ToString(), "bi-check-circle", "stat-icon-leaf"),
     };
 
-    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+    static string Cap(string? s) => string.IsNullOrWhiteSpace(s) ? "" : char.ToUpper(s[0]) + s.Substring(1);
 
-    static string StatusClass(string s) => s switch
+    static string StatusPillClass(string? s) =>
+        string.Equals(s, "completed", StringComparison.OrdinalIgnoreCase) ? "pill-forest" : "pill-earth";
+
+    static string StatusIcon(string? s) =>
+        string.Equals(s, "completed", StringComparison.OrdinalIgnoreCase) ? "bi-check-circle" : "bi-clock-history";
+
+    private string CapitalizeWords(string? input)
     {
-        "completed" => "pill-green",
-        _ => "pill-yellow"    // pending ug ongoing, parehas nga dalag sa prototype
-    };
+        if (string.IsNullOrWhiteSpace(input)) return input ?? "";
+        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input.ToLower().Trim());
+    }
 
-    // ---------- ACTIONS ----------
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
+
+    private async Task ToggleTab(bool archived)
+    {
+        showArchived = archived;
+        currentPage = 1;
+        openMenuId = null;
+        await Task.CompletedTask;
+    }
+
+    private async Task ToggleMenuAsync(MouseEventArgs e, AgriNexus.DataLayer.Models.WorkAssignment item)
+    {
+        if (openMenuId == item.AssignmentId)
+        {
+            openMenuId = null;
+            return;
+        }
+
+        var st = (item.Status ?? "pending").ToLower();
+        int itemCount = st == "archived" ? 1 : (st == "completed" ? 2 : 3);
+
+        const double itemHeight = 42;
+        const double padding = 16;
+        const double menuWidth = 185;
+        double menuHeight = (itemCount * itemHeight) + padding;
+
+        var viewport = await JS.InvokeAsync<Viewport>("eval", "({ w: window.innerWidth, h: window.innerHeight })");
+
+        menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewport.W - menuWidth - 10);
+        menuTop = (e.ClientY + menuHeight > viewport.H) ? e.ClientY - menuHeight - 5 : e.ClientY + 15;
+
+        openMenuId = item.AssignmentId;
+    }
+
+    void CloseMenu() => openMenuId = null;
+
+    void OpenDetails(AgriNexus.DataLayer.Models.WorkAssignment a)
+    {
+        selectedAssignment = a;
+        showDetailsModal = true;
+    }
+
+    void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedAssignment = null;
+    }
+
     void OpenNew()
     {
-        form = new AssignRec { Assigned = DateTime.Today, Status = "pending" };
+        openMenuId = null;
+        form = new AgriNexus.DataLayer.Models.WorkAssignment
+        {
+            AssignedDate = DateTime.Today,
+            Status = "pending"
+        };
+        selectedWorkerIdStr = "";
+        selectedPlotIdStr = "";
         editingId = null;
         showErrors = false;
         showModal = true;
     }
 
-    void OpenEdit(AssignRec a)
+    void OpenEdit(AgriNexus.DataLayer.Models.WorkAssignment a)
     {
-        form = a.Clone();
-        editingId = a.Id;
-        showErrors = false;
+        showDetailsModal = false;
         openMenuId = null;
+        form = new AgriNexus.DataLayer.Models.WorkAssignment
+        {
+            AssignmentId = a.AssignmentId,
+            WorkerId = a.WorkerId,
+            PlotId = a.PlotId,
+            Task = a.Task,
+            AssignedDate = a.AssignedDate,
+            Status = a.Status,
+            Notes = a.Notes
+        };
+        selectedWorkerIdStr = a.WorkerId > 0 ? a.WorkerId.ToString() : "";
+        selectedPlotIdStr = a.PlotId.HasValue ? a.PlotId.Value.ToString() : "";
+        editingId = a.AssignmentId;
+        showErrors = false;
         showModal = true;
     }
 
     void CloseModal() => showModal = false;
 
-    // Kung mopili og worker, i-fill ang "Worker name (as displayed)"
-    void OnWorkerChanged(ChangeEventArgs e)
-    {
-        var name = e.Value?.ToString() ?? "";
-        form.WorkerRef = name;
-        if (name.Length > 0) form.WorkerName = name;
-    }
-
-    void Save()
+    void PromptSave()
     {
         showErrors = true;
-        if (string.IsNullOrWhiteSpace(form.Task)) return;
+        if (string.IsNullOrWhiteSpace(selectedWorkerIdStr) || string.IsNullOrWhiteSpace(form.Task))
+            return;
 
-        form.Task = form.Task.Trim();
-        if (string.IsNullOrWhiteSpace(form.WorkerName)) form.WorkerName = form.WorkerRef;
-
-        if (editingId == null)
-        {
-            form.Id = assignments.Count == 0 ? 1 : assignments.Max(a => a.Id) + 1;
-            assignments.Add(form);
-        }
-        else
-        {
-            var idx = assignments.FindIndex(a => a.Id == editingId);
-            if (idx >= 0) assignments[idx] = form;
-        }
-        showModal = false;
+        showConfirmSaveModal = true;
     }
 
-    void SetStatus(AssignRec a, string status)
+    void CancelSaveConfirm() => showConfirmSaveModal = false;
+
+    async Task ConfirmSaveAsync()
+    {
+        isSaving = true;
+        try
+        {
+            if (!int.TryParse(selectedWorkerIdStr, out var workerId) || workerId <= 0)
+            {
+                await ShowToast("Please select a valid worker.", isWarning: true);
+                return;
+            }
+
+            int? parsedPlotId = int.TryParse(selectedPlotIdStr, out var pId) && pId > 0
+                ? pId
+                : form.PlotId;
+
+            var cleanTask = form.Task.Trim();
+            var cleanStatus = string.IsNullOrWhiteSpace(form.Status) ? "pending" : form.Status.Trim().ToLower();
+
+            if (editingId == null)
+            {
+                var created = new AgriNexus.DataLayer.Models.WorkAssignment
+                {
+                    WorkerId = workerId,
+                    PlotId = parsedPlotId,
+                    Task = cleanTask,
+                    AssignedDate = form.AssignedDate,
+                    Status = cleanStatus,
+                    Notes = string.IsNullOrWhiteSpace(form.Notes) ? null : form.Notes.Trim()
+                };
+
+                DbContext.WorkAssignments.Add(created);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Work assignment saved.");
+            }
+            else
+            {
+                var existing = await DbContext.WorkAssignments.FindAsync(editingId.Value);
+                if (existing != null)
+                {
+                    existing.WorkerId = workerId;
+                    existing.PlotId = parsedPlotId;
+                    existing.Task = cleanTask;
+                    existing.AssignedDate = form.AssignedDate;
+                    existing.Status = cleanStatus;
+                    existing.Notes = string.IsNullOrWhiteSpace(form.Notes) ? null : form.Notes.Trim();
+
+                    DbContext.WorkAssignments.Update(existing);
+                    await DbContext.SaveChangesAsync();
+                    await ShowToast("Work assignment updated.");
+                }
+            }
+
+            showConfirmSaveModal = false;
+            showModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error saving assignment: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    async Task SetStatusAsync(AgriNexus.DataLayer.Models.WorkAssignment a, string status)
     {
         openMenuId = null;
-        a.Status = status;
-        // TODO: kung "completed", i-log sa Attendance & Logs ug sa Labor Cost Records
+        try
+        {
+            var existing = await DbContext.WorkAssignments.FindAsync(a.AssignmentId);
+            if (existing != null)
+            {
+                existing.Status = status;
+                DbContext.WorkAssignments.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast($"Assignment marked as {Cap(status)}.");
+            }
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error updating status: " + ex.Message, isWarning: true);
+        }
     }
 
-    async Task Delete(AssignRec a)
+    void PromptArchive(AgriNexus.DataLayer.Models.WorkAssignment a)
     {
         openMenuId = null;
-        assignments.Remove(a);
-        await ShowToast("Assignment for " + (string.IsNullOrWhiteSpace(a.WorkerName) ? "worker" : a.WorkerName) + " was removed.");
+        assignmentToArchive = a;
+        showConfirmArchiveModal = true;
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
-    void CloseMenu() => openMenuId = null;
+    void CancelArchiveConfirm()
+    {
+        showConfirmArchiveModal = false;
+        assignmentToArchive = null;
+    }
 
-    async Task ShowToast(string message)
+    async Task ConfirmArchiveAsync()
+    {
+        if (assignmentToArchive == null) return;
+        isSaving = true;
+        try
+        {
+            var existing = await DbContext.WorkAssignments.FindAsync(assignmentToArchive.AssignmentId);
+            if (existing != null)
+            {
+                existing.Status = "archived";
+                DbContext.WorkAssignments.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Work assignment moved to Archived.");
+            }
+
+            showConfirmArchiveModal = false;
+            assignmentToArchive = null;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error archiving assignment: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    async Task RestoreAssignmentAsync(AgriNexus.DataLayer.Models.WorkAssignment a)
+    {
+        openMenuId = null;
+        try
+        {
+            var existing = await DbContext.WorkAssignments.FindAsync(a.AssignmentId);
+            if (existing != null)
+            {
+                existing.Status = "pending";
+                DbContext.WorkAssignments.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Work assignment restored to Active.");
+            }
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error restoring assignment: " + ex.Message, isWarning: true);
+        }
+    }
+
+    async Task ShowToast(string message, bool isWarning = false)
     {
         toast = message;
+        toastIsWarning = isWarning;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3000);
+        await Task.Delay(3200);
         toast = "";
         await InvokeAsync(StateHasChanged);
     }

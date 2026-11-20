@@ -338,14 +338,14 @@
     }
 
 .btn-check:checked + .btn-outline-secondary {
-    background-color: #475569 !important;
-    border-color: #475569 !important;
+    background-color: #7A5230 !important;
+    border-color: #7A5230 !important;
     color: #FFFFFF !important;
     box-shadow: none !important;
 }
 
     .btn-check:checked + .btn-outline-secondary:hover {
-        background-color: #334155 !important;
+        background-color: #634125 !important;
     }
 
 .btn-check:not(:checked) + .btn:hover {

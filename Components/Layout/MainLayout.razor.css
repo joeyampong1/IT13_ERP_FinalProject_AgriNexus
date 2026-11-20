@@ -183,3 +183,33 @@ main {
         transform: rotate(360deg);
     }
 }
+
+.sidebar {
+    position: relative;
+    background: linear-gradient(145deg, #071E14 0%, #0A2B1D 52%, #164A2B 100%) !important;
+    overflow: hidden;
+}
+
+    .sidebar::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(rgba(110, 231, 183, 0.14) 1px, transparent 1px);
+        background-size: 26px 26px;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    .sidebar > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    main,
+    .content {
+        background-color: #F4F7F5;
+        background-image: linear-gradient(to right, rgba(27, 94, 52, 0.045) 1px, transparent 1px), linear-gradient(to bottom, rgba(27, 94, 52, 0.045) 1px, transparent 1px), radial-gradient(circle at 85% 20%, rgba(27, 94, 52, 0.09), transparent 55%);
+        background-size: 32px 32px, 32px 32px, 100% 100%;
+        background-attachment: fixed;
+        min-height: 100vh;
+    }

@@ -1,13 +1,30 @@
 ﻿@page "/inventory"
+@layout MainLayout
 @using System.Globalization
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Web
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
+@inject AgriNexus.Services.AuthService Auth
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
-<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
     <div>
         <h2 class="page-title">Inventory</h2>
-        <p class="text-muted mb-0 page-sub">@ActiveBranch · seeds, fertilizers, tools, fuel and harvested produce held in stock.</p>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@ActiveBranch</strong> · seeds, fertilizers, tools, fuel and harvested produce held in stock.
+        </p>
     </div>
-    <button type="button" class="btn-solid" @onclick="GoStock">Receive / issue stock</button>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+            <i class="bi bi-box-seam me-1"></i> Inventory Directory
+        </span>
+        <button type="button" class="btn-new shadow-sm" @onclick="GoStock">
+            <i class="bi bi-arrow-left-right"></i> Receive / issue stock
+        </button>
+    </div>
 </div>
 
 <!-- STAT CARDS -->
@@ -32,124 +49,204 @@
     }
 </div>
 
-<!-- TABS -->
+<!-- 4 MODULE TABS -->
 <div class="tabs mb-4">
-    <button type="button" class="tab-btn @(activeTab == "items" ? "active" : "")" @onclick='() => SetTab("items")'>Item and supply management</button>
-    <button type="button" class="tab-btn @(activeTab == "low" ? "active" : "")" @onclick='() => SetTab("low")'>Low-stock monitoring</button>
-    <button type="button" class="tab-btn @(activeTab == "produce" ? "active" : "")" @onclick='() => SetTab("produce")'>Produce stock</button>
-    <button type="button" class="tab-btn @(activeTab == "reports" ? "active" : "")" @onclick='() => SetTab("reports")'>Inventory reports</button>
+    <button type="button" class="tab-btn @(activeTab == "items" ? "active" : "")" @onclick='() => SetTab("items")'>
+        <i class="bi bi-box-seam me-1"></i> Item and supply management
+    </button>
+    <button type="button" class="tab-btn @(activeTab == "low" ? "active" : "")" @onclick='() => SetTab("low")'>
+        <i class="bi bi-exclamation-triangle me-1"></i> Low-stock monitoring
+    </button>
+    <button type="button" class="tab-btn @(activeTab == "produce" ? "active" : "")" @onclick='() => SetTab("produce")'>
+        <i class="bi bi-flower2 me-1"></i> Produce stock
+    </button>
+    <button type="button" class="tab-btn @(activeTab == "reports" ? "active" : "")" @onclick='() => SetTab("reports")'>
+        <i class="bi bi-bar-chart-line me-1"></i> Inventory reports
+    </button>
 </div>
 
-<!-- ======================= ITEMS ======================= -->
+<!-- ======================= TAB 1: ITEM AND SUPPLY MANAGEMENT ======================= -->
 @if (activeTab == "items")
 {
-    <div class="toolbar mb-3">
+    <div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+
+        <!-- ACTIVE / ARCHIVED TABS (Branches.razor btn-group style) -->
+        <div class="btn-group shadow-sm" role="group" aria-label="View Tabs">
+            <input type="radio" class="btn-check" name="inventoryViewTabs" id="tabInvActive" autocomplete="off"
+                   checked="@(!showArchived)" @onchange="() => ToggleArchiveTab(false)">
+            <label class="btn btn-outline-success fw-bold" for="tabInvActive">
+                <i class="bi bi-check-circle me-1"></i> Active
+            </label>
+
+            <input type="radio" class="btn-check" name="inventoryViewTabs" id="tabInvArchived" autocomplete="off"
+                   checked="@showArchived" @onchange="() => ToggleArchiveTab(true)">
+            <label class="btn btn-outline-secondary fw-bold" for="tabInvArchived">
+                <i class="bi bi-archive me-1"></i> Archived
+            </label>
+        </div>
+
+        <!-- SEARCH BOX -->
         <div class="search-box">
             <i class="bi bi-search"></i>
-            <input type="text" placeholder="Search items..." @bind="searchText" @bind:event="oninput" />
+            <input type="text" placeholder="Search items..."
+                   @bind="searchText"
+                   @bind:event="oninput"
+                   @bind:after="ResetPagination" />
         </div>
-        <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "item" : "items")</span>
-        <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
-            <i class="bi bi-plus-lg"></i> New item
-        </button>
+
+        <span class="badge rounded-pill px-3 py-2 fw-semibold count-label" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+            <i class="bi bi-box-seam me-1 text-success"></i>@Filtered.Count @(Filtered.Count == 1 ? "item" : "items")
+        </span>
+
+        @if (!showArchived)
+        {
+            <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNew">
+                <i class="bi bi-plus-lg"></i> New item
+            </button>
+        }
     </div>
 
-    <div class="panel">
-        <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
-                <thead>
+    <div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 340px); overflow: hidden;">
+        <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+            <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+                <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                     <tr>
-                        <th>Item</th>
-                        <th>Category</th>
-                        <th>On hand</th>
-                        <th>Stock<br />level</th>
-                        <th>Reorder<br />at</th>
-                        <th>Unit cost</th>
-                        <th>Stock<br />value</th>
-                        <th>Supplier</th>
-                        <th></th>
+                        <th class="text-muted small fw-bold text-uppercase py-3 px-4">Item</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Category</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">On hand</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Stock<br />level</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Reorder<br />at</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Unit cost</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Stock<br />value</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Supplier</th>
+                        <th class="py-3"></th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var i in Filtered)
+                    @foreach (var i in PaginatedItems)
                     {
-                        <tr>
-                            <td class="col-item">
-                                <div class="fw-semibold">@i.Name</div>
-                                <div class="sub">@i.Sku@(string.IsNullOrWhiteSpace(i.Location) ? "" : " · " + i.Location)</div>
+                        <tr style="cursor: pointer;" @onclick="() => OpenDetails(i)">
+                            <td class="px-4">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="branch-avatar">
+                                        <i class="bi bi-box-seam"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold" style="color: #0A2B1D;">@i.ItemName</div>
+                                        <div class="text-muted small mt-1">
+                                            <span class="fw-semibold" style="color: #1B5E34;">@i.ItemCode</span>
+                                            @(string.IsNullOrWhiteSpace(i.StorageLocation) ? "" : " · " + i.StorageLocation)
+                                        </div>
+                                    </div>
+                                </div>
                             </td>
-                            <td>@Cap(i.Category)</td>
-                            <td class="text-nowrap">@Qty(i.OnHand) @i.Unit</td>
-                            <td><span class="pill @(IsLow(i) ? "pill-yellow" : "pill-green")">@(IsLow(i) ? "Pending" : "Active")</span></td>
-                            <td class="num-muted">@(i.Reorder > 0 ? Qty(i.Reorder) : "—")</td>
-                            <td class="text-nowrap">@Peso(i.UnitCost)</td>
-                            <td class="text-nowrap">@Peso(i.OnHand * i.UnitCost)</td>
-                            <td class="col-supplier">@(string.IsNullOrWhiteSpace(i.Supplier) ? "—" : i.Supplier)</td>
-                            <td class="text-end action-cell">
-                                <button type="button" class="btn-dots" @onclick="() => ToggleMenu(i.Id)" aria-label="Actions">
+                            <td class="text-dark fw-medium">@Cap(i.Category)</td>
+                            <td class="text-nowrap fw-semibold text-dark">@Qty(i.QuantityOnHand) @i.Unit</td>
+                            <td>
+                                @if (i.IsArchived)
+                                {
+                                    <span class="pill pill-earth">
+                                        <i class="bi bi-archive me-1"></i>Archived
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="pill @(IsLow(i) ? "pill-earth" : "pill-forest")">
+                                        <i class="bi @(IsLow(i) ? "bi-exclamation-circle" : "bi-check-circle") me-1"></i>@(IsLow(i) ? "Low Stock" : "Active")
+                                    </span>
+                                }
+                            </td>
+                            <td class="text-muted fw-medium">@(i.ReorderLevel > 0 ? Qty(i.ReorderLevel) : "—")</td>
+                            <td class="text-nowrap text-dark fw-medium">@Peso(i.UnitCost)</td>
+                            <td class="text-nowrap text-dark fw-semibold">@Peso(i.QuantityOnHand * i.UnitCost)</td>
+                            <td class="text-dark fw-medium">@SupplierNameOf(i)</td>
+                            <td class="text-end px-4 action-cell">
+                                <button type="button" class="btn-dots"
+                                        @onclick="(e) => ToggleMenuAsync(e, i.ItemId)"
+                                        @onclick:stopPropagation="true" aria-label="Actions">
                                     <i class="bi bi-three-dots"></i>
                                 </button>
-                                @if (openMenuId == i.Id)
-                                {
-                                    <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                    <div class="row-menu">
-                                        <button type="button" class="row-menu-item" @onclick="() => OpenEdit(i)">
-                                            <i class="bi bi-pencil"></i> Edit
-                                        </button>
-                                        <div class="menu-sep"></div>
-                                        <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(i)">
-                                            <i class="bi bi-trash"></i> Delete
-                                        </button>
-                                    </div>
-                                }
                             </td>
                         </tr>
                     }
                     @if (Filtered.Count == 0)
                     {
-                        <tr><td colspan="9" class="text-center text-muted py-5">No items found.</td></tr>
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                                @(showArchived ? "No archived items found." : "No items found.")
+                            </td>
+                        </tr>
                     }
                 </tbody>
             </table>
         </div>
+
+        @if (Filtered.Count > 0)
+        {
+            <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+                <div class="text-muted small mb-2 mb-md-0">
+                    Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> items
+                </div>
+
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                        <i class="bi bi-chevron-left me-1"></i>Previous
+                    </button>
+
+                    @for (int p = 1; p <= TotalPages; p++)
+                    {
+                        var pageNumber = p;
+                        <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                                @onclick="() => GoToPage(pageNumber)">
+                            @pageNumber
+                        </button>
+                    }
+
+                    <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                        Next<i class="bi bi-chevron-right ms-1"></i>
+                    </button>
+                </div>
+            </div>
+        }
     </div>
 }
 
-<!-- ======================= LOW STOCK ======================= -->
+<!-- ======================= TAB 2: LOW STOCK MONITORING ======================= -->
 @if (activeTab == "low")
 {
-    <div class="panel">
+    <div class="panel shadow-sm bg-white">
         <div class="panel-head">
             <div class="panel-title">Low-stock monitoring</div>
             <div class="panel-sub mb-0">Items at or below their reorder level</div>
         </div>
-        <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
-                <thead>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 biz-table">
+                <thead style="background-color: #F7FAF8;">
                     <tr>
-                        <th>Item</th>
-                        <th>Category</th>
-                        <th>On hand</th>
-                        <th>Reorder at</th>
-                        <th>Shortage</th>
-                        <th>Suggested order</th>
-                        <th>Supplier</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3 px-4">Item</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Category</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">On hand</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Reorder at</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Shortage</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Suggested order</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Supplier</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var i in LowItems)
                     {
-                        <tr>
-                            <td class="col-item">
-                                <div class="fw-semibold">@i.Name</div>
-                                <div class="sub">@i.Sku</div>
+                        <tr style="cursor: pointer;" @onclick="() => OpenDetails(i)">
+                            <td class="px-4">
+                                <div class="fw-bold" style="color: #0A2B1D;">@i.ItemName</div>
+                                <div class="text-muted small">@i.ItemCode</div>
                             </td>
                             <td>@Cap(i.Category)</td>
-                            <td class="text-nowrap fw-medium neg">@Qty(i.OnHand) @i.Unit</td>
-                            <td class="text-nowrap">@Qty(i.Reorder) @i.Unit</td>
-                            <td class="text-nowrap">@Qty(Math.Max(0, i.Reorder - i.OnHand)) @i.Unit</td>
-                            <td class="text-nowrap fw-medium">@Qty(Math.Max(0, i.Reorder * 2 - i.OnHand)) @i.Unit</td>
-                            <td class="col-supplier">@(string.IsNullOrWhiteSpace(i.Supplier) ? "—" : i.Supplier)</td>
+                            <td class="text-nowrap fw-semibold neg">@Qty(i.QuantityOnHand) @i.Unit</td>
+                            <td class="text-nowrap">@Qty(i.ReorderLevel) @i.Unit</td>
+                            <td class="text-nowrap">@Qty(Math.Max(0, i.ReorderLevel - i.QuantityOnHand)) @i.Unit</td>
+                            <td class="text-nowrap fw-semibold">@Qty(Math.Max(0, i.ReorderLevel * 2 - i.QuantityOnHand)) @i.Unit</td>
+                            <td>@SupplierNameOf(i)</td>
                         </tr>
                     }
                     @if (LowItems.Count == 0)
@@ -160,42 +257,42 @@
             </table>
         </div>
     </div>
-    <div class="sub mt-2">Suggested order brings each item back to twice its reorder level.</div>
+    <div class="text-muted small mt-2">Suggested order brings each item back to twice its reorder level.</div>
 }
 
-<!-- ======================= PRODUCE ======================= -->
+<!-- ======================= TAB 3: PRODUCE STOCK ======================= -->
 @if (activeTab == "produce")
 {
-    <div class="panel">
+    <div class="panel shadow-sm bg-white">
         <div class="panel-head">
             <div class="panel-title">Produce stock</div>
             <div class="panel-sub mb-0">Harvested produce, managed as a separate inventory category</div>
         </div>
-        <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
-                <thead>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 biz-table">
+                <thead style="background-color: #F7FAF8;">
                     <tr>
-                        <th>Lot</th>
-                        <th>Source plot</th>
-                        <th>On hand</th>
-                        <th>Unit value</th>
-                        <th>Stock value</th>
-                        <th>Storage</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3 px-4">Lot</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Source plot</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">On hand</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Unit value</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Stock value</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Storage</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var i in ProduceItems)
                     {
-                        <tr>
-                            <td class="col-item">
-                                <div class="fw-semibold">@i.Name</div>
-                                <div class="sub">@i.Sku</div>
+                        <tr style="cursor: pointer;" @onclick="() => OpenDetails(i)">
+                            <td class="px-4">
+                                <div class="fw-bold" style="color: #0A2B1D;">@i.ItemName</div>
+                                <div class="text-muted small">@i.ItemCode</div>
                             </td>
-                            <td>@(string.IsNullOrWhiteSpace(i.Source) ? "—" : i.Source)</td>
-                            <td class="text-nowrap">@Qty(i.OnHand) @i.Unit</td>
+                            <td>@(string.IsNullOrWhiteSpace(i.SourcePlot) ? "—" : i.SourcePlot)</td>
+                            <td class="text-nowrap">@Qty(i.QuantityOnHand) @i.Unit</td>
                             <td class="text-nowrap">@Peso(i.UnitCost)</td>
-                            <td class="text-nowrap">@Peso(i.OnHand * i.UnitCost)</td>
-                            <td>@(string.IsNullOrWhiteSpace(i.Location) ? "—" : i.Location)</td>
+                            <td class="text-nowrap">@Peso(i.QuantityOnHand * i.UnitCost)</td>
+                            <td>@(string.IsNullOrWhiteSpace(i.StorageLocation) ? "—" : i.StorageLocation)</td>
                         </tr>
                     }
                     @if (ProduceItems.Count == 0)
@@ -207,11 +304,11 @@
                 {
                     <tfoot>
                         <tr>
-                            <td class="fw-semibold">Total</td>
+                            <td class="fw-semibold px-4">Total</td>
                             <td></td>
                             <td class="fw-semibold text-nowrap">@Qty(ProduceKg) kg</td>
                             <td></td>
-                            <td class="fw-semibold text-nowrap">@Peso(ProduceItems.Sum(p => p.OnHand * p.UnitCost))</td>
+                            <td class="fw-semibold text-nowrap">@Peso(ProduceItems.Sum(p => p.QuantityOnHand * p.UnitCost))</td>
                             <td></td>
                         </tr>
                     </tfoot>
@@ -219,35 +316,35 @@
             </table>
         </div>
     </div>
-    <div class="sub mt-2">New produce lots are added when a harvest is approved in Harvest Recording.</div>
+    <div class="text-muted small mt-2">New produce lots are added when a harvest is approved in Harvest Recording.</div>
 }
 
-<!-- ======================= REPORTS ======================= -->
+<!-- ======================= TAB 4: INVENTORY REPORTS ======================= -->
 @if (activeTab == "reports")
 {
-    <div class="panel">
+    <div class="panel shadow-sm bg-white">
         <div class="panel-head">
             <div class="panel-title">Stock value by category</div>
             <div class="panel-sub mb-0">How inventory value is distributed</div>
         </div>
-        <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
-                <thead>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0 biz-table">
+                <thead style="background-color: #F7FAF8;">
                     <tr>
-                        <th>Category</th>
-                        <th>Items</th>
-                        <th>Low stock</th>
-                        <th>Stock value</th>
-                        <th class="col-share">Share</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3 px-4">Category</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Items</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Low stock</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3">Stock value</th>
+                        <th class="text-muted small fw-bold text-uppercase py-3" style="width: 28%;">Share</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var c in CategorySummary)
                     {
                         <tr>
-                            <td class="fw-semibold">@Cap(c.Category)</td>
+                            <td class="fw-semibold px-4">@Cap(c.Category)</td>
                             <td>@c.Items</td>
-                            <td class="@(c.Low > 0 ? "neg fw-medium" : "num-muted")">@c.Low</td>
+                            <td class="@(c.Low > 0 ? "neg fw-semibold" : "text-muted")">@c.Low</td>
                             <td class="text-nowrap">@Peso(c.Value)</td>
                             <td>
                                 <div class="share-cell">
@@ -260,9 +357,9 @@
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td class="fw-semibold">Total</td>
-                        <td class="fw-semibold">@items.Count</td>
-                        <td class="fw-semibold">@items.Count(IsLow)</td>
+                        <td class="fw-semibold px-4">Total</td>
+                        <td class="fw-semibold">@allActiveItems.Count</td>
+                        <td class="fw-semibold">@allActiveItems.Count(IsLow)</td>
                         <td class="fw-semibold text-nowrap">@Peso(TotalValue)</td>
                         <td></td>
                     </tr>
@@ -272,97 +369,365 @@
     </div>
 }
 
-<!-- MODAL -->
+<!-- FLOATING ACTION MENU -->
+@if (openMenuId != null)
+{
+    var menuItem = allItems.FirstOrDefault(x => x.ItemId == openMenuId);
+    if (menuItem != null)
+    {
+        <div class="menu-backdrop" @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
+
+        <div class="vertical-action-menu shadow-lg" style="top:@(menuTop)px; left:@(menuLeft)px;">
+            @if (!menuItem.IsArchived)
+            {
+                <button type="button" class="action-item"
+                        @onclick="() => OpenEdit(menuItem)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-pencil-square text-success"></i> Edit
+                </button>
+
+                @if (!string.Equals(menuItem.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase))
+                {
+                    <button type="button" class="action-item text-earth"
+                            @onclick="() => PromptArchive(menuItem)"
+                            @onclick:stopPropagation="true">
+                        <i class="bi bi-archive"></i> Archive
+                    </button>
+                }
+            }
+            else
+            {
+                <button type="button" class="action-item text-success"
+                        @onclick="() => RestoreItemAsync(menuItem)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-arrow-counterclockwise"></i> Restore
+                </button>
+            }
+        </div>
+    }
+}
+
+<!-- DETAILS MODAL -->
+@if (showDetailsModal && selectedItem != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <!-- Header -->
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi bi-box-seam fs-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedItem.ItemName</h4>
+                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                <i class="bi bi-upc-scan me-1"></i>@selectedItem.ItemCode
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <!-- SECTION 1: Item & Storage Information -->
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-info-circle me-2 text-success"></i>Item &amp; Storage Information
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Category &amp; Type</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">@Cap(selectedItem.Category) (@selectedItem.ItemType)</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Supplier</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">@SupplierNameOf(selectedItem)</p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Storage Location</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-geo-alt text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedItem.StorageLocation) ? "—" : selectedItem.StorageLocation)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Reorder Level</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    @(selectedItem.ReorderLevel > 0 ? $"{Qty(selectedItem.ReorderLevel)} {selectedItem.Unit}" : "—")
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Record Status</label>
+                                @if (selectedItem.IsArchived)
+                                {
+                                    <span class="pill pill-earth"><i class="bi bi-archive me-1"></i>Archived</span>
+                                }
+                                else
+                                {
+                                    <span class="pill @(IsLow(selectedItem) ? "pill-earth" : "pill-forest")">
+                                        <i class="bi @(IsLow(selectedItem) ? "bi-exclamation-circle" : "bi-check-circle") me-1"></i>@(IsLow(selectedItem) ? "Low Stock" : "Active")
+                                    </span>
+                                }
+                            </div>
+                            @if (string.Equals(selectedItem.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="col-md-6 mt-3">
+                                    <label class="text-muted small fw-bold text-uppercase">Source Plot</label>
+                                    <p class="mb-0 fw-medium text-dark">@(string.IsNullOrWhiteSpace(selectedItem.SourcePlot) ? "—" : selectedItem.SourcePlot)</p>
+                                </div>
+                            }
+                            <div class="col-12 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Notes</label>
+                                <p class="mb-0 text-muted fst-italic">
+                                    @(string.IsNullOrWhiteSpace(selectedItem.Notes) ? "No notes provided." : selectedItem.Notes)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: Quantity & Valuation Summary -->
+                    <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-cash-coin me-2 text-success"></i>Stock &amp; Valuation Summary
+                        </h6>
+                        <div class="row g-3 text-center">
+                            <div class="col-4">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #1B5E34;">@Qty(selectedItem.QuantityOnHand) @selectedItem.Unit</h4>
+                                    <small class="text-muted fw-medium">On Hand</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #4E8D2A;">@Peso(selectedItem.UnitCost)</h4>
+                                    <small class="text-muted fw-medium">Unit Cost</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #7A5230;">@Peso(selectedItem.QuantityOnHand * selectedItem.UnitCost)</h4>
+                                    <small class="text-muted fw-medium">Stock Value</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                    @if (!selectedItem.IsArchived)
+                    {
+                        <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedItem)">
+                            <i class="bi bi-pencil-square me-2"></i>Edit Item
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ADD / EDIT MODAL -->
 @if (showModal)
 {
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New item" : "Edit item")</h5>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
-            </div>
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Item name <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
-                    {
-                        <div class="err">Item name is required.</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">SKU / code</label>
-                    <input class="form-control @(showErrors && SkuTaken ? "is-invalid" : "")" placeholder="@NextSku(form.Category)" @bind="form.Sku" />
-                    @if (showErrors && SkuTaken)
-                    {
-                        <div class="err">This code is already used.</div>
-                    }
+                <!-- Header -->
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(editingId == null ? "bi-box-seam" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingId == null ? "Register New Item" : "Edit Item Details")
+                            </h4>
+                            <p class="text-muted small mb-0">Fill in the master item details below to @(editingId == null ? "add an inventory item" : "update the item").</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
                 </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Category</label>
-                    @if (form.Category == "produce")
-                    {
-                        <input class="form-control" value="produce" disabled />
-                    }
-                    else
-                    {
-                        <select class="form-select" @bind="form.Category">
-                            @foreach (var c in CategoryOptions)
-                            {
-                                <option value="@c">@c</option>
-                            }
-                        </select>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Unit</label>
-                    <select class="form-select" @bind="form.Unit">
-                        @foreach (var u in UnitOptions)
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <!-- SECTION 1: Item Identification -->
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-box-seam me-2 text-success"></i>Item Identification
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <label class="form-label fw-bold small text-muted">Item Name <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.ItemName) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-box-seam text-success"></i></span>
+                                        <input class="form-control" placeholder="e.g. Urea (46-0-0)"
+                                               @bind="form.ItemName"
+                                               @bind:after="() => form.ItemName = CapitalizeWords(form.ItemName)" />
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(form.ItemName))
+                                    {
+                                        <div class="err">Item name is required.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold small text-muted">SKU / Code</label>
+                                    <div class="input-group modern-input @(showErrors && SkuTaken ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-upc-scan text-success"></i></span>
+                                        <input class="form-control fw-bold" placeholder="@NextSku(form.Category)"
+                                               @bind="form.ItemCode"
+                                               @bind:after="() => form.ItemCode = form.ItemCode.Trim().ToUpper()" />
+                                    </div>
+                                    @if (showErrors && SkuTaken)
+                                    {
+                                        <div class="err">This code is already used.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Category</label>
+                                    @if (string.Equals(form.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <input class="form-control" value="produce" disabled />
+                                    }
+                                    else
+                                    {
+                                        <select class="form-select" @bind="form.Category">
+                                            @foreach (var c in CategoryOptions)
+                                            {
+                                                <option value="@c">@c</option>
+                                            }
+                                        </select>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Unit</label>
+                                    <select class="form-select" @bind="form.Unit">
+                                        @foreach (var u in UnitOptions)
+                                        {
+                                            <option value="@u">@u</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SECTION 2: Stock & Supplier -->
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-sliders me-2 text-success"></i>Stock Levels, Cost &amp; Supplier
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Quantity On Hand</label>
+                                    <input type="number" min="0" step="any"
+                                           class="form-control @(showErrors && Negative(qtyInput) ? "border-danger" : "")"
+                                           @bind="qtyInput" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Reorder Level</label>
+                                    <input type="number" min="0" step="any"
+                                           class="form-control @(showErrors && Negative(reorderInput) ? "border-danger" : "")"
+                                           @bind="reorderInput" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Unit Cost (₱)</label>
+                                    <input type="number" min="0" step="0.01"
+                                           class="form-control @(showErrors && Negative(costInput) ? "border-danger" : "")"
+                                           @bind="costInput" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Supplier</label>
+                                    <select class="form-select" @bind="selectedSupplierIdStr">
+                                        <option value="">-- Select Supplier --</option>
+                                        @foreach (var sup in suppliers)
+                                        {
+                                            <option value="@sup.SupplierId">@sup.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SECTION 3: Storage & Notes -->
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-geo-alt me-2 text-success"></i>Storage &amp; Notes
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small text-muted">Storage Location</label>
+                                    <input class="form-control border-0 shadow-sm" placeholder="e.g. Fertilizer shed"
+                                           @bind="form.StorageLocation"
+                                           @bind:after="() => form.StorageLocation = CapitalizeWords(form.StorageLocation)" />
+                                </div>
+                                <div class="col-12 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Notes</label>
+                                    <textarea class="form-control border-0 shadow-sm" rows="3" @bind="form.Notes"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (showErrors && AnyNegative)
                         {
-                            <option value="@u">@u</option>
+                            <div class="err mt-3"><i class="bi bi-exclamation-circle"></i> Quantity, reorder level and cost can’t be negative.</div>
                         }
-                    </select>
+                    </form>
                 </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Quantity on hand</label>
-                    <input type="number" min="0" step="any" class="form-control @(showErrors && Negative(qtyInput) ? "is-invalid" : "")" @bind="qtyInput" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Reorder level</label>
-                    <input type="number" min="0" step="any" class="form-control @(showErrors && Negative(reorderInput) ? "is-invalid" : "")" @bind="reorderInput" />
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Unit cost (₱)</label>
-                    <input type="number" min="0" step="0.01" class="form-control @(showErrors && Negative(costInput) ? "is-invalid" : "")" @bind="costInput" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Supplier</label>
-                    <input class="form-control" @bind="form.Supplier" />
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Storage location</label>
-                    <input class="form-control" @bind="form.Location" />
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label">Notes</label>
-                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
+                <!-- Footer -->
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="SaveAsync" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check2-circle me-2"></i>
+                            <span>@(editingId == null ? "Save Item" : "Update Item")</span>
+                        }
+                    </button>
                 </div>
             </div>
+        </div>
+    </div>
+}
 
-            @if (showErrors && AnyNegative)
-            {
-                <div class="err mt-3"><i class="bi bi-exclamation-circle"></i> Quantity, reorder level and cost can’t be negative.</div>
-            }
+<!-- ARCHIVE CONFIRMATION MODAL -->
+@if (showConfirmArchiveModal && itemToArchive != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #F5EFEA; color: #7A5230;">
+                        <i class="bi bi-archive" style="font-size: 2.3rem;"></i>
+                    </div>
 
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Archive Item?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to archive <strong>@itemToArchive.ItemName</strong>?<br />
+                        It will be moved to the Archived tab, while keeping all historical records safe.
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelArchiveConfirm">Cancel</button>
+                        <button type="button" class="btn-earth rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmArchiveAsync">
+                            <i class="bi bi-archive me-1"></i> Yes, Archive
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -370,127 +735,226 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+    <div class="toast-note shadow-lg">
+        <i class="bi @(toastIsWarning ? "bi-exclamation-circle" : "bi-check2")"></i>
+        <span>@toast</span>
+    </div>
 }
 
 @code {
-    // ---------- MODELS ----------
-    class ItemRec
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = "";
-        public string Sku { get; set; } = "";
-        public string Location { get; set; } = "";
-        public string Category { get; set; } = "supplies";
-        public string Unit { get; set; } = "kg";
-        public decimal OnHand { get; set; }
-        public decimal Reorder { get; set; }
-        public decimal UnitCost { get; set; }
-        public string Supplier { get; set; } = "";
-        public string Source { get; set; } = "";    // para sa produce: plot nga gigikanan
-        public string Notes { get; set; } = "";
-
-        public ItemRec Clone() => (ItemRec)MemberwiseClone();
-    }
-
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
     record CatRow(string Category, int Items, int Low, decimal Value);
 
-    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    class Viewport
+    {
+        public double W { get; set; }
+        public double H { get; set; }
+    }
 
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     static readonly string[] CategoryOptions = { "seeds", "fertilizer", "pesticide", "tools", "fuel", "packaging", "supplies" };
     static readonly string[] UnitOptions = { "kg", "sack", "bottle", "liter", "piece", "pair", "box" };
 
-    // TODO: kuhaa gikan sa naka-login nga tenant
-    const string ActiveBranch = "North Field Branch";
+    long currentBusinessId;
+    long? currentBranchId;
+    string ActiveBranch = "All Branches";
 
-    // ---------- STATE ----------
+    List<InventoryItem> allItems = new();
+    List<AgriNexus.DataLayer.Models.Supplier> suppliers = new();
+
     string activeTab = "items";
+    bool showArchived = false;
     string searchText = "";
+    string selectedSupplierIdStr = "";
     string toast = "";
+    bool toastIsWarning = false;
+
     bool showModal;
     bool showErrors;
+    bool isSaving;
     int? editingId;
     int? openMenuId;
-    ItemRec form = new();
+    InventoryItem form = new();
     decimal? qtyInput, reorderInput, costInput;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    readonly List<ItemRec> items = new()
+    bool showDetailsModal;
+    InventoryItem? selectedItem;
+
+    bool showConfirmArchiveModal;
+    InventoryItem? itemToArchive;
+
+    private int currentPage = 1;
+    private int pageSize = 5;
+    private double menuTop;
+    private double menuLeft;
+
+    protected override async Task OnInitializedAsync()
     {
-        new() { Id = 1,  Name = "Certified rice seeds (NSIC Rc222)", Sku = "SEED-001", Location = "Dry storage A",   Category = "seeds",      Unit = "kg",     OnHand = 180, Reorder = 100, UnitCost = 55,   Supplier = "Pioneer Seeds Depot" },
-        new() { Id = 2,  Name = "Hybrid corn seeds (Pioneer 30T80)", Sku = "SEED-002", Location = "Dry storage A",   Category = "seeds",      Unit = "kg",     OnHand = 30,  Reorder = 40,  UnitCost = 320,  Supplier = "Pioneer Seeds Depot" },
-        new() { Id = 3,  Name = "Urea (46-0-0)",                     Sku = "FER-001",  Location = "Fertilizer shed",  Category = "fertilizer", Unit = "sack",   OnHand = 6,   Reorder = 10,  UnitCost = 1450, Supplier = "Central Luzon Agri Supply" },
-        new() { Id = 4,  Name = "Complete fertilizer (14-14-14)",    Sku = "FER-002",  Location = "Fertilizer shed",  Category = "fertilizer", Unit = "sack",   OnHand = 26,  Reorder = 15,  UnitCost = 1680, Supplier = "Central Luzon Agri Supply" },
-        new() { Id = 5,  Name = "Organic compost",                   Sku = "FER-003",  Location = "Fertilizer shed",  Category = "fertilizer", Unit = "sack",   OnHand = 42,  Reorder = 20,  UnitCost = 480,  Supplier = "Central Luzon Agri Supply" },
-        new() { Id = 6,  Name = "Insecticide (lambda-cyhalothrin)",  Sku = "PES-001",  Location = "Chemical cabinet", Category = "pesticide",  Unit = "bottle", OnHand = 2,   Reorder = 5,   UnitCost = 780,  Supplier = "GreenShield Crop Protection" },
-        new() { Id = 7,  Name = "Herbicide (glyphosate)",            Sku = "PES-002",  Location = "Chemical cabinet", Category = "pesticide",  Unit = "liter",  OnHand = 9,   Reorder = 6,   UnitCost = 620,  Supplier = "GreenShield Crop Protection" },
-        new() { Id = 8,  Name = "Knapsack sprayer 16L",             Sku = "TOOL-001", Location = "Tool room",        Category = "tools",      Unit = "piece",  OnHand = 4,   Reorder = 2,   UnitCost = 2350, Supplier = "FarmTech Machinery & Tools" },
-        new() { Id = 9,  Name = "Hand trowel",                       Sku = "TOOL-002", Location = "Tool room",        Category = "tools",      Unit = "piece",  OnHand = 22,  Reorder = 10,  UnitCost = 180,  Supplier = "FarmTech Machinery & Tools" },
-        new() { Id = 10, Name = "Work gloves",                       Sku = "TOOL-003", Location = "Tool room",        Category = "tools",      Unit = "pair",   OnHand = 7,   Reorder = 10,  UnitCost = 110,  Supplier = "FarmTech Machinery & Tools" },
-        new() { Id = 11, Name = "Diesel fuel",                       Sku = "FUEL-001", Location = "Fuel storage",     Category = "fuel",       Unit = "liter",  OnHand = 380, Reorder = 100, UnitCost = 62,   Supplier = "Valley Fuel Station" },
-        new() { Id = 12, Name = "Empty sacks (50 kg)",               Sku = "PKG-001",  Location = "Warehouse",        Category = "packaging",  Unit = "piece",  OnHand = 352, Reorder = 100, UnitCost = 12,   Supplier = "Central Luzon Agri Supply" },
+        try
+        {
+            User? currentUser = null;
 
-        // Produce lots (gikan sa approved harvests)
-        new() { Id = 13, Name = "Palay (rice)",  Sku = "LOT-001", Location = "Warehouse bay 1", Category = "produce", Unit = "kg", OnHand = 1000, UnitCost = 22, Source = "North Plot A" },
-        new() { Id = 14, Name = "Yellow corn",   Sku = "LOT-002", Location = "Warehouse bay 2", Category = "produce", Unit = "kg", OnHand = 600,  UnitCost = 18, Source = "North Plot B" },
-        new() { Id = 15, Name = "Cabbage",       Sku = "LOT-003", Location = "Cold room",       Category = "produce", Unit = "kg", OnHand = 650,  UnitCost = 25, Source = "South Plot D" },
-        new() { Id = 16, Name = "Ampalaya",      Sku = "LOT-004", Location = "Cold room",       Category = "produce", Unit = "kg", OnHand = 400,  UnitCost = 40, Source = "South Plot E" },
-    };
+            if (Auth.CurrentUserId > 0)
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+            {
+                var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                           || u.FName == Auth.CurrentUserName);
+            }
 
-    // ---------- COMPUTED ----------
-    List<ItemRec> Filtered => string.IsNullOrWhiteSpace(searchText)
-        ? items
-        : items.Where(i =>
-            i.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            i.Sku.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            i.Category.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            i.Supplier.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (currentUser?.BusinessId != null)
+            {
+                currentBusinessId = currentUser.BusinessId.Value;
+                currentBranchId = currentUser.BranchId;
+            }
+            else
+            {
+                var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+                if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+            }
 
-    List<ItemRec> LowItems => items.Where(IsLow)
-        .OrderBy(i => i.Reorder == 0 ? 1 : i.OnHand / i.Reorder).ToList();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading inventory: " + ex.Message, isWarning: true);
+        }
+    }
 
-    List<ItemRec> ProduceItems => items.Where(i => i.Category == "produce").ToList();
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            var branches = await DbContext.Branches
+                .Where(b => b.BusinessId == currentBusinessId)
+                .OrderBy(b => b.BranchName)
+                .ToListAsync();
 
-    decimal ProduceKg => ProduceItems.Sum(p => p.OnHand);
-    decimal TotalValue => items.Sum(i => i.OnHand * i.UnitCost);
+            if (currentBranchId.HasValue)
+            {
+                var matchedBranch = branches.FirstOrDefault(b => b.BranchId == currentBranchId.Value);
+                if (matchedBranch != null) ActiveBranch = matchedBranch.BranchName;
+            }
+            else if (branches.Count > 0)
+            {
+                ActiveBranch = branches[0].BranchName;
+            }
 
-    List<CatRow> CategorySummary => items
-        .GroupBy(i => i.Category)
-        .Select(g => new CatRow(g.Key, g.Count(), g.Count(IsLow), g.Sum(i => i.OnHand * i.UnitCost)))
+            suppliers = await DbContext.Suppliers
+                .Where(s => s.BusinessId == currentBusinessId && s.Status != "archived")
+                .OrderBy(s => s.Name)
+                .ToListAsync();
+
+            allItems = await DbContext.InventoryItems
+                .Include(i => i.Supplier)
+                .Where(i => i.BusinessId == currentBusinessId)
+                .OrderByDescending(i => i.ItemId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Database load error: " + ex.Message, isWarning: true);
+        }
+    }
+
+    List<InventoryItem> allActiveItems => allItems.Where(i => !i.IsArchived).ToList();
+
+    List<InventoryItem> SupplyItemsByStatus => allItems
+        .Where(i => !string.Equals(i.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase)
+                 && (showArchived ? i.IsArchived : !i.IsArchived))
+        .ToList();
+
+    List<InventoryItem> ProduceItems => allActiveItems
+        .Where(i => string.Equals(i.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    List<InventoryItem> Filtered
+    {
+        get
+        {
+            var baseList = SupplyItemsByStatus;
+            if (string.IsNullOrWhiteSpace(searchText))
+                return baseList;
+
+            return baseList.Where(i =>
+                i.ItemName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                i.ItemCode.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                i.Category.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                SupplierNameOf(i).Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Filtered.Count / pageSize));
+    private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<InventoryItem> PaginatedItems => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    List<InventoryItem> LowItems => allActiveItems
+        .Where(IsLow)
+        .OrderBy(i => i.ReorderLevel == 0 ? 1 : i.QuantityOnHand / i.ReorderLevel)
+        .ToList();
+
+    decimal ProduceKg => ProduceItems.Sum(p => p.QuantityOnHand);
+    decimal TotalValue => allActiveItems.Sum(i => i.QuantityOnHand * i.UnitCost);
+
+    List<CatRow> CategorySummary => allActiveItems
+        .GroupBy(i => string.IsNullOrWhiteSpace(i.Category) ? "supplies" : i.Category)
+        .Select(g => new CatRow(g.Key, g.Count(), g.Count(IsLow), g.Sum(i => i.QuantityOnHand * i.UnitCost)))
         .OrderByDescending(c => c.Value)
         .ToList();
 
     List<Stat> Stats => new()
     {
-        new("ITEMS TRACKED", items.Count.ToString(), ProduceItems.Count + " produce lots", "bi-boxes", ""),
-        new("STOCK VALUE", Peso(TotalValue), "", "bi-cash-coin", "stat-icon-plain"),
-        new("LOW STOCK", items.Count(IsLow).ToString(), "At or below reorder level", "bi-exclamation-triangle", "stat-icon-warn"),
-        new("PRODUCE ON HAND", Qty(ProduceKg) + " kg", "", "bi-flower2", "stat-icon-plain"),
+        new("ITEMS TRACKED", allActiveItems.Count.ToString(), ProduceItems.Count + " produce lots", "bi-box-seam", ""),
+        new("STOCK VALUE", Peso(TotalValue), "", "bi-cash-coin", "stat-icon-leaf"),
+        new("LOW STOCK", allActiveItems.Count(IsLow).ToString(), "At or below reorder level", "bi-exclamation-triangle", "stat-icon-earth"),
+        new("PRODUCE ON HAND", Qty(ProduceKg) + " kg", "", "bi-flower2", "stat-icon-leaf"),
     };
 
-    bool SkuTaken => !string.IsNullOrWhiteSpace(form.Sku) &&
-        items.Any(i => i.Id != (editingId ?? -1) &&
-                       string.Equals(i.Sku, form.Sku.Trim(), StringComparison.OrdinalIgnoreCase));
+    bool SkuTaken => !string.IsNullOrWhiteSpace(form.ItemCode) &&
+        allItems.Any(i => i.ItemId != (editingId ?? -1) &&
+                     string.Equals(i.ItemCode, form.ItemCode.Trim(), StringComparison.OrdinalIgnoreCase));
 
     bool AnyNegative => Negative(qtyInput) || Negative(reorderInput) || Negative(costInput);
 
-    // ---------- HELPERS ----------
-    static bool IsLow(ItemRec i) => i.Reorder > 0 && i.OnHand <= i.Reorder;
-
+    static bool IsLow(InventoryItem i) => !i.IsArchived && i.ReorderLevel > 0 && i.QuantityOnHand <= i.ReorderLevel;
     static bool Negative(decimal? v) => v.HasValue && v.Value < 0;
-
     static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
-
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
-
-    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+    static string Cap(string? s) => string.IsNullOrWhiteSpace(s) ? "" : char.ToUpper(s[0]) + s.Substring(1);
 
     int Share(decimal value) => TotalValue <= 0 ? 0 : (int)Math.Round(value * 100 / TotalValue);
 
-    string NextSku(string category)
+    string SupplierNameOf(InventoryItem item)
     {
-        var prefix = category switch
+        if (item.Supplier != null && !string.IsNullOrWhiteSpace(item.Supplier.Name))
+            return item.Supplier.Name;
+
+        if (item.SupplierId.HasValue)
+        {
+            var sup = suppliers.FirstOrDefault(s => s.SupplierId == item.SupplierId.Value);
+            if (sup != null) return sup.Name;
+        }
+
+        return "—";
+    }
+
+    string NextSku(string? category)
+    {
+        var prefix = (category ?? "").ToLower() switch
         {
             "seeds" => "SEED",
             "fertilizer" => "FER",
@@ -503,95 +967,283 @@
         };
 
         var max = 0;
-        foreach (var i in items)
+        foreach (var i in allItems)
         {
-            var parts = i.Sku.Split('-');
+            var parts = (i.ItemCode ?? "").Split('-');
             if (parts.Length == 2 && parts[0].Equals(prefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(parts[1], out var n))
                 max = Math.Max(max, n);
         }
         return prefix + "-" + (max + 1).ToString("000");
     }
 
-    // ---------- ACTIONS ----------
+    private string CapitalizeWords(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input ?? "";
+        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input.ToLower().Trim());
+    }
+
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
+
     void SetTab(string key)
     {
         activeTab = key;
         openMenuId = null;
+        currentPage = 1;
+    }
+
+    private async Task ToggleArchiveTab(bool archived)
+    {
+        showArchived = archived;
+        currentPage = 1;
+        openMenuId = null;
+        await Task.CompletedTask;
     }
 
     void GoStock() => Nav.NavigateTo("stock");
 
+    private async Task ToggleMenuAsync(MouseEventArgs e, int id)
+    {
+        if (openMenuId == id)
+        {
+            openMenuId = null;
+            return;
+        }
+
+        var target = allItems.FirstOrDefault(x => x.ItemId == id);
+        int itemCount = target?.IsArchived == true ? 1 : 2;
+        const double itemHeight = 42;
+        const double padding = 16;
+        const double menuWidth = 175;
+        double menuHeight = (itemCount * itemHeight) + padding;
+
+        var viewport = await JS.InvokeAsync<Viewport>("eval", "({ w: window.innerWidth, h: window.innerHeight })");
+
+        menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewport.W - menuWidth - 10);
+        menuTop = (e.ClientY + menuHeight > viewport.H) ? e.ClientY - menuHeight - 5 : e.ClientY + 15;
+
+        openMenuId = id;
+    }
+
+    void CloseMenu() => openMenuId = null;
+
+    void OpenDetails(InventoryItem item)
+    {
+        selectedItem = item;
+        showDetailsModal = true;
+    }
+
+    void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedItem = null;
+    }
+
     void OpenNew()
     {
-        form = new ItemRec { Category = "supplies", Unit = "kg" };
+        openMenuId = null;
+        form = new InventoryItem
+        {
+            BusinessId = currentBusinessId,
+            BranchId = currentBranchId,
+            ItemType = "SUPPLY",
+            Category = "supplies",
+            ItemCode = NextSku("supplies"),
+            Unit = "kg"
+        };
+        selectedSupplierIdStr = "";
         qtyInput = reorderInput = costInput = null;
         editingId = null;
         showErrors = false;
         showModal = true;
     }
 
-    void OpenEdit(ItemRec i)
+    void OpenEdit(InventoryItem i)
     {
-        form = i.Clone();
-        qtyInput = i.OnHand;
-        reorderInput = i.Reorder;
-        costInput = i.UnitCost;
-        editingId = i.Id;
-        showErrors = false;
+        showDetailsModal = false;
         openMenuId = null;
+        form = new InventoryItem
+        {
+            ItemId = i.ItemId,
+            BusinessId = i.BusinessId,
+            BranchId = i.BranchId,
+            ItemName = i.ItemName,
+            ItemCode = i.ItemCode,
+            Category = i.Category,
+            ItemType = i.ItemType,
+            QuantityOnHand = i.QuantityOnHand,
+            ReorderLevel = i.ReorderLevel,
+            UnitCost = i.UnitCost,
+            Unit = i.Unit,
+            StorageLocation = i.StorageLocation,
+            SupplierId = i.SupplierId,
+            HarvestId = i.HarvestId,
+            SourcePlot = i.SourcePlot,
+            Notes = i.Notes,
+            IsArchived = i.IsArchived
+        };
+        selectedSupplierIdStr = i.SupplierId?.ToString() ?? "";
+        qtyInput = i.QuantityOnHand;
+        reorderInput = i.ReorderLevel;
+        costInput = i.UnitCost;
+        editingId = i.ItemId;
+        showErrors = false;
         showModal = true;
     }
 
     void CloseModal() => showModal = false;
 
-    void Save()
+    async Task SaveAsync()
     {
         showErrors = true;
-        if (string.IsNullOrWhiteSpace(form.Name) || SkuTaken || AnyNegative) return;
+        if (string.IsNullOrWhiteSpace(form.ItemName) || SkuTaken || AnyNegative) return;
 
-        form.Name = form.Name.Trim();
-        form.Sku = string.IsNullOrWhiteSpace(form.Sku) ? NextSku(form.Category) : form.Sku.Trim();
-        form.OnHand = qtyInput ?? 0;
-        form.Reorder = reorderInput ?? 0;
-        form.UnitCost = costInput ?? 0;
+        isSaving = true;
+        try
+        {
+            int? parsedSupplierId = int.TryParse(selectedSupplierIdStr, out var supId) && supId > 0 ? supId : null;
+            var cleanName = form.ItemName.Trim();
+            var cleanSku = string.IsNullOrWhiteSpace(form.ItemCode) ? NextSku(form.Category) : form.ItemCode.Trim().ToUpper();
+            var cleanCategory = string.Equals(form.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase)
+                ? "produce"
+                : (string.IsNullOrWhiteSpace(form.Category) ? "supplies" : form.Category.Trim());
 
-        if (editingId == null)
-        {
-            form.Id = items.Count == 0 ? 1 : items.Max(i => i.Id) + 1;
-            items.Add(form);
-        }
-        else
-        {
-            var idx = items.FindIndex(i => i.Id == editingId);
-            if (idx >= 0)
+            if (editingId == null)
             {
-                form.Source = items[idx].Source;
-                items[idx] = form;
+                var created = new InventoryItem
+                {
+                    BusinessId = currentBusinessId,
+                    BranchId = currentBranchId,
+                    ItemName = cleanName,
+                    ItemCode = cleanSku,
+                    Category = cleanCategory,
+                    ItemType = "SUPPLY",
+                    QuantityOnHand = qtyInput ?? 0,
+                    ReorderLevel = reorderInput ?? 0,
+                    UnitCost = costInput ?? 0,
+                    Unit = string.IsNullOrWhiteSpace(form.Unit) ? "kg" : form.Unit.Trim(),
+                    StorageLocation = (form.StorageLocation ?? "").Trim(),
+                    SupplierId = parsedSupplierId,
+                    Notes = (form.Notes ?? "").Trim(),
+                    IsArchived = false
+                };
+
+                DbContext.InventoryItems.Add(created);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Inventory item saved successfully.");
             }
+            else
+            {
+                var existing = await DbContext.InventoryItems.FindAsync(editingId.Value);
+                if (existing != null)
+                {
+                    existing.ItemName = cleanName;
+                    existing.ItemCode = cleanSku;
+                    existing.Category = cleanCategory;
+                    existing.QuantityOnHand = qtyInput ?? 0;
+                    existing.ReorderLevel = reorderInput ?? 0;
+                    existing.UnitCost = costInput ?? 0;
+                    existing.Unit = string.IsNullOrWhiteSpace(form.Unit) ? "kg" : form.Unit.Trim();
+                    existing.StorageLocation = (form.StorageLocation ?? "").Trim();
+                    existing.SupplierId = parsedSupplierId;
+                    existing.Notes = (form.Notes ?? "").Trim();
+
+                    DbContext.InventoryItems.Update(existing);
+                    await DbContext.SaveChangesAsync();
+                    await ShowToast("Inventory item updated.");
+                }
+            }
+
+            showModal = false;
+            await LoadDataAsync();
         }
-        // TODO: i-log sa Audit Logs / Stock Movements kung nausab ang quantity
-        showModal = false;
+        catch (Exception ex)
+        {
+            await ShowToast("Error saving item: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
-    async Task Delete(ItemRec i)
+    void PromptArchive(InventoryItem item)
     {
         openMenuId = null;
-        if (i.Category == "produce")
+        if (string.Equals(item.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase))
         {
-            await ShowToast("Produce lots come from approved harvests and can’t be deleted here.");
+            _ = ShowToast("Produce lots come from approved harvests and are managed through Harvest Recording.", isWarning: true);
             return;
         }
-        items.Remove(i);
+        itemToArchive = item;
+        showConfirmArchiveModal = true;
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
-    void CloseMenu() => openMenuId = null;
+    void CancelArchiveConfirm()
+    {
+        showConfirmArchiveModal = false;
+        itemToArchive = null;
+    }
 
-    async Task ShowToast(string message)
+    async Task ConfirmArchiveAsync()
+    {
+        if (itemToArchive == null) return;
+        isSaving = true;
+        try
+        {
+            var existing = await DbContext.InventoryItems.FindAsync(itemToArchive.ItemId);
+            if (existing != null)
+            {
+                existing.IsArchived = true;
+                DbContext.InventoryItems.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast($"{itemToArchive.ItemName} moved to Archived.");
+            }
+
+            showConfirmArchiveModal = false;
+            itemToArchive = null;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error archiving item: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    async Task RestoreItemAsync(InventoryItem item)
+    {
+        openMenuId = null;
+        try
+        {
+            var existing = await DbContext.InventoryItems.FindAsync(item.ItemId);
+            if (existing != null)
+            {
+                existing.IsArchived = false;
+                DbContext.InventoryItems.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast($"{item.ItemName} restored to Active.");
+            }
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error restoring item: " + ex.Message, isWarning: true);
+        }
+    }
+
+    async Task ShowToast(string message, bool isWarning = false)
     {
         toast = message;
+        toastIsWarning = isWarning;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3500);
+        await Task.Delay(3200);
         toast = "";
         await InvokeAsync(StateHasChanged);
     }

@@ -8,7 +8,15 @@ namespace AgriNexus.Services
 
     public class RolePermissionService
     {
-        // All 22 business modules available across the 5 customizable staff roles
+        // Restricted governance modules for non-admin staff
+        public static readonly HashSet<string> RestrictedStaffModules = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "branches",
+            "staff",
+            "subscription",
+            "business-settings"
+        };
+
         public static readonly List<ModuleDef> AllBusinessModules = new()
         {
             // Overview
@@ -50,8 +58,11 @@ namespace AgriNexus.Services
             new("financial-audit-trail", "Financial Audit Trail", "Finance", "bi-shield-check")
         };
 
-        // Stores enabled module keys per Role (BranchManager, InventoryOfficer, LaborOfficer, SalesOfficer, Accountant)
-        private readonly Dictionary<string, HashSet<string>> _rolePermissions = new(StringComparer.OrdinalIgnoreCase)
+        public static IEnumerable<ModuleDef> CustomizableStaffModules =>
+            AllBusinessModules.Where(m => !RestrictedStaffModules.Contains(m.Key));
+
+        // Default baseline modules per role (restricted modules excluded for staff)
+        private static readonly Dictionary<string, HashSet<string>> _defaultRolePermissions = new(StringComparer.OrdinalIgnoreCase)
         {
             ["BranchManager"] = new(StringComparer.OrdinalIgnoreCase)
             {
@@ -87,24 +98,71 @@ namespace AgriNexus.Services
             }
         };
 
+        private readonly Dictionary<string, HashSet<string>> _rolePermissions;
+        private readonly Dictionary<long, HashSet<string>> _staffPermissions = new();
+
+        public RolePermissionService()
+        {
+            _rolePermissions = _defaultRolePermissions.ToDictionary(
+                kvp => kvp.Key,
+                kvp => SanitizeStaffModules(kvp.Value),
+                StringComparer.OrdinalIgnoreCase
+            );
+        }
+
         public event Action? OnPermissionsChanged;
+
+        private static HashSet<string> SanitizeStaffModules(IEnumerable<string> moduleKeys) =>
+            moduleKeys
+                .Where(k => !string.IsNullOrWhiteSpace(k) && !RestrictedStaffModules.Contains(k))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        public HashSet<string> GetDefaultModules(string roleKey)
+        {
+            if (_defaultRolePermissions.TryGetValue(roleKey, out var set))
+            {
+                return SanitizeStaffModules(set);
+            }
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
 
         public HashSet<string> GetAllowedModules(string roleKey)
         {
             if (_rolePermissions.TryGetValue(roleKey, out var set))
             {
-                return new HashSet<string>(set, StringComparer.OrdinalIgnoreCase);
+                return SanitizeStaffModules(set);
             }
             return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
 
         public void SaveRolePermissions(string roleKey, IEnumerable<string> moduleKeys)
         {
-            _rolePermissions[roleKey] = new HashSet<string>(moduleKeys, StringComparer.OrdinalIgnoreCase);
+            _rolePermissions[roleKey] = SanitizeStaffModules(moduleKeys);
             OnPermissionsChanged?.Invoke();
         }
 
-        public bool HasAccess(string roleKey, string moduleKey)
+        public HashSet<string> GetStaffAllowedModules(long userId, string roleKey)
+        {
+            if (_staffPermissions.TryGetValue(userId, out var customSet))
+            {
+                return SanitizeStaffModules(customSet);
+            }
+            return GetAllowedModules(roleKey);
+        }
+
+        public void SaveStaffPermissions(long userId, IEnumerable<string> moduleKeys)
+        {
+            _staffPermissions[userId] = SanitizeStaffModules(moduleKeys);
+            OnPermissionsChanged?.Invoke();
+        }
+
+        public void ResetStaffPermissions(long userId, string roleKey)
+        {
+            _staffPermissions.Remove(userId);
+            OnPermissionsChanged?.Invoke();
+        }
+
+        public bool HasAccess(string roleKey, string moduleKey, long? userId = null)
         {
             if (string.Equals(roleKey, "SuperAdmin", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(roleKey, "TenantAdmin", StringComparison.OrdinalIgnoreCase))
@@ -112,7 +170,17 @@ namespace AgriNexus.Services
                 return true;
             }
 
-            return _rolePermissions.TryGetValue(roleKey, out var set) && set.Contains(moduleKey);
+            if (RestrictedStaffModules.Contains(moduleKey))
+            {
+                return false;
+            }
+
+            if (userId.HasValue && _staffPermissions.TryGetValue(userId.Value, out var staffSet))
+            {
+                return staffSet.Contains(moduleKey);
+            }
+
+            return _rolePermissions.TryGetValue(roleKey, out var roleSet) && roleSet.Contains(moduleKey);
         }
     }
 }

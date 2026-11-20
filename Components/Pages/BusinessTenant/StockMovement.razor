@@ -1,20 +1,29 @@
 ﻿@page "/stock"
+@layout MainLayout
 @using System.Globalization
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
 @inject AgriNexus.Services.AuthService Auth
 
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <h2 class="page-title">Stock Movements</h2>
-        <p class="text-muted mb-0 page-sub">@(items.Count + ProduceLots) items monitored · receiving, issuance, adjustments and full movement history.</p>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@ActiveBranch</strong> · @totalMonitoredItems items monitored · receiving, issuance, adjustments and full movement history.
+        </p>
     </div>
-    <div class="d-flex gap-2 flex-wrap">
-        <button type="button" class="btn-solid" @onclick='() => OpenModal("receive")'>
+
+    <!-- COMPACT ACTION CONTAINER (TOP RIGHT) -->
+    <div class="action-pill-group shadow-sm">
+        <button type="button" class="btn-new" @onclick='() => OpenModal("receive")'>
             <i class="bi bi-download"></i> Receive stock
         </button>
-        <button type="button" class="btn-outline-lg" @onclick='() => OpenModal("issue")'>
+        <button type="button" class="btn-action-sub" @onclick='() => OpenModal("issue")'>
             <i class="bi bi-upload"></i> Issue stock
         </button>
-        <button type="button" class="btn-outline-lg" @onclick='() => OpenModal("adjust")'>
+        <button type="button" class="btn-action-sub" @onclick='() => OpenModal("adjust")'>
             <i class="bi bi-sliders"></i> Adjust stock
         </button>
     </div>
@@ -39,148 +48,335 @@
     }
 </div>
 
-<!-- FILTER -->
-<div class="toolbar mb-3">
-    <select class="filter-select" @bind="typeFilter">
+<!-- FILTER TOOLBAR (SEARCH + DATE PERIOD + MOVEMENT TYPE) -->
+<div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search item, reference, reason..."
+               @bind="searchText"
+               @bind:event="oninput"
+               @bind:after="ResetPagination" />
+    </div>
+
+    <select class="filter-select" @bind="dateRangeFilter" @bind:after="ResetPagination">
+        <option value="month">This Month</option>
+        <option value="90days">Last 90 Days</option>
+        <option value="year">This Year</option>
+        <option value="all">All Time</option>
+    </select>
+
+    <select class="filter-select" @bind="typeFilter" @bind:after="ResetPagination">
         <option value="">All movement types</option>
         <option value="received">Receive stock</option>
         <option value="issued">Issue stock</option>
         <option value="adjusted">Adjust stock</option>
     </select>
-    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "movement" : "movements")</span>
+
+    <span class="badge rounded-pill px-3 py-2 fw-semibold count-label" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+        <i class="bi bi-arrow-left-right me-1 text-success"></i>@Filtered.Count @(Filtered.Count == 1 ? "movement" : "movements")
+    </span>
 </div>
 
 <!-- TABLE -->
-<div class="panel">
-    <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
-            <thead>
+<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 340px); overflow: hidden;">
+    <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+            <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                 <tr>
-                    <th>Date</th>
-                    <th>Item</th>
-                    <th>Type</th>
-                    <th>Quantity</th>
-                    <th>Unit cost</th>
-                    <th>Reference</th>
-                    <th>Reason</th>
-                    <th>By</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3 px-4">Date</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Item</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Type</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Quantity</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Unit cost</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Reference</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Reason</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3 px-4">By</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var m in Filtered)
+                @foreach (var m in PaginatedMovements)
                 {
-                    <tr>
-                        <td class="col-date">@m.Date.ToString("MMM d, yyyy", Inv)</td>
-                        <td class="col-item fw-semibold">@m.ItemName</td>
-                        <td><span class="pill @TypeClass(m.Type)">@Cap(m.Type)</span></td>
-                        <td class="text-nowrap fw-medium @QtyClass(m.Type)">@QtyText(m)</td>
-                        <td class="text-nowrap">@Peso(m.UnitCost)</td>
-                        <td class="col-ref">@(string.IsNullOrWhiteSpace(m.Reference) ? "—" : m.Reference)</td>
-                        <td class="col-reason">@(string.IsNullOrWhiteSpace(m.Reason) ? "—" : m.Reason)</td>
-                        <td class="col-by">@(string.IsNullOrWhiteSpace(m.By) ? "—" : m.By)</td>
+                    <tr style="cursor: pointer;" @onclick="() => OpenDetails(m)">
+                        <td class="col-date px-4 text-nowrap text-dark">@m.Date.ToString("MMM d, yyyy", Inv)</td>
+                        <td class="col-item">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="branch-avatar">
+                                    <i class="bi bi-arrow-left-right"></i>
+                                </div>
+                                <span class="fw-bold" style="color: #0A2B1D;">@m.ItemName</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="pill @TypeClass(m.Kind)">
+                                <i class="bi @TypeIcon(m.Kind) me-1"></i>@Cap(m.Kind)
+                            </span>
+                        </td>
+                        <td class="text-nowrap fw-semibold @QtyClass(m.Kind)">@QtyText(m)</td>
+                        <td class="text-nowrap text-dark fw-medium">@Peso(m.UnitCost)</td>
+                        <td class="col-ref text-dark fw-medium">@(string.IsNullOrWhiteSpace(m.Reference) ? "—" : m.Reference)</td>
+                        <td class="col-reason text-dark">@(string.IsNullOrWhiteSpace(m.Reason) ? "—" : m.Reason)</td>
+                        <td class="col-by px-4 text-dark">@(string.IsNullOrWhiteSpace(m.By) ? "—" : m.By)</td>
                     </tr>
                 }
                 @if (Filtered.Count == 0)
                 {
-                    <tr><td colspan="8" class="text-center text-muted py-5">No movements found.</td></tr>
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                            No movements found for the selected filter.
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
     </div>
+
+    @if (Filtered.Count > 0)
+    {
+        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+            <div class="text-muted small mb-2 mb-md-0">
+                Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> movements
+            </div>
+
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                    <i class="bi bi-chevron-left me-1"></i>Previous
+                </button>
+
+                @for (int p = 1; p <= TotalPages; p++)
+                {
+                    var pageNumber = p;
+                    <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                            @onclick="() => GoToPage(pageNumber)">
+                        @pageNumber
+                    </button>
+                }
+
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                    Next<i class="bi bi-chevron-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    }
 </div>
+
+<!-- DETAILS MODAL (ROW CLICK) -->
+@if (showDetailsModal && selectedMovement != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @TypeIcon(selectedMovement.Kind) fs-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedMovement.ItemName</h4>
+                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                <i class="bi bi-upc-scan me-1"></i>@(string.IsNullOrWhiteSpace(selectedMovement.Reference) ? "No Reference" : selectedMovement.Reference)
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-info-circle me-2 text-success"></i>Movement Transaction Details
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Transaction Date</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    <i class="bi bi-calendar3 text-success me-2"></i>@selectedMovement.Date.ToString("MMMM d, yyyy", Inv)
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Movement Type</label>
+                                <span class="pill @TypeClass(selectedMovement.Kind)">
+                                    <i class="bi @TypeIcon(selectedMovement.Kind) me-1"></i>@Cap(selectedMovement.Kind)
+                                </span>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Performed By</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-person-badge text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedMovement.By) ? "—" : selectedMovement.By)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Reason / Remarks</label>
+                                <p class="mb-0 fw-medium text-dark">@(string.IsNullOrWhiteSpace(selectedMovement.Reason) ? "—" : selectedMovement.Reason)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-cash-coin me-2 text-success"></i>Quantity &amp; Value Impact
+                        </h6>
+                        <div class="row g-3 text-center">
+                            <div class="col-4">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0 @QtyClass(selectedMovement.Kind)">@QtyText(selectedMovement)</h4>
+                                    <small class="text-muted fw-medium">Movement Qty</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #4E8D2A;">@Peso(selectedMovement.UnitCost)</h4>
+                                    <small class="text-muted fw-medium">Unit Cost</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #7A5230;">@Peso(selectedMovement.Qty * selectedMovement.UnitCost)</h4>
+                                    <small class="text-muted fw-medium">Total Value</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 <!-- MODAL (Receive / Issue / Adjust) -->
 @if (modal != null)
 {
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start">
-                <div>
-                    <h5 class="modal-heading mb-1">@ModalTitle</h5>
-                    <div class="modal-sub">@ModalSub</div>
-                </div>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
-            </div>
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
-            <div class="row g-3 mt-1">
-                <div class="col-12">
-                    <label class="form-label">Item <span class="req">*</span></label>
-                    <select class="form-select @(showErrors && form.ItemId == null ? "is-invalid" : "")" @bind="form.ItemId">
-                        <option value="">Select...</option>
-                        @foreach (var i in items)
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @ModalIcon fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@ModalTitle</h4>
+                            <p class="text-muted small mb-0">@ModalSub</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-box-seam me-2 text-success"></i>Item &amp; Quantity
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small text-muted">Item <span class="text-danger">*</span></label>
+                                    <select class="form-select @(showErrors && form.ItemId == null ? "border-danger" : "")" @bind="form.ItemId">
+                                        <option value="">-- Select Item --</option>
+                                        @foreach (var i in inventoryItems)
+                                        {
+                                            <option value="@i.ItemId">@i.ItemName (@i.ItemCode)</option>
+                                        }
+                                    </select>
+                                    @if (showErrors && form.ItemId == null)
+                                    {
+                                        <div class="err">Please select an item.</div>
+                                    }
+                                    @if (SelectedItem != null)
+                                    {
+                                        <div class="hint">On hand: <strong>@Qty(SelectedItem.QuantityOnHand) @SelectedItem.Unit</strong></div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">@(modal == "adjust" ? "New counted balance" : "Quantity") <span class="text-danger">*</span></label>
+                                    <input type="number" min="0" step="any"
+                                           class="form-control @(showErrors && QtyError != null ? "border-danger" : "")"
+                                           @bind="form.Qty" />
+                                    @if (showErrors && QtyError != null)
+                                    {
+                                        <div class="err">@QtyError</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Date</label>
+                                    <input type="date" class="form-control" @bind="form.Date" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-file-text me-2 text-success"></i>Transaction Reference &amp; Remarks
+                            </h6>
+                            <div class="row g-3">
+                                @if (modal == "receive")
+                                {
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold small text-muted">Unit cost (₱)</label>
+                                        <input type="number" min="0" step="0.01"
+                                               class="form-control border-0 shadow-sm @(showErrors && form.Cost < 0 ? "border-danger" : "")"
+                                               @bind="form.Cost" />
+                                        @if (showErrors && form.Cost < 0)
+                                        {
+                                            <div class="err">Cost can’t be negative.</div>
+                                        }
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold small text-muted">Delivery / DR number</label>
+                                        <input class="form-control border-0 shadow-sm" placeholder="e.g. DR-22050" @bind="form.Reference" />
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold small text-muted">Reference</label>
+                                        <input class="form-control border-0 shadow-sm" placeholder="@NextRef(modal)" @bind="form.Reference" />
+                                    </div>
+                                }
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Performed by</label>
+                                    <input class="form-control border-0 shadow-sm" @bind="form.By" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Reason / remarks</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="form.Reason">
+                                        <option value="">-- Select Reason --</option>
+                                        @foreach (var r in ReasonOptions)
+                                        {
+                                            <option value="@r">@r</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="SaveAsync" disabled="@isSaving">
+                        @if (isSaving)
                         {
-                            <option value="@i.Id">@i.Name</option>
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Saving...</span>
                         }
-                    </select>
-                    @if (showErrors && form.ItemId == null)
-                    {
-                        <div class="err">Please select an item.</div>
-                    }
-                    @if (SelectedItem != null)
-                    {
-                        <div class="hint">On hand: <strong>@Qty(SelectedItem.OnHand) @SelectedItem.Unit</strong></div>
-                    }
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">@(modal == "adjust" ? "New counted balance" : "Quantity") <span class="req">*</span></label>
-                    <input type="number" min="0" step="any" class="form-control @(showErrors && QtyError != null ? "is-invalid" : "")" @bind="form.Qty" />
-                    @if (showErrors && QtyError != null)
-                    {
-                        <div class="err">@QtyError</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Date</label>
-                    <input type="date" class="form-control" @bind="form.Date" />
-                </div>
-
-                @if (modal == "receive")
-                {
-                    <div class="col-md-6">
-                        <label class="form-label">Unit cost (₱)</label>
-                        <input type="number" min="0" step="0.01" class="form-control @(showErrors && form.Cost < 0 ? "is-invalid" : "")" @bind="form.Cost" />
-                        @if (showErrors && form.Cost < 0)
+                        else
                         {
-                            <div class="err">Cost can’t be negative.</div>
+                            <i class="bi bi-check2-circle me-2"></i>
+                            <span>@ModalTitle</span>
                         }
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Delivery / DR number</label>
-                        <input class="form-control" @bind="form.Reference" />
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Performed by</label>
-                        <input class="form-control" @bind="form.By" />
-                    </div>
-                }
-                else
-                {
-                    <div class="col-md-6">
-                        <label class="form-label">Reference</label>
-                        <input class="form-control" placeholder="@NextRef(modal)" @bind="form.Reference" />
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Performed by</label>
-                        <input class="form-control" @bind="form.By" />
-                    </div>
-                }
-
-                <div class="col-md-6">
-                    <label class="form-label">Reason / remarks</label>
-                    <select class="form-select" @bind="form.Reason">
-                        <option value="">Select...</option>
-                        @foreach (var r in ReasonOptions)
-                        {
-                            <option value="@r">@r</option>
-                        }
-                    </select>
+                    </button>
                 </div>
-            </div>
-
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">@ModalTitle</button>
             </div>
         </div>
     </div>
@@ -188,27 +384,20 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+    <div class="toast-note shadow-lg">
+        <i class="bi @(toastIsWarning ? "bi-exclamation-circle" : "bi-check2")"></i>
+        <span>@toast</span>
+    </div>
 }
 
 @code {
-    // ---------- MODELS ----------
-    class StockItem
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = "";
-        public string Unit { get; set; } = "";
-        public decimal OnHand { get; set; }
-        public decimal UnitCost { get; set; }
-    }
-
-    class Movement
+    class MovementRow
     {
         public int Id { get; set; }
         public DateTime Date { get; set; }
         public string ItemName { get; set; } = "";
         public string Unit { get; set; } = "";
-        public string Type { get; set; } = "received";   // received | issued | adjusted
+        public string Kind { get; set; } = "received"; // received | issued | adjusted
         public decimal Qty { get; set; }
         public decimal UnitCost { get; set; }
         public string Reference { get; set; } = "";
@@ -231,71 +420,243 @@
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    // Temporary: gidaghanon sa produce lots nga naa sa Inventory (i-compute gikan sa shared service later)
-    const int ProduceLots = 4;
-
     static readonly string[] ReceiveReasons = { "Purchase delivery", "Supplier replacement", "Donation", "Return from field", "Other" };
     static readonly string[] IssueReasons = { "Fertilizer application", "Planting", "Pest control", "Harvest packing", "Tractor operation", "Tool distribution", "Other" };
     static readonly string[] AdjustReasons = { "Physical count", "Damaged / spoiled", "Lost", "Data correction", "Other" };
 
-    // ---------- STATE ----------
+    long currentBusinessId;
+    long activeBranchId;
+    string ActiveBranch = "All Branches";
+    int totalMonitoredItems;
+
+    string searchText = "";
+    string dateRangeFilter = "month"; // month | 90days | year | all
     string typeFilter = "";
-    string? modal;          // receive | issue | adjust
+    string? modal; // receive | issue | adjust
     bool showErrors;
+    bool isSaving;
     string toast = "";
+    bool toastIsWarning = false;
     MoveForm form = new();
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    readonly List<StockItem> items = new()
+    bool showDetailsModal;
+    MovementRow? selectedMovement;
+
+    List<InventoryItem> inventoryItems = new();
+    List<MovementRow> movements = new();
+
+    private int currentPage = 1;
+    private int pageSize = 6;
+
+    protected override async Task OnInitializedAsync()
     {
-        new() { Id = 1,  Name = "Certified rice seeds (NSIC Rc222)", Unit = "kg",     OnHand = 180, UnitCost = 55 },
-        new() { Id = 2,  Name = "Hybrid corn seeds (Pioneer 30T80)", Unit = "kg",     OnHand = 30,  UnitCost = 320 },
-        new() { Id = 3,  Name = "Urea (46-0-0)",                     Unit = "sack",   OnHand = 6,   UnitCost = 1450 },
-        new() { Id = 4,  Name = "Complete fertilizer (14-14-14)",    Unit = "sack",   OnHand = 26,  UnitCost = 1680 },
-        new() { Id = 5,  Name = "Organic compost",                   Unit = "sack",   OnHand = 42,  UnitCost = 480 },
-        new() { Id = 6,  Name = "Insecticide (lambda-cyhalothrin)",  Unit = "bottle", OnHand = 2,   UnitCost = 780 },
-        new() { Id = 7,  Name = "Herbicide (glyphosate)",            Unit = "liter",  OnHand = 9,   UnitCost = 620 },
-        new() { Id = 8,  Name = "Knapsack sprayer 16L",             Unit = "piece",  OnHand = 4,   UnitCost = 2350 },
-        new() { Id = 9,  Name = "Hand trowel",                       Unit = "piece",  OnHand = 22,  UnitCost = 180 },
-        new() { Id = 10, Name = "Work gloves",                       Unit = "pair",   OnHand = 7,   UnitCost = 110 },
-        new() { Id = 11, Name = "Diesel fuel",                       Unit = "liter",  OnHand = 380, UnitCost = 62 },
-        new() { Id = 12, Name = "Empty sacks (50 kg)",               Unit = "piece",  OnHand = 352, UnitCost = 12 },
+        try
+        {
+            User? currentUser = null;
+
+            if (Auth.CurrentUserId > 0)
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+            {
+                var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                           || u.FName == Auth.CurrentUserName);
+            }
+
+            if (currentUser?.BusinessId != null)
+            {
+                currentBusinessId = currentUser.BusinessId.Value;
+                if (currentUser.BranchId.HasValue) activeBranchId = currentUser.BranchId.Value;
+            }
+            else
+            {
+                var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+                if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+            }
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading stock movements: " + ex.Message, isWarning: true);
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            var branches = await DbContext.Branches
+                .Where(b => b.BusinessId == currentBusinessId)
+                .OrderBy(b => b.BranchId)
+                .ToListAsync();
+
+            if (activeBranchId > 0)
+            {
+                var matched = branches.FirstOrDefault(b => b.BranchId == activeBranchId);
+                if (matched != null) ActiveBranch = matched.BranchName;
+            }
+            else if (branches.Count > 0)
+            {
+                activeBranchId = branches[0].BranchId;
+                ActiveBranch = branches[0].BranchName;
+            }
+
+            var allItems = await DbContext.InventoryItems
+                .Where(i => i.BusinessId == currentBusinessId && !i.IsArchived)
+                .OrderBy(i => i.ItemName)
+                .ToListAsync();
+
+            totalMonitoredItems = allItems.Count;
+
+            inventoryItems = allItems
+                .Where(i => !string.Equals(i.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var itemLookup = allItems.ToDictionary(i => i.ItemId);
+            var validItemIds = itemLookup.Keys.ToHashSet();
+
+            var dbMovements = await DbContext.StockMovements
+                .Where(m => validItemIds.Contains(m.ItemId))
+                .OrderByDescending(m => m.TransactionDate)
+                .ThenByDescending(m => m.MovementId)
+                .ToListAsync();
+
+            movements = dbMovements.Select(m =>
+            {
+                itemLookup.TryGetValue(m.ItemId, out var item);
+                var (kind, reason, by) = ParseNotes(m.Notes, m.MovementType);
+                return new MovementRow
+                {
+                    Id = m.MovementId,
+                    Date = m.TransactionDate,
+                    ItemName = item?.ItemName ?? $"Item #{m.ItemId}",
+                    Unit = item?.Unit ?? "",
+                    Kind = kind,
+                    Qty = m.Quantity,
+                    UnitCost = item?.UnitCost ?? 0,
+                    Reference = m.ReferenceNumber,
+                    Reason = reason,
+                    By = by
+                };
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Database load error: " + ex.Message, isWarning: true);
+        }
+    }
+
+    static (string Kind, string Reason, string By) ParseNotes(string? notes, string movementType)
+    {
+        var raw = notes ?? "";
+        var kind = string.Equals(movementType, "IN", StringComparison.OrdinalIgnoreCase) ? "received" : "issued";
+
+        if (raw.Contains("[Kind:adjusted]", StringComparison.OrdinalIgnoreCase))
+            kind = "adjusted";
+        else if (raw.Contains("[Kind:issued]", StringComparison.OrdinalIgnoreCase))
+            kind = "issued";
+        else if (raw.Contains("[Kind:received]", StringComparison.OrdinalIgnoreCase))
+            kind = "received";
+
+        var cleaned = System.Text.RegularExpressions.Regex.Replace(raw, @"\[Kind:\w+\]", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+        var parts = cleaned.Split(" | By: ", 2);
+        var reason = parts[0].Trim();
+        var by = parts.Length > 1 ? parts[1].Trim() : "";
+
+        return (kind, reason, by);
+    }
+
+    static string BuildNotes(string kind, string? reason, string? by)
+    {
+        var cleanReason = (reason ?? "").Trim();
+        var cleanBy = (by ?? "").Trim();
+        var baseText = string.IsNullOrWhiteSpace(cleanBy)
+            ? cleanReason
+            : (string.IsNullOrWhiteSpace(cleanReason) ? $"By: {cleanBy}" : $"{cleanReason} | By: {cleanBy}");
+
+        return string.IsNullOrWhiteSpace(baseText) ? $"[Kind:{kind}]" : $"{baseText} [Kind:{kind}]";
+    }
+
+    DateTime? DateCutoff => dateRangeFilter switch
+    {
+        "month" => new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
+        "90days" => DateTime.Today.AddDays(-90),
+        "year" => new DateTime(DateTime.Today.Year, 1, 1),
+        _ => null
     };
 
-    // 12 ka movements: 4 received (320), 6 issued (333), 2 adjusted
-    readonly List<Movement> movements = new()
+    List<MovementRow> PeriodMovements
     {
-        new() { Id = 1,  Date = new(2026, 10, 22), ItemName = "Empty sacks (50 kg)",              Unit = "piece",  Type = "received", Qty = 200, UnitCost = 12,   Reference = "DR-21098", Reason = "Purchase delivery",      By = "Cristina Yabut" },
-        new() { Id = 2,  Date = new(2026, 10, 21), ItemName = "Empty sacks (50 kg)",              Unit = "piece",  Type = "issued",   Qty = 180, UnitCost = 12,   Reference = "IS-2210",  Reason = "Harvest packing",       By = "Marilou Pangan" },
-        new() { Id = 3,  Date = new(2026, 10, 20), ItemName = "Insecticide (lambda-cyhalothrin)", Unit = "bottle", Type = "adjusted", Qty = 2,   UnitCost = 780,  Reference = "ADJ-0044", Reason = "Physical count",        By = "Allan Mercado" },
-        new() { Id = 4,  Date = new(2026, 10, 19), ItemName = "Urea (46-0-0)",                    Unit = "sack",   Type = "issued",   Qty = 6,   UnitCost = 1450, Reference = "IS-1042",  Reason = "Fertilizer application", By = "Ernesto Bacani" },
-        new() { Id = 5,  Date = new(2026, 10, 18), ItemName = "Urea (46-0-0)",                    Unit = "sack",   Type = "received", Qty = 20,  UnitCost = 1450, Reference = "DR-22041", Reason = "Purchase delivery",      By = "Allan Mercado" },
-        new() { Id = 6,  Date = new(2026, 10, 16), ItemName = "Diesel fuel",                      Unit = "liter",  Type = "issued",   Qty = 80,  UnitCost = 62,   Reference = "IS-1031",  Reason = "Tractor operation",     By = "Ernesto Bacani" },
-        new() { Id = 7,  Date = new(2026, 10, 14), ItemName = "Certified rice seeds (NSIC Rc222)", Unit = "kg",    Type = "received", Qty = 60,  UnitCost = 55,   Reference = "DR-21877", Reason = "Purchase delivery",      By = "Cristina Yabut" },
-        new() { Id = 8,  Date = new(2026, 10, 12), ItemName = "Certified rice seeds (NSIC Rc222)", Unit = "kg",    Type = "issued",   Qty = 40,  UnitCost = 55,   Reference = "IS-1018",  Reason = "Planting",              By = "Dante Villamor" },
-        new() { Id = 9,  Date = new(2026, 10, 10), ItemName = "Work gloves",                      Unit = "pair",   Type = "adjusted", Qty = 7,   UnitCost = 110,  Reference = "ADJ-0043", Reason = "Physical count",        By = "Allan Mercado" },
-        new() { Id = 10, Date = new(2026, 10, 8),  ItemName = "Organic compost",                  Unit = "sack",   Type = "received", Qty = 40,  UnitCost = 480,  Reference = "DR-21790", Reason = "Purchase delivery",      By = "Cristina Yabut" },
-        new() { Id = 11, Date = new(2026, 10, 7),  ItemName = "Organic compost",                  Unit = "sack",   Type = "issued",   Qty = 7,   UnitCost = 480,  Reference = "IS-1009",  Reason = "Fertilizer application", By = "Ernesto Bacani" },
-        new() { Id = 12, Date = new(2026, 10, 5),  ItemName = "Hand trowel",                      Unit = "piece",  Type = "issued",   Qty = 20,  UnitCost = 180,  Reference = "IS-1002",  Reason = "Tool distribution",     By = "Dante Villamor" },
-    };
+        get
+        {
+            var cutoff = DateCutoff;
+            return cutoff.HasValue
+                ? movements.Where(m => m.Date.Date >= cutoff.Value).ToList()
+                : movements;
+        }
+    }
 
-    // ---------- COMPUTED ----------
-    List<Movement> Filtered => movements
-        .Where(m => string.IsNullOrEmpty(typeFilter) || m.Type == typeFilter)
-        .OrderByDescending(m => m.Date).ThenByDescending(m => m.Id)
-        .ToList();
+    List<MovementRow> Filtered
+    {
+        get
+        {
+            IEnumerable<MovementRow> query = PeriodMovements;
+
+            if (!string.IsNullOrEmpty(typeFilter))
+                query = query.Where(m => m.Kind == typeFilter);
+
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                query = query.Where(m =>
+                    m.ItemName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    (m.Reference ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    (m.Reason ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    (m.By ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return query.OrderByDescending(m => m.Date).ThenByDescending(m => m.Id).ToList();
+        }
+    }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Filtered.Count / pageSize));
+    private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<MovementRow> PaginatedMovements => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    string PeriodNote => dateRangeFilter switch
+    {
+        "month" => "This month",
+        "90days" => "Last 90 days",
+        "year" => "This year",
+        _ => "All time"
+    };
 
     List<Stat> Stats => new()
     {
-        new("MOVEMENTS RECORDED", movements.Count.ToString(), "Full history retained", "bi-clock-history", ""),
-        new("STOCK RECEIVED", Qty(movements.Where(m => m.Type == "received").Sum(m => m.Qty)), "Total quantity in", "bi-download", ""),
-        new("STOCK ISSUED", Qty(movements.Where(m => m.Type == "issued").Sum(m => m.Qty)), "Total quantity out", "bi-upload", "stat-icon-plain"),
-        new("ADJUSTMENTS", movements.Count(m => m.Type == "adjusted").ToString(), "Count corrections logged", "bi-sliders", "stat-icon-warn"),
+        new("MOVEMENTS RECORDED", PeriodMovements.Count.ToString(), PeriodNote, "bi-clock-history", ""),
+        new("STOCK RECEIVED", Qty(PeriodMovements.Where(m => m.Kind == "received").Sum(m => m.Qty)), "Total quantity in", "bi-download", "stat-icon-leaf"),
+        new("STOCK ISSUED", Qty(PeriodMovements.Where(m => m.Kind == "issued").Sum(m => m.Qty)), "Total quantity out", "bi-upload", "stat-icon-earth"),
+        new("ADJUSTMENTS", PeriodMovements.Count(m => m.Kind == "adjusted").ToString(), "Count corrections logged", "bi-sliders", ""),
     };
 
-    StockItem? SelectedItem => form.ItemId == null ? null : items.FirstOrDefault(i => i.Id == form.ItemId);
+    InventoryItem? SelectedItem => form.ItemId == null ? null : inventoryItems.FirstOrDefault(i => i.ItemId == form.ItemId);
 
     string ModalTitle => modal switch { "receive" => "Receive stock", "issue" => "Issue stock", _ => "Adjust stock" };
+
+    string ModalIcon => modal switch { "receive" => "bi-download", "issue" => "bi-upload", _ => "bi-sliders" };
 
     string ModalSub => modal switch
     {
@@ -313,24 +674,28 @@
             if (form.Qty == null) return modal == "adjust" ? "Enter the counted balance." : "Enter a quantity.";
             if (form.Qty < 0) return "Value can’t be negative.";
             if (modal != "adjust" && form.Qty == 0) return "Quantity must be greater than zero.";
-            if (modal == "issue" && SelectedItem != null && form.Qty > SelectedItem.OnHand)
-                return "Only " + Qty(SelectedItem.OnHand) + " " + SelectedItem.Unit + " on hand.";
+            if (modal == "issue" && SelectedItem != null && form.Qty > SelectedItem.QuantityOnHand)
+                return "Only " + Qty(SelectedItem.QuantityOnHand) + " " + SelectedItem.Unit + " on hand.";
             return null;
         }
     }
 
-    // ---------- HELPERS ----------
     static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
-
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
-
     static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
 
     static string TypeClass(string t) => t switch
     {
-        "received" => "pill-green",
-        "adjusted" => "pill-yellow",
+        "received" => "pill-forest",
+        "adjusted" => "pill-earth",
         _ => "pill-outline"
+    };
+
+    static string TypeIcon(string t) => t switch
+    {
+        "received" => "bi-download",
+        "adjusted" => "bi-sliders",
+        _ => "bi-upload"
     };
 
     static string QtyClass(string t) => t switch
@@ -340,7 +705,7 @@
         _ => ""
     };
 
-    static string QtyText(Movement m) => m.Type switch
+    static string QtyText(MovementRow m) => m.Kind switch
     {
         "received" => "+ " + Qty(m.Qty) + " " + m.Unit,
         "issued" => "− " + Qty(m.Qty) + " " + m.Unit,
@@ -350,79 +715,134 @@
     string NextRef(string? type)
     {
         var prefix = type == "adjust" ? "ADJ" : "IS";
-        var width = type == "adjust" ? "0000" : "0000";
         var max = 0;
         foreach (var m in movements)
         {
-            var p = m.Reference.Split('-');
-            if (p.Length == 2 && p[0] == prefix && int.TryParse(p[1], out var n)) max = Math.Max(max, n);
+            var p = (m.Reference ?? "").Split('-');
+            if (p.Length == 2 && p[0].Equals(prefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(p[1], out var n))
+                max = Math.Max(max, n);
         }
-        return prefix + "-" + (max + 1).ToString(width);
+        return prefix + "-" + (max + 1).ToString("0000");
     }
 
-    // ---------- ACTIONS ----------
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
+
+    void OpenDetails(MovementRow m)
+    {
+        selectedMovement = m;
+        showDetailsModal = true;
+    }
+
+    void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedMovement = null;
+    }
+
     void OpenModal(string type)
     {
         modal = type;
-        form = new MoveForm { Date = DateTime.Today };
+        form = new MoveForm
+        {
+            Date = DateTime.Today,
+            By = Auth.CurrentUserName ?? ""
+        };
         showErrors = false;
     }
 
     void CloseModal() => modal = null;
 
-    async Task Save()
+    async Task SaveAsync()
     {
         showErrors = true;
-        var item = SelectedItem;
-        if (item == null || QtyError != null) return;
+        if (form.ItemId == null || QtyError != null) return;
         if (modal == "receive" && form.Cost < 0) return;
 
-        var qty = form.Qty!.Value;
-        var by = string.IsNullOrWhiteSpace(form.By) ? (Auth.CurrentUserName ?? "") : form.By.Trim();
-        var type = modal == "receive" ? "received" : modal == "issue" ? "issued" : "adjusted";
-
-        decimal unitCost = item.UnitCost;
-        if (modal == "receive" && form.Cost.HasValue)
+        isSaving = true;
+        try
         {
-            unitCost = form.Cost.Value;
-            item.UnitCost = unitCost;
+            var dbItem = await DbContext.InventoryItems.FindAsync(form.ItemId.Value);
+            if (dbItem == null) return;
+
+            var qty = form.Qty!.Value;
+            var by = string.IsNullOrWhiteSpace(form.By) ? (Auth.CurrentUserName ?? "") : form.By.Trim();
+            var kind = modal == "receive" ? "received" : modal == "issue" ? "issued" : "adjusted";
+
+            string dbMovementType;
+            decimal movementQty;
+
+            switch (modal)
+            {
+                case "receive":
+                    dbItem.QuantityOnHand += qty;
+                    if (form.Cost.HasValue) dbItem.UnitCost = form.Cost.Value;
+                    dbMovementType = "IN";
+                    movementQty = qty;
+                    break;
+
+                case "issue":
+                    if (qty > dbItem.QuantityOnHand)
+                    {
+                        await ShowToast($"Only {Qty(dbItem.QuantityOnHand)} {dbItem.Unit} on hand.", isWarning: true);
+                        return;
+                    }
+                    dbItem.QuantityOnHand -= qty;
+                    dbMovementType = "OUT";
+                    movementQty = qty;
+                    break;
+
+                default: // adjust (new counted balance)
+                    var diff = qty - dbItem.QuantityOnHand;
+                    dbMovementType = diff >= 0 ? "IN" : "OUT";
+                    movementQty = Math.Abs(diff);
+                    dbItem.QuantityOnHand = qty;
+                    break;
+            }
+
+            var reference = form.Reference?.Trim() ?? "";
+            if (modal != "receive" && reference.Length == 0) reference = NextRef(modal);
+
+            long branchToUse = dbItem.BranchId ?? activeBranchId;
+
+            var entity = new AgriNexus.DataLayer.Models.StockMovement
+            {
+                ItemId = dbItem.ItemId,
+                BranchId = branchToUse,
+                MovementType = dbMovementType,
+                Quantity = movementQty,
+                ReferenceNumber = reference,
+                Notes = BuildNotes(kind, form.Reason, by),
+                TransactionDate = form.Date
+            };
+
+            DbContext.InventoryItems.Update(dbItem);
+            DbContext.StockMovements.Add(entity);
+            await DbContext.SaveChangesAsync();
+
+            var title = ModalTitle;
+            modal = null;
+            await LoadDataAsync();
+            await ShowToast($"{title} recorded for {dbItem.ItemName}.");
         }
-
-        var reference = form.Reference?.Trim() ?? "";
-        if (modal != "receive" && reference.Length == 0) reference = NextRef(modal);
-
-        switch (modal)
+        catch (Exception ex)
         {
-            case "receive": item.OnHand += qty; break;
-            case "issue": item.OnHand -= qty; break;
-            default: item.OnHand = qty; break;
+            await ShowToast("Error recording movement: " + ex.Message, isWarning: true);
         }
-
-        movements.Add(new Movement
+        finally
         {
-            Id = movements.Count == 0 ? 1 : movements.Max(m => m.Id) + 1,
-            Date = form.Date,
-            ItemName = item.Name,
-            Unit = item.Unit,
-            Type = type,
-            Qty = qty,
-            UnitCost = unitCost,
-            Reference = reference,
-            Reason = form.Reason,
-            By = by
-        });
-
-        // TODO: i-update ang Inventory (on hand) ug i-log sa Audit Logs kung naa na ang shared service / database
-        var title = ModalTitle;
-        modal = null;
-        await ShowToast(title + " recorded for " + item.Name + ".");
+            isSaving = false;
+        }
     }
 
-    async Task ShowToast(string message)
+    async Task ShowToast(string message, bool isWarning = false)
     {
         toast = message;
+        toastIsWarning = isWarning;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3000);
+        await Task.Delay(3200);
         toast = "";
         await InvokeAsync(StateHasChanged);
     }

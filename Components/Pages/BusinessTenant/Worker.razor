@@ -1,9 +1,25 @@
 ﻿@page "/workers"
+@layout MainLayout
 @using System.Globalization
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Web
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
+@inject AgriNexus.Services.AuthService Auth
+@inject IJSRuntime JS
+@using WorkerModel = AgriNexus.DataLayer.Models.Worker
 
-<div class="mb-4">
-    <h2 class="page-title">Worker Records</h2>
-    <p class="text-muted mb-0 page-sub">@ActiveBranch · farm workers, their skills, rates and employment status.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="page-title">Worker Records</h2>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@ActiveBranch</strong> · farm workers, their skills, rates and employment status.
+        </p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-person-badge me-1"></i> Workforce Directory
+    </span>
 </div>
 
 <!-- STAT CARDS -->
@@ -28,153 +44,474 @@
     }
 </div>
 
-<!-- TOOLBAR -->
-<div class="toolbar mb-3">
+<!-- TOOLBAR WITH ACTIVE / ARCHIVED TOGGLE -->
+<div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+
+    <div class="btn-group shadow-sm" role="group" aria-label="View Tabs">
+        <input type="radio" class="btn-check" name="workerViewTabs" id="tabWorkerActive" autocomplete="off"
+               checked="@(!showArchived)" @onchange="() => ToggleTab(false)">
+        <label class="btn btn-outline-success fw-bold" for="tabWorkerActive">
+            <i class="bi bi-check-circle me-1"></i> Active
+        </label>
+
+        <input type="radio" class="btn-check" name="workerViewTabs" id="tabWorkerArchived" autocomplete="off"
+               checked="@showArchived" @onchange="() => ToggleTab(true)">
+        <label class="btn btn-outline-secondary fw-bold" for="tabWorkerArchived">
+            <i class="bi bi-archive me-1"></i> Archived
+        </label>
+    </div>
+
     <div class="search-box">
         <i class="bi bi-search"></i>
-        <input type="text" placeholder="Search workers..." @bind="searchText" @bind:event="oninput" />
+        <input type="text" placeholder="Search workers..."
+               @bind="searchText"
+               @bind:event="oninput"
+               @bind:after="ResetPagination" />
     </div>
-    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "worker" : "workers")</span>
-    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
-        <i class="bi bi-plus-lg"></i> New worker
-    </button>
+
+    <span class="badge rounded-pill px-3 py-2 fw-semibold count-label" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+        <i class="bi bi-person-badge me-1 text-success"></i>@Filtered.Count @(Filtered.Count == 1 ? "worker" : "workers")
+    </span>
+
+    @if (!showArchived)
+    {
+        <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNew">
+            <i class="bi bi-plus-lg"></i> New worker
+        </button>
+    }
 </div>
 
-<!-- TABLE -->
-<div class="panel">
-    <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
-            <thead>
+<!-- TABLE (WITH SCROLL, PAGINATION & ROUNDED CORNERS) -->
+<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 280px); overflow: hidden;">
+
+    <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+            <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                 <tr>
-                    <th>Worker</th>
-                    <th>Daily rate</th>
-                    <th>Contact</th>
-                    <th>Hired</th>
-                    <th>Status</th>
-                    <th></th>
+                    <th class="text-muted small fw-bold text-uppercase py-3 px-4">Worker</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Daily rate</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Contact</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Hired</th>
+                    <th class="text-muted small fw-bold text-uppercase py-3">Status</th>
+                    <th class="py-3"></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var w in Filtered)
+                @foreach (var w in PaginatedWorkers)
                 {
-                    <tr>
-                        <td class="col-name">
-                            <div class="fw-semibold">@w.Name</div>
-                            <div class="sub">@Cap(w.Employment) · @Cap(w.Skill)</div>
+                    <tr style="cursor: pointer;" @onclick="() => OpenDetails(w)">
+                        <td class="col-name px-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="biz-avatar">
+                                    <i class="bi bi-person"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: #0A2B1D;">@w.FullName</div>
+                                    <div class="text-muted small mt-1">@Cap(w.EmploymentType) · @Cap(w.Skill)</div>
+                                </div>
+                            </div>
                         </td>
-                        <td class="text-nowrap">@Peso(w.DailyRate)</td>
-                        <td class="text-nowrap">@(string.IsNullOrWhiteSpace(w.Contact) ? "—" : w.Contact)</td>
-                        <td class="text-nowrap">@(w.Hired.HasValue ? w.Hired.Value.ToString("MMM d, yyyy", Inv) : "—")</td>
-                        <td><span class="pill @(w.Status == "active" ? "pill-green" : "pill-red")">@Cap(w.Status)</span></td>
-                        <td class="text-end action-cell">
-                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(w.Id)" aria-label="Actions">
+                        <td class="text-nowrap fw-semibold text-dark">@Peso(w.DailyRate)</td>
+                        <td class="text-nowrap text-dark fw-medium">
+                            @if (string.IsNullOrWhiteSpace(w.ContactNumber))
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                            else
+                            {
+                                <span><i class="bi bi-telephone text-success me-1"></i>@w.ContactNumber</span>
+                            }
+                        </td>
+                        <td class="text-nowrap text-muted small fw-medium">
+                            @(w.DateHired.HasValue ? w.DateHired.Value.ToString("MMM d, yyyy", Inv) : "—")
+                        </td>
+                        <td>
+                            <span class="pill @StatusPillClass(w.Status)">
+                                <i class="bi @StatusIcon(w.Status) me-1"></i>@Cap(w.Status)
+                            </span>
+                        </td>
+                        <td class="text-end px-4 action-cell">
+                            <button type="button" class="btn-dots"
+                                    @onclick="(e) => ToggleMenuAsync(e, w.WorkerId)"
+                                    @onclick:stopPropagation="true" aria-label="Actions">
                                 <i class="bi bi-three-dots"></i>
                             </button>
-                            @if (openMenuId == w.Id)
-                            {
-                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                <div class="row-menu">
-                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(w)">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </button>
-                                    <button type="button" class="row-menu-item plain" @onclick="() => ToggleStatus(w)">
-                                        @(w.Status == "active" ? "Mark inactive" : "Mark active")
-                                    </button>
-                                    <div class="menu-sep"></div>
-                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(w)">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </div>
-                            }
                         </td>
                     </tr>
                 }
                 @if (Filtered.Count == 0)
                 {
-                    <tr><td colspan="6" class="text-center text-muted py-5">No workers found.</td></tr>
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                            @(showArchived ? "No archived workers found." : "No workers found.")
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
     </div>
+
+    <!-- PAGINATION FOOTER -->
+    @if (Filtered.Count > 0)
+    {
+        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+            <div class="text-muted small mb-2 mb-md-0">
+                Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> workers
+            </div>
+
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                    <i class="bi bi-chevron-left me-1"></i>Previous
+                </button>
+
+                @for (int p = 1; p <= TotalPages; p++)
+                {
+                    var pageNumber = p;
+                    <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                            @onclick="() => GoToPage(pageNumber)">
+                        @pageNumber
+                    </button>
+                }
+
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                    Next<i class="bi bi-chevron-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    }
 </div>
 
-<!-- MODAL -->
+<!-- FLOATING ACTION MENU -->
+@if (openMenuId != null)
+{
+    var menuWorker = workers.FirstOrDefault(x => x.WorkerId == openMenuId);
+    if (menuWorker != null)
+    {
+        <div class="menu-backdrop" @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
+
+        <div class="vertical-action-menu shadow-lg" style="top:@(menuTop)px; left:@(menuLeft)px;">
+            @if (!string.Equals(menuWorker.Status, "archived", StringComparison.OrdinalIgnoreCase))
+            {
+                <button type="button" class="action-item"
+                        @onclick="() => OpenEdit(menuWorker)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-pencil-square text-success"></i> Edit
+                </button>
+                <button type="button" class="action-item"
+                        @onclick="() => ToggleStatusAsync(menuWorker)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi @(string.Equals(menuWorker.Status, "active", StringComparison.OrdinalIgnoreCase) ? "bi-pause-circle" : "bi-check-circle")"></i>
+                    @(string.Equals(menuWorker.Status, "active", StringComparison.OrdinalIgnoreCase) ? "Mark inactive" : "Mark active")
+                </button>
+                <button type="button" class="action-item text-danger"
+                        @onclick="() => PromptArchive(menuWorker)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-archive"></i> Archive
+                </button>
+            }
+            else
+            {
+                <button type="button" class="action-item text-success"
+                        @onclick="() => RestoreWorkerAsync(menuWorker)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-arrow-counterclockwise"></i> Restore
+                </button>
+            }
+        </div>
+    }
+}
+
+<!-- DETAILS MODAL -->
+@if (showDetailsModal && selectedWorker != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi bi-person fs-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedWorker.FullName</h4>
+                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                <i class="bi bi-briefcase me-1"></i>@Cap(selectedWorker.EmploymentType) · @Cap(selectedWorker.Skill)
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-person-badge me-2 text-success"></i>Employment &amp; Contact Info
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Assigned Branch</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    <i class="bi bi-building text-success me-2"></i>@BranchNameOf(selectedWorker.BranchId)
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Contact Number</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    @(string.IsNullOrWhiteSpace(selectedWorker.ContactNumber) ? "N/A" : selectedWorker.ContactNumber)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Date Hired</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-calendar3 text-success me-2"></i>@(selectedWorker.DateHired.HasValue ? selectedWorker.DateHired.Value.ToString("MMMM d, yyyy", Inv) : "N/A")
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Employment Status</label>
+                                <span class="pill @StatusPillClass(selectedWorker.Status)">
+                                    <i class="bi @StatusIcon(selectedWorker.Status) me-1"></i>@Cap(selectedWorker.Status)
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-wallet2 me-2 text-success"></i>Compensation Summary
+                        </h6>
+                        <div class="row g-3 text-center">
+                            <div class="col-md-6">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #1B5E34;">@Peso(selectedWorker.DailyRate)</h4>
+                                    <small class="text-muted fw-medium">Daily Rate</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <h4 class="fw-bolder mb-0" style="color: #4E8D2A;">@Cap(selectedWorker.EmploymentType)</h4>
+                                    <small class="text-muted fw-medium">Employment Type</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                    @if (!string.Equals(selectedWorker.Status, "archived", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedWorker)">
+                            <i class="bi bi-pencil-square me-2"></i>Edit Details
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ADD / EDIT MODAL -->
 @if (showModal)
 {
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New worker" : "Edit worker")</h5>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(editingId == null ? "bi-person-plus" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingId == null ? "Register New Worker" : "Edit Worker Details")
+                            </h4>
+                            <p class="text-muted small mb-0">Fill in the worker information below to @(editingId == null ? "add a worker record" : "update the worker").</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-person me-2 text-success"></i>Worker Identification
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Full Name <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && string.IsNullOrWhiteSpace(form.FullName) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                                        <input class="form-control" placeholder="e.g. Ernesto Bacani"
+                                               @bind="form.FullName"
+                                               @bind:after="() => form.FullName = CapitalizeWords(form.FullName)" />
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(form.FullName))
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>Full name is required.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Employment Type</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-briefcase text-success"></i></span>
+                                        <select class="form-select" @bind="form.EmploymentType">
+                                            @foreach (var e in EmploymentOptions)
+                                            {
+                                                <option value="@e">@e</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6 mt-4">
+                                    <label class="form-label fw-bold small text-muted">Primary Skill</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-tools text-success"></i></span>
+                                        <select class="form-select" @bind="form.Skill">
+                                            @foreach (var s in SkillOptions)
+                                            {
+                                                <option value="@s">@s</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6 mt-4">
+                                    <label class="form-label fw-bold small text-muted">Daily Rate (₱)</label>
+                                    <div class="input-group modern-input @(showErrors && RateInvalid ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-wallet2 text-success"></i></span>
+                                        <input type="number" min="0" step="0.01" class="form-control" @bind="rateInput" placeholder="0.00" />
+                                    </div>
+                                    @if (showErrors && RateInvalid)
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>Rate can’t be negative.</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-geo-alt me-2 text-success"></i>Contact, Assignment &amp; Status
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Contact Number</label>
+                                    <div class="input-group modern-input @(showErrors && !string.IsNullOrEmpty(contactError) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-telephone text-success"></i></span>
+                                        <input type="tel"
+                                               inputmode="numeric"
+                                               maxlength="13"
+                                               class="form-control border-0 shadow-sm"
+                                               @bind="form.ContactNumber"
+                                               @bind:event="oninput"
+                                               @bind:after="FormatContactNumber"
+                                               placeholder="09XX XXX XXXX"
+                                               spellcheck="false" />
+                                    </div>
+                                    @if (showErrors && !string.IsNullOrEmpty(contactError))
+                                    {
+                                        <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>@contactError</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Date Hired</label>
+                                    <input type="date" class="form-control border-0 shadow-sm" @bind="form.DateHired" />
+                                </div>
+
+                                <div class="col-md-6 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Status</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="form.Status">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Branch</label>
+                                    <select class="form-select border-0 shadow-sm" @bind="selectedBranchIdStr">
+                                        @foreach (var b in branches)
+                                        {
+                                            <option value="@b.BranchId">@b.BranchName</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="PromptSave" disabled="@isSaving">
+                        <i class="bi bi-check2-circle me-2"></i>@(editingId == null ? "Save Worker" : "Update Worker")
+                    </button>
+                </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Full name <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Name) ? "is-invalid" : "")" @bind="form.Name" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
-                    {
-                        <div class="err">Full name is required.</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Employment type</label>
-                    <select class="form-select" @bind="form.Employment">
-                        @foreach (var e in EmploymentOptions)
-                        {
-                            <option value="@e">@e</option>
-                        }
-                    </select>
-                </div>
+<!-- SAVE CONFIRMATION MODAL -->
+@if (showConfirmSaveModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1060;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #E8F3EC; color: #1B5E34;">
+                        <i class="bi bi-check2" style="font-size: 2.5rem;"></i>
+                    </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Primary skill</label>
-                    <select class="form-select" @bind="form.Skill">
-                        @foreach (var s in SkillOptions)
-                        {
-                            <option value="@s">@s</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Daily rate (₱)</label>
-                    <input type="number" min="0" step="0.01" class="form-control @(showErrors && RateInvalid ? "is-invalid" : "")" @bind="rateInput" />
-                    @if (showErrors && RateInvalid)
-                    {
-                        <div class="err">Rate can’t be negative.</div>
-                    }
-                </div>
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">@(editingId == null ? "Register New Worker?" : "Update Worker Details?")</h4>
+                    <p class="text-muted small mb-4">
+                        @(editingId == null
+                            ? $"Are you sure you want to register worker \"{form.FullName.Trim()}\"?"
+                            : $"Are you sure you want to save changes to worker \"{form.FullName.Trim()}\"?" )
+                    </p>
 
-                <div class="col-md-6">
-                    <label class="form-label">Contact number</label>
-                    <input class="form-control" @bind="form.Contact" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Date hired</label>
-                    <input type="date" class="form-control" @bind="form.Hired" />
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" @bind="form.Status">
-                        <option value="active">active</option>
-                        <option value="inactive">inactive</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Branch</label>
-                    <select class="form-select" @bind="form.Branch">
-                        @foreach (var b in branchNames)
-                        {
-                            <option value="@b">@b</option>
-                        }
-                    </select>
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelSaveConfirm">Cancel</button>
+                        <button type="button" class="btn-save rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmSaveAsync">
+                            @(isSaving ? "Saving..." : "Yes, Save")
+                        </button>
+                    </div>
                 </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
+<!-- ARCHIVE CONFIRMATION MODAL -->
+@if (showConfirmArchiveModal && workerToArchive != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1060;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px; background-color: #F5EFEA; color: #7A5230;">
+                        <i class="bi bi-archive" style="font-size: 2.5rem;"></i>
+                    </div>
+
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Archive Worker?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to archive <strong>@workerToArchive.FullName</strong>?<br />
+                        It will be hidden from the active list, while keeping all historical work records safe.
+                    </p>
+
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CancelArchiveConfirm">Cancel</button>
+                        <button type="button" class="btn-earth rounded-3 fw-bold px-4 shadow-sm" disabled="@isSaving" @onclick="ConfirmArchiveAsync">
+                            <i class="bi bi-archive me-1"></i> Yes, Archive
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -182,160 +519,525 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-info-circle-fill"></i> @toast</div>
+    <div class="toast-note shadow-lg">
+        <i class="bi @(toastIsWarning ? "bi-exclamation-circle" : "bi-check2")"></i>
+        <span>@toast</span>
+    </div>
 }
 
 @code {
-    // ---------- MODELS ----------
-    class WorkerRec
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = "";
-        public string Employment { get; set; } = "daily";   // daily | permanent | seasonal
-        public string Skill { get; set; } = "general";
-        public decimal DailyRate { get; set; }
-        public string Contact { get; set; } = "";
-        public DateTime? Hired { get; set; }
-        public string Status { get; set; } = "active";      // active | inactive
-        public string Branch { get; set; } = "";
-
-        public WorkerRec Clone() => (WorkerRec)MemberwiseClone();
-    }
-
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
 
-    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    class Viewport
+    {
+        public double W { get; set; }
+        public double H { get; set; }
+    }
 
+    static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     static readonly string[] EmploymentOptions = { "daily", "permanent", "seasonal" };
     static readonly string[] SkillOptions = { "general", "irrigation", "spraying", "harvesting", "planting", "packing", "driving" };
 
-    // TODO: kuhaa gikan sa naka-login nga tenant ug sa Branches module
-    const string ActiveBranch = "North Field Branch";
-    readonly string[] branchNames = { "North Field Branch", "South Valley Branch", "Central Packing Branch" };
+    long currentBusinessId;
+    long? currentBranchId;
+    string ActiveBranch = "All Branches";
 
-    // ---------- STATE ----------
+    List<Branch> branches = new();
+    List<AgriNexus.DataLayer.Models.Worker> workers = new();
+
+    bool showArchived = false;
     string searchText = "";
+    string selectedBranchIdStr = "";
+    string contactError = "";
     string toast = "";
+    bool toastIsWarning = false;
+
     bool showModal;
     bool showErrors;
+    bool isSaving;
     int? editingId;
     int? openMenuId;
-    WorkerRec form = new();
+    AgriNexus.DataLayer.Models.Worker form = new();
     decimal? rateInput;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    readonly List<WorkerRec> workers = new()
-    {
-        new() { Id = 1, Name = "Ernesto Bacani",   Employment = "permanent", Skill = "irrigation", DailyRate = 500, Contact = "0917 334 1189", Hired = new(2024, 3, 5),   Status = "active",   Branch = "North Field Branch" },
-        new() { Id = 2, Name = "Ronnie Aquino",    Employment = "daily",     Skill = "spraying",   DailyRate = 420, Contact = "0918 552 7712", Hired = new(2024, 4, 18),  Status = "active",   Branch = "North Field Branch" },
-        new() { Id = 3, Name = "Jomar Salvador",   Employment = "seasonal",  Skill = "harvesting", DailyRate = 400, Contact = "0920 118 4471", Hired = new(2025, 6, 1),   Status = "active",   Branch = "North Field Branch" },
-        new() { Id = 4, Name = "Lito Marasigan",   Employment = "daily",     Skill = "planting",   DailyRate = 420, Contact = "0917 998 3312", Hired = new(2025, 1, 12),  Status = "active",   Branch = "North Field Branch" },
-        new() { Id = 5, Name = "Avelino Dungca",   Employment = "permanent", Skill = "general",    DailyRate = 480, Contact = "0918 220 5590", Hired = new(2024, 9, 20),  Status = "active",   Branch = "North Field Branch" },
-        new() { Id = 6, Name = "Marilou Pangan",   Employment = "daily",     Skill = "harvesting", DailyRate = 400, Contact = "0921 778 2298", Hired = new(2025, 2, 25),  Status = "active",   Branch = "South Valley Branch" },
-        new() { Id = 7, Name = "Rolando Espino",   Employment = "seasonal",  Skill = "planting",   DailyRate = 400, Contact = "0917 445 6610", Hired = new(2025, 7, 14),  Status = "active",   Branch = "South Valley Branch" },
-        new() { Id = 8, Name = "Felix Bernardo",   Employment = "daily",     Skill = "spraying",   DailyRate = 430, Contact = "0919 662 1145", Hired = new(2024, 11, 8),  Status = "inactive", Branch = "South Valley Branch" },
-        new() { Id = 9, Name = "Danilo Roque",     Employment = "daily",     Skill = "general",    DailyRate = 420, Contact = "0920 331 8877", Hired = new(2025, 5, 22),  Status = "active",   Branch = "Central Packing Branch" },
-    };
+    bool showDetailsModal;
+    AgriNexus.DataLayer.Models.Worker? selectedWorker;
 
-    // ---------- COMPUTED ----------
-    List<WorkerRec> Filtered => string.IsNullOrWhiteSpace(searchText)
-        ? workers
-        : workers.Where(w =>
-            w.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            w.Skill.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            w.Employment.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            w.Contact.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+    bool showConfirmSaveModal;
+    bool showConfirmArchiveModal;
+    AgriNexus.DataLayer.Models.Worker? workerToArchive;
+
+    private int currentPage = 1;
+    private int pageSize = 5;
+    private double menuTop;
+    private double menuLeft;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            User? currentUser = null;
+
+            if (Auth.CurrentUserId > 0)
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+            {
+                var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                           || u.FName == Auth.CurrentUserName);
+            }
+
+            if (currentUser?.BusinessId != null)
+            {
+                currentBusinessId = currentUser.BusinessId.Value;
+                currentBranchId = currentUser.BranchId;
+            }
+            else
+            {
+                var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+                if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+            }
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading workers: " + ex.Message, isWarning: true);
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            branches = await DbContext.Branches
+                .Where(b => b.BusinessId == currentBusinessId)
+                .OrderBy(b => b.BranchName)
+                .ToListAsync();
+
+            if (currentBranchId.HasValue)
+            {
+                var matched = branches.FirstOrDefault(b => b.BranchId == currentBranchId.Value);
+                if (matched != null) ActiveBranch = matched.BranchName;
+            }
+            else if (branches.Count > 0)
+            {
+                ActiveBranch = branches[0].BranchName;
+            }
+
+            var branchIds = branches.Select(b => b.BranchId).ToHashSet();
+
+            workers = await DbContext.Workers
+                .Where(w => branchIds.Contains(w.BranchId))
+                .OrderByDescending(w => w.WorkerId)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Database load error: " + ex.Message, isWarning: true);
+        }
+    }
+
+    List<AgriNexus.DataLayer.Models.Worker> NonArchivedWorkers => workers
+        .Where(w => !string.Equals(w.Status, "archived", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    List<AgriNexus.DataLayer.Models.Worker> Filtered
+    {
+        get
+        {
+            var baseList = workers
+                .Where(w => showArchived
+                    ? string.Equals(w.Status, "archived", StringComparison.OrdinalIgnoreCase)
+                    : !string.Equals(w.Status, "archived", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (string.IsNullOrWhiteSpace(searchText))
+                return baseList;
+
+            return baseList.Where(w =>
+                w.FullName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                (w.Skill ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                (w.EmploymentType ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                (w.ContactNumber ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Filtered.Count / pageSize));
+    private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<AgriNexus.DataLayer.Models.Worker> PaginatedWorkers => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
 
     List<Stat> Stats
     {
         get
         {
-            var active = workers.Count(w => w.Status == "active");
-            var commitment = workers.Where(w => w.Status == "active").Sum(w => w.DailyRate);
-            var permanent = workers.Count(w => w.Employment == "permanent");
-            var seasonal = workers.Count(w => w.Employment == "seasonal");
+            var activeList = NonArchivedWorkers.Where(w => string.Equals(w.Status, "active", StringComparison.OrdinalIgnoreCase)).ToList();
+            var commitment = activeList.Sum(w => w.DailyRate);
+            var permanent = NonArchivedWorkers.Count(w => string.Equals(w.EmploymentType, "permanent", StringComparison.OrdinalIgnoreCase));
+            var seasonal = NonArchivedWorkers.Count(w => string.Equals(w.EmploymentType, "seasonal", StringComparison.OrdinalIgnoreCase));
+
             return new()
             {
-                new("WORKERS ON RECORD", workers.Count.ToString(), active + " active", "bi-person-badge", ""),
-                new("DAILY WAGE COMMITMENT", Peso(commitment), "If all active workers are deployed", "bi-wallet2", "stat-icon-plain"),
-                new("PERMANENT STAFF", permanent.ToString(), seasonal + " seasonal", "bi-people", "stat-icon-plain"),
+                new("WORKERS ON RECORD", NonArchivedWorkers.Count.ToString(), activeList.Count + " active", "bi-person-badge", ""),
+                new("DAILY WAGE COMMITMENT", Peso(commitment), "If all active workers are deployed", "bi-wallet2", "stat-icon-leaf"),
+                new("PERMANENT STAFF", permanent.ToString(), seasonal + " seasonal", "bi-people", "stat-icon-earth"),
             };
         }
     }
 
     bool RateInvalid => rateInput.HasValue && rateInput.Value < 0;
 
-    // ---------- HELPERS ----------
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    static string Cap(string? s) => string.IsNullOrWhiteSpace(s) ? "" : char.ToUpper(s[0]) + s.Substring(1);
 
-    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+    static string StatusPillClass(string? status) =>
+        string.Equals(status, "active", StringComparison.OrdinalIgnoreCase) ? "pill-forest" : "pill-earth";
 
-    // ---------- ACTIONS ----------
+    static string StatusIcon(string? status) =>
+        string.Equals(status, "active", StringComparison.OrdinalIgnoreCase) ? "bi-check-circle" : "bi-pause-circle";
+
+    string BranchNameOf(long branchId) =>
+        branches.FirstOrDefault(b => b.BranchId == branchId)?.BranchName ?? "—";
+
+    private string CapitalizeWords(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input ?? "";
+        return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input.ToLower().Trim());
+    }
+
+    private void FormatContactNumber()
+    {
+        if (string.IsNullOrEmpty(form.ContactNumber)) return;
+
+        var digits = new string(form.ContactNumber.Where(char.IsDigit).ToArray());
+
+        if (string.IsNullOrEmpty(digits))
+        {
+            form.ContactNumber = "";
+            return;
+        }
+
+        if (digits.StartsWith("63") && digits.Length > 2)
+        {
+            digits = "0" + digits.Substring(2);
+        }
+        else if (digits.StartsWith("9"))
+        {
+            digits = "0" + digits;
+        }
+
+        if (digits.Length > 11)
+        {
+            digits = digits.Substring(0, 11);
+        }
+
+        if (digits.Length > 7)
+        {
+            form.ContactNumber = $"{digits.Substring(0, 4)} {digits.Substring(4, 3)} {digits.Substring(7)}";
+        }
+        else if (digits.Length > 4)
+        {
+            form.ContactNumber = $"{digits.Substring(0, 4)} {digits.Substring(4)}";
+        }
+        else
+        {
+            form.ContactNumber = digits;
+        }
+    }
+
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
+
+    private async Task ToggleTab(bool archived)
+    {
+        showArchived = archived;
+        currentPage = 1;
+        openMenuId = null;
+        await Task.CompletedTask;
+    }
+
+    private async Task ToggleMenuAsync(MouseEventArgs e, int id)
+    {
+        if (openMenuId == id)
+        {
+            openMenuId = null;
+            return;
+        }
+
+        var target = workers.FirstOrDefault(x => x.WorkerId == id);
+        int itemCount = string.Equals(target?.Status, "archived", StringComparison.OrdinalIgnoreCase) ? 1 : 3;
+        const double itemHeight = 42;
+        const double padding = 16;
+        const double menuWidth = 175;
+        double menuHeight = (itemCount * itemHeight) + padding;
+
+        var viewport = await JS.InvokeAsync<Viewport>("eval", "({ w: window.innerWidth, h: window.innerHeight })");
+
+        menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewport.W - menuWidth - 10);
+        menuTop = (e.ClientY + menuHeight > viewport.H) ? e.ClientY - menuHeight - 5 : e.ClientY + 15;
+
+        openMenuId = id;
+    }
+
+    void CloseMenu() => openMenuId = null;
+
+    void OpenDetails(AgriNexus.DataLayer.Models.Worker w)
+    {
+        selectedWorker = w;
+        showDetailsModal = true;
+    }
+
+    void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedWorker = null;
+    }
+
     void OpenNew()
     {
-        form = new WorkerRec { Employment = "daily", Skill = "general", Status = "active", Branch = ActiveBranch };
+        openMenuId = null;
+        long defaultBranchId = currentBranchId ?? branches.FirstOrDefault()?.BranchId ?? 0;
+
+        form = new AgriNexus.DataLayer.Models.Worker
+        {
+            BranchId = defaultBranchId,
+            EmploymentType = "daily",
+            Skill = "general",
+            DateHired = DateTime.Today,
+            Status = "active"
+        };
+        selectedBranchIdStr = defaultBranchId > 0 ? defaultBranchId.ToString() : "";
         rateInput = null;
         editingId = null;
         showErrors = false;
+        contactError = "";
         showModal = true;
     }
 
-    void OpenEdit(WorkerRec w)
+    void OpenEdit(AgriNexus.DataLayer.Models.Worker w)
     {
-        form = w.Clone();
-        rateInput = w.DailyRate;
-        editingId = w.Id;
-        showErrors = false;
+        showDetailsModal = false;
         openMenuId = null;
+        form = new AgriNexus.DataLayer.Models.Worker
+        {
+            WorkerId = w.WorkerId,
+            BranchId = w.BranchId,
+            FullName = w.FullName,
+            EmploymentType = w.EmploymentType,
+            Skill = w.Skill,
+            DailyRate = w.DailyRate,
+            ContactNumber = w.ContactNumber,
+            DateHired = w.DateHired,
+            Status = w.Status
+        };
+        selectedBranchIdStr = w.BranchId.ToString();
+        rateInput = w.DailyRate;
+        editingId = w.WorkerId;
+        showErrors = false;
+        contactError = "";
         showModal = true;
     }
 
     void CloseModal() => showModal = false;
 
-    void Save()
+    void PromptSave()
     {
         showErrors = true;
-        if (string.IsNullOrWhiteSpace(form.Name) || RateInvalid) return;
+        contactError = "";
 
-        form.Name = form.Name.Trim();
-        form.DailyRate = rateInput ?? 0;
+        if (string.IsNullOrWhiteSpace(form.FullName) || RateInvalid) return;
 
-        if (editingId == null)
+        if (!string.IsNullOrWhiteSpace(form.ContactNumber))
         {
-            form.Id = workers.Count == 0 ? 1 : workers.Max(w => w.Id) + 1;
-            workers.Add(form);
+            var rawContact = new string(form.ContactNumber.Where(char.IsDigit).ToArray());
+            if (rawContact.Length != 11)
+            {
+                contactError = "Contact number must be 11 digits (e.g., 09XX XXX XXXX).";
+                return;
+            }
         }
-        else
-        {
-            var idx = workers.FindIndex(w => w.Id == editingId);
-            if (idx >= 0) workers[idx] = form;
-        }
-        showModal = false;
+
+        showConfirmSaveModal = true;
     }
 
-    void ToggleStatus(WorkerRec w)
+    void CancelSaveConfirm() => showConfirmSaveModal = false;
+
+    async Task ConfirmSaveAsync()
+    {
+        isSaving = true;
+        try
+        {
+            long branchId = long.TryParse(selectedBranchIdStr, out var bId) && bId > 0
+                ? bId
+                : (currentBranchId ?? branches.FirstOrDefault()?.BranchId ?? 0);
+
+            if (branchId == 0)
+            {
+                await ShowToast("No branch available to assign worker.", isWarning: true);
+                return;
+            }
+
+            var cleanName = form.FullName.Trim();
+
+            if (editingId == null)
+            {
+                var created = new AgriNexus.DataLayer.Models.Worker
+                {
+                    BranchId = branchId,
+                    FullName = cleanName,
+                    EmploymentType = string.IsNullOrWhiteSpace(form.EmploymentType) ? "daily" : form.EmploymentType.Trim(),
+                    Skill = string.IsNullOrWhiteSpace(form.Skill) ? "general" : form.Skill.Trim(),
+                    DailyRate = rateInput ?? 0,
+                    ContactNumber = (form.ContactNumber ?? "").Trim(),
+                    DateHired = form.DateHired,
+                    Status = string.IsNullOrWhiteSpace(form.Status) ? "active" : form.Status.Trim()
+                };
+
+                DbContext.Workers.Add(created);
+                await DbContext.SaveChangesAsync();
+                await ShowToast("Worker registered successfully.");
+            }
+            else
+            {
+                var existing = await DbContext.Workers.FindAsync(editingId.Value);
+                if (existing != null)
+                {
+                    existing.BranchId = branchId;
+                    existing.FullName = cleanName;
+                    existing.EmploymentType = string.IsNullOrWhiteSpace(form.EmploymentType) ? "daily" : form.EmploymentType.Trim();
+                    existing.Skill = string.IsNullOrWhiteSpace(form.Skill) ? "general" : form.Skill.Trim();
+                    existing.DailyRate = rateInput ?? 0;
+                    existing.ContactNumber = (form.ContactNumber ?? "").Trim();
+                    existing.DateHired = form.DateHired;
+                    existing.Status = string.IsNullOrWhiteSpace(form.Status) ? "active" : form.Status.Trim();
+
+                    DbContext.Workers.Update(existing);
+                    await DbContext.SaveChangesAsync();
+                    await ShowToast("Worker details updated.");
+                }
+            }
+
+            showConfirmSaveModal = false;
+            showModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error saving worker: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    async Task ToggleStatusAsync(AgriNexus.DataLayer.Models.Worker w)
     {
         openMenuId = null;
-        w.Status = w.Status == "active" ? "inactive" : "active";
+        try
+        {
+            var existing = await DbContext.Workers.FindAsync(w.WorkerId);
+            if (existing != null)
+            {
+                existing.Status = string.Equals(existing.Status, "active", StringComparison.OrdinalIgnoreCase)
+                    ? "inactive"
+                    : "active";
+                DbContext.Workers.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast($"{existing.FullName} marked as {existing.Status}.");
+            }
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error updating status: " + ex.Message, isWarning: true);
+        }
     }
 
-    async Task Delete(WorkerRec w)
+    void PromptArchive(AgriNexus.DataLayer.Models.Worker w)
     {
         openMenuId = null;
-        // TODO: kung naay work assignments, attendance o labor cost records ang worker,
-        // i-set sa inactive imbes i-delete aron dili madaot ang history
-        workers.Remove(w);
-        await ShowToast(w.Name + " was removed.");
+        workerToArchive = w;
+        showConfirmArchiveModal = true;
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
-    void CloseMenu() => openMenuId = null;
+    void CancelArchiveConfirm()
+    {
+        showConfirmArchiveModal = false;
+        workerToArchive = null;
+    }
 
-    async Task ShowToast(string message)
+    async Task ConfirmArchiveAsync()
+    {
+        if (workerToArchive == null) return;
+        isSaving = true;
+        try
+        {
+            var existing = await DbContext.Workers.FindAsync(workerToArchive.WorkerId);
+            if (existing != null)
+            {
+                existing.Status = "archived";
+                DbContext.Workers.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast($"{workerToArchive.FullName} archived.");
+            }
+
+            showConfirmArchiveModal = false;
+            workerToArchive = null;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error archiving worker: " + ex.Message, isWarning: true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    async Task RestoreWorkerAsync(AgriNexus.DataLayer.Models.Worker w)
+    {
+        openMenuId = null;
+        try
+        {
+            var existing = await DbContext.Workers.FindAsync(w.WorkerId);
+            if (existing != null)
+            {
+                existing.Status = "active";
+                DbContext.Workers.Update(existing);
+                await DbContext.SaveChangesAsync();
+                await ShowToast($"{w.FullName} restored to Active.");
+            }
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error restoring worker: " + ex.Message, isWarning: true);
+        }
+    }
+
+    async Task ShowToast(string message, bool isWarning = false)
     {
         toast = message;
+        toastIsWarning = isWarning;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3000);
+        await Task.Delay(3200);
         toast = "";
         await InvokeAsync(StateHasChanged);
     }
