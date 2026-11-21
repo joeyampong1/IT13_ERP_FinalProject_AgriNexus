@@ -1,16 +1,27 @@
 ﻿@page "/customers"
 @using System.Globalization
+@layout MainLayout
+@inject AgriNexus.DataLayer.AgriNexusDbContext DbContext
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer.Models
+@inject IJSRuntime JS
+@using Microsoft.AspNetCore.Components.Web
 
-<div class="mb-4">
-    <h2 class="page-title">Customer Management</h2>
-    <p class="text-muted mb-0 page-sub">@BusinessName · buyers, credit limits and outstanding balances.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h2 class="page-title">Customer Management</h2>
+        <p class="text-muted mb-0 page-sub">@BusinessName · buyers, credit limits, and outstanding balances.</p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-people-fill me-1"></i> Customer Directory
+    </span>
 </div>
 
 <!-- STAT CARDS -->
 <div class="row g-3 mb-4">
     @foreach (var s in Stats)
     {
-        <div class="col-12 col-md-4">
+        <div class="col-12 col-sm-6 col-xl-4">
             <div class="stat-card h-100">
                 <div class="d-flex justify-content-between align-items-start gap-2">
                     <span class="card-title">@s.Title</span>
@@ -28,169 +39,451 @@
     }
 </div>
 
-<!-- TOOLBAR -->
-<div class="toolbar mb-3">
+<!-- TOOLBAR WITH TABS -->
+<div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+    <div class="btn-group shadow-sm" role="group" aria-label="View Tabs">
+        <input type="radio" class="btn-check" name="customerTabs" id="tabCustActive" autocomplete="off"
+               checked="@(!showArchived)" @onchange="() => ToggleTabAsync(false)">
+        <label class="btn btn-outline-success fw-bold" for="tabCustActive">
+            <i class="bi bi-check-circle-fill me-1"></i> Active
+        </label>
+
+        <input type="radio" class="btn-check" name="customerTabs" id="tabCustArchived" autocomplete="off"
+               checked="@showArchived" @onchange="() => ToggleTabAsync(true)">
+        <label class="btn btn-outline-secondary fw-bold" for="tabCustArchived">
+            <i class="bi bi-archive-fill me-1"></i> Archived
+        </label>
+    </div>
+
     <div class="search-box">
         <i class="bi bi-search"></i>
-        <input type="text" placeholder="Search customers..." @bind="searchText" @bind:event="oninput" />
+        <input type="text" placeholder="Search customers..."
+               @bind="searchText"
+               @bind:event="oninput"
+               @bind:after="ResetPagination" />
     </div>
-    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "customer" : "customers")</span>
-    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
+
+    <span class="badge rounded-pill px-3 py-2 fw-semibold count-label" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+        <i class="bi bi-person-lines-fill me-1 text-success"></i>@Filtered.Count @(Filtered.Count == 1 ? "customer" : "customers")
+    </span>
+
+    <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNew">
         <i class="bi bi-plus-lg"></i> New customer
     </button>
 </div>
 
-<!-- TABLE -->
-<div class="panel">
-    <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
-            <thead>
+<!-- TABLE (WITH SCROLL, PAGINATION & ROUNDED CORNERS) -->
+<div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 280px); overflow: hidden;">
+    <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+        <table class="table table-hover biz-table align-middle mb-0" style="width: 100%;">
+            <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
                 <tr>
-                    <th>Customer</th>
-                    <th>Contact person</th>
-                    <th>Contact</th>
-                    <th>Credit limit</th>
-                    <th>Outstanding</th>
-                    <th>Status</th>
-                    <th></th>
+                    <th class="py-3 px-4">Customer</th>
+                    <th class="py-3">Contact person</th>
+                    <th class="py-3">Contact</th>
+                    <th class="py-3">Credit limit</th>
+                    <th class="py-3">Outstanding</th>
+                    <th class="py-3">Status</th>
+                    <th class="py-3 px-4"></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var c in Filtered)
+                @foreach (var c in PaginatedCustomers)
                 {
-                    <tr>
-                        <td class="col-name">
-                            <div class="fw-semibold">@c.Name</div>
-                            <div class="sub">@TypeLabel(c.Type)</div>
+                    <tr @onclick="() => OpenDetails(c)">
+                        <td class="col-name px-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="biz-avatar">
+                                    <i class="bi bi-person-badge"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: #0A2B1D;">@c.Name</div>
+                                    <div class="sub">@TypeLabel(c.Type)</div>
+                                </div>
+                            </div>
                         </td>
                         <td class="col-person">@(string.IsNullOrWhiteSpace(c.Person) ? "—" : c.Person)</td>
-                        <td class="text-nowrap">@(string.IsNullOrWhiteSpace(c.Contact) ? "" : c.Contact)</td>
-                        <td class="text-nowrap">@Peso(c.CreditLimit)</td>
-                        <td class="text-nowrap @(c.Outstanding > 0 ? "neg fw-medium" : "")">@Peso(c.Outstanding)</td>
-                        <td><span class="pill @(c.Status == "active" ? "pill-green" : "pill-gray")">@Cap(c.Status)</span></td>
-                        <td class="text-end action-cell">
-                            <button type="button" class="btn-dots" @onclick="() => ToggleMenu(c.Id)" aria-label="Actions">
+                        <td class="col-contact text-nowrap">
+                            @if (string.IsNullOrWhiteSpace(c.Contact))
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                            else
+                            {
+                                <span><i class="bi bi-telephone me-1 text-success"></i>@c.Contact</span>
+                            }
+                        </td>
+                        <td class="col-terms text-nowrap fw-semibold" style="color: #0A2B1D;">@Peso(c.CreditLimit)</td>
+                        <td class="col-terms text-nowrap @(c.Outstanding > 0 ? "neg fw-bold" : "text-muted")">@Peso(c.Outstanding)</td>
+                        <td>
+                            <span class="pill @(c.Status == "active" ? "pill-green" : "pill-gray")">
+                                <i class="bi @(c.Status == "active" ? "bi-check-circle-fill" : "bi-slash-circle") me-1"></i>@Cap(c.Status)
+                            </span>
+                        </td>
+                        <td class="text-end px-4 action-cell">
+                            <button type="button" class="btn-dots"
+                                    @onclick="(e) => ToggleMenuAsync(e, c.Id)"
+                                    @onclick:stopPropagation="true" aria-label="Actions">
                                 <i class="bi bi-three-dots"></i>
                             </button>
-                            @if (openMenuId == c.Id)
-                            {
-                                <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                <div class="row-menu">
-                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(c)">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </button>
-                                    <div class="menu-sep"></div>
-                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(c)">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </div>
-                            }
                         </td>
                     </tr>
                 }
                 @if (Filtered.Count == 0)
                 {
-                    <tr><td colspan="7" class="text-center text-muted py-5">No customers found.</td></tr>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                            No customers found.
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
     </div>
+
+    <!-- PAGINATION FOOTER -->
+    @if (Filtered.Count > 0)
+    {
+        <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+            <div class="text-muted small mb-2 mb-md-0">
+                Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> customers
+            </div>
+
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                    <i class="bi bi-chevron-left me-1"></i>Previous
+                </button>
+
+                @for (int i = 1; i <= TotalPages; i++)
+                {
+                    var pageNumber = i;
+                    <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                            @onclick="() => GoToPage(pageNumber)">
+                        @pageNumber
+                    </button>
+                }
+
+                <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                    Next<i class="bi bi-chevron-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    }
 </div>
 
-<!-- MODAL -->
+<!-- FLOATING ACTION MENU -->
+@if (openMenuId != null)
+{
+    var menuCustomer = customers.FirstOrDefault(x => x.Id == openMenuId);
+    if (menuCustomer != null)
+    {
+        <div class="menu-backdrop" @onclick="CloseMenu" @onclick:stopPropagation="true"></div>
+        <div class="vertical-action-menu shadow-lg" style="top:@(menuTop)px; left:@(menuLeft)px;">
+            @if (!showArchived)
+            {
+                <button type="button" class="action-item"
+                        @onclick="() => OpenEdit(menuCustomer)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-pencil-square text-success"></i> Edit
+                </button>
+                <div class="menu-sep"></div>
+                <button type="button" class="action-item text-danger"
+                        @onclick="() => RequestArchiveAsync(menuCustomer)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-archive-fill"></i> Archive
+                </button>
+            }
+            else
+            {
+                <button type="button" class="action-item text-success"
+                        @onclick="() => RestoreCustomerAsync(menuCustomer)"
+                        @onclick:stopPropagation="true">
+                    <i class="bi bi-arrow-counterclockwise"></i> Restore
+                </button>
+            }
+        </div>
+    }
+}
+
+<!-- DETAILS MODAL -->
+@if (showDetailsModal && selectedCustomer != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1" @onclick="CloseDetailsModal">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi bi-person-badge-fill fs-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedCustomer.Name</h4>
+                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                <i class="bi bi-tag-fill me-1"></i>@TypeLabel(selectedCustomer.Type)
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-person-lines-fill me-2 text-success"></i>Contact & Address Info
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Contact Person</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">@(string.IsNullOrWhiteSpace(selectedCustomer.Person) ? "N/A" : selectedCustomer.Person)</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Contact Number</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">@(string.IsNullOrWhiteSpace(selectedCustomer.Contact) ? "N/A" : selectedCustomer.Contact)</p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Email Address</label>
+                                <p class="mb-0 fw-medium text-dark">@(string.IsNullOrWhiteSpace(selectedCustomer.Email) ? "N/A" : selectedCustomer.Email)</p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Account Status</label>
+                                <div class="mt-1">
+                                    <span class="pill @(selectedCustomer.Status == "active" ? "pill-green" : "pill-gray")">@Cap(selectedCustomer.Status)</span>
+                                </div>
+                            </div>
+                            <div class="col-12 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Complete Address</label>
+                                <p class="mb-0 text-muted fst-italic">@(string.IsNullOrWhiteSpace(selectedCustomer.Address) ? "No address provided." : selectedCustomer.Address)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-wallet2 me-2 text-success"></i>Credit Standing & Notes
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Credit Limit</label>
+                                <span class="fw-bold fs-5" style="color: #0A2B1D;">@Peso(selectedCustomer.CreditLimit)</span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Outstanding Balance</label>
+                                <span class="fw-bold fs-5 @(selectedCustomer.Outstanding > 0 ? "neg" : "text-success")">@Peso(selectedCustomer.Outstanding)</span>
+                            </div>
+                            <div class="col-12 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase d-block mb-2">Internal Notes</label>
+                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
+                                    <p class="mb-0 text-muted small">@(string.IsNullOrWhiteSpace(selectedCustomer.Notes) ? "No notes available." : selectedCustomer.Notes)</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                    @if (!selectedCustomer.IsArchived)
+                    {
+                        <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedCustomer)">
+                            <i class="bi bi-pencil-square me-2"></i>Edit Customer
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ADD / EDIT MODAL -->
 @if (showModal)
 {
-    <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New customer" : "Edit customer")</h5>
-                <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1" @onclick="CloseModal">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                            <i class="bi @(editingId == null ? "bi-person-plus-fill" : "bi-pencil-square") fs-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">
+                                @(editingId == null ? "Register New Customer" : "Edit Customer Details")
+                            </h4>
+                            <p class="text-muted small mb-0">Fill in buyer details, credit terms, and contact information.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <form>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-person-badge-fill me-2 text-success"></i>Customer & Contact Info
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Customer Name <span class="text-danger">*</span></label>
+                                    <div class="input-group modern-input @(showErrors && (string.IsNullOrWhiteSpace(form.Name) || nameTaken) ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-building text-success"></i></span>
+                                        <input class="form-control" placeholder="e.g. Bayanihan Trading"
+                                               @bind="form.Name"
+                                               @bind:after="() => form.Name = CapitalizeWords(form.Name)" />
+                                    </div>
+                                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
+                                    {
+                                        <div class="err"><i class="bi bi-exclamation-circle me-1"></i>Customer name is required.</div>
+                                    }
+                                    @if (showErrors && nameTaken)
+                                    {
+                                        <div class="err"><i class="bi bi-exclamation-circle me-1"></i>This customer already exists.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Customer Type</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-tags text-success"></i></span>
+                                        <select class="form-select" @bind="form.Type">
+                                            @foreach (var t in TypeOptions)
+                                            {
+                                                <option value="@t">@TypeLabel(t)</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Contact Person</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                                        <input class="form-control" placeholder="Full name"
+                                               @bind="form.Person"
+                                               @bind:after="() => form.Person = CapitalizeWords(form.Person)" />
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Contact Number</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-telephone text-success"></i></span>
+                                        <input type="tel" class="form-control"
+                                               @bind="form.Contact"
+                                               @bind:event="oninput"
+                                               @bind:after="FormatContactNumber"
+                                               placeholder="09XX XXX XXXX"
+                                               spellcheck="false" />
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Email Address</label>
+                                    <div class="input-group modern-input @(showErrors && !EmailValid ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-envelope text-success"></i></span>
+                                        <input type="email" class="form-control" placeholder="buyer@email.com" @bind="form.Email" />
+                                    </div>
+                                    @if (showErrors && !EmailValid)
+                                    {
+                                        <div class="err"><i class="bi bi-exclamation-circle me-1"></i>Enter a valid email address.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Status</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-toggle-on text-success"></i></span>
+                                        <select class="form-select" @bind="form.Status">
+                                            <option value="active">Active</option>
+                                            <option value="inactive">Inactive</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Complete Address</label>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-geo-alt text-success"></i></span>
+                                        <input class="form-control" placeholder="Street, Barangay, City / Municipality"
+                                               @bind="form.Address"
+                                               @bind:after="() => form.Address = CapitalizeWords(form.Address)" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                                <i class="bi bi-wallet2 me-2 text-success"></i>Credit & Notes
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Credit Limit (₱)</label>
+                                    <input type="number" min="0" step="0.01" class="form-control border-0 shadow-sm @(showErrors && Negative(limitInput) ? "is-invalid" : "")" @bind="limitInput" />
+                                    @if (showErrors && Negative(limitInput))
+                                    {
+                                        <div class="err">Credit limit can’t be negative.</div>
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Current Outstanding Balance (₱)</label>
+                                    <input type="number" min="0" step="0.01" class="form-control border-0 shadow-sm @(showErrors && Negative(balanceInput) ? "is-invalid" : "")" @bind="balanceInput" />
+                                    @if (showErrors && Negative(balanceInput))
+                                    {
+                                        <div class="err">Balance can’t be negative.</div>
+                                    }
+                                </div>
+
+                                <div class="col-12 mt-3">
+                                    <label class="form-label fw-bold small text-muted">Internal Notes</label>
+                                    <textarea class="form-control border-0 shadow-sm" rows="3" @bind="form.Notes" placeholder="Payment terms, delivery instructions, or remarks..."></textarea>
+                                </div>
+                            </div>
+
+                            @if (showErrors && OverLimit)
+                            {
+                                <div class="warn-box mt-3"><i class="bi bi-exclamation-triangle-fill"></i> The outstanding balance is higher than the credit limit.</div>
+                            }
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn-save px-5 shadow-sm" @onclick="SaveAsync">
+                        <i class="bi bi-check2-circle me-2"></i>@(editingId == null ? "Save Customer" : "Update Customer")
+                    </button>
+                </div>
             </div>
+        </div>
+    </div>
+}
 
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Customer name <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && (string.IsNullOrWhiteSpace(form.Name) || NameTaken) ? "is-invalid" : "")" @bind="form.Name" />
-                    @if (showErrors && string.IsNullOrWhiteSpace(form.Name))
-                    {
-                        <div class="err">Customer name is required.</div>
-                    }
-                    @if (showErrors && NameTaken)
-                    {
-                        <div class="err">This customer already exists.</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Customer type</label>
-                    <select class="form-select" @bind="form.Type">
-                        @foreach (var t in TypeOptions)
-                        {
-                            <option value="@t">@t</option>
-                        }
-                    </select>
-                </div>
+<!-- ARCHIVE CONFIRMATION MODAL -->
+@if (showArchiveModal && customerToArchive != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 1050;" tabindex="-1" @onclick="CloseArchiveModal">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center">
+                <div class="modal-body p-4 mt-2">
+                    <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 70px; height: 70px;">
+                        <i class="bi bi-archive" style="font-size: 2.5rem;"></i>
+                    </div>
 
-                <div class="col-md-6">
-                    <label class="form-label">Contact person</label>
-                    <input class="form-control" @bind="form.Person" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Contact number</label>
-                    <input class="form-control" @bind="form.Contact" />
-                </div>
+                    <h4 class="fw-bolder mb-2" style="color: #0A2B1D;">Archive Customer?</h4>
+                    <p class="text-muted small mb-4">
+                        Are you sure you want to archive <strong>@customerToArchive.Name</strong>?<br />
+                        It will be moved to the Archived tab while keeping sales history intact.
+                    </p>
 
-                <div class="col-md-6">
-                    <label class="form-label">Email address</label>
-                    <input type="email" class="form-control @(showErrors && !EmailValid ? "is-invalid" : "")" @bind="form.Email" />
-                    @if (showErrors && !EmailValid)
-                    {
-                        <div class="err">Enter a valid email address.</div>
-                    }
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-light border rounded-3 fw-bold px-4" @onclick="CloseArchiveModal">Cancel</button>
+                        <button type="button" class="btn btn-danger rounded-3 fw-bold px-4 shadow-sm" @onclick="ConfirmArchiveAsync">
+                            <i class="bi bi-archive-fill me-1"></i> Yes, Archive
+                        </button>
+                    </div>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">Credit limit (₱)</label>
-                    <input type="number" min="0" step="0.01" class="form-control @(showErrors && Negative(limitInput) ? "is-invalid" : "")" @bind="limitInput" />
-                    @if (showErrors && Negative(limitInput))
-                    {
-                        <div class="err">Credit limit can’t be negative.</div>
-                    }
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Current outstanding balance (₱)</label>
-                    <input type="number" min="0" step="0.01" class="form-control @(showErrors && Negative(balanceInput) ? "is-invalid" : "")" @bind="balanceInput" />
-                    @if (showErrors && Negative(balanceInput))
-                    {
-                        <div class="err">Balance can’t be negative.</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" @bind="form.Status">
-                        <option value="active">active</option>
-                        <option value="inactive">inactive</option>
-                    </select>
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label">Address</label>
-                    <input class="form-control" @bind="form.Address" />
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label">Notes</label>
-                    <textarea class="form-control" rows="3" @bind="form.Notes"></textarea>
-                </div>
-            </div>
-
-            @if (showErrors && OverLimit)
-            {
-                <div class="warn-box mt-3"><i class="bi bi-exclamation-triangle"></i> The outstanding balance is higher than the credit limit.</div>
-            }
-
-            <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
-                <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
             </div>
         </div>
     </div>
@@ -202,10 +495,11 @@
 }
 
 @code {
-    // ---------- MODELS ----------
+    // ---------- VIEW MODEL ----------
     class CustomerRec
     {
         public int Id { get; set; }
+        public long BusinessId { get; set; }
         public string Name { get; set; } = "";
         public string Type { get; set; } = "retail";   // retail | wholesale | institutional | walk in
         public string Person { get; set; } = "";
@@ -216,39 +510,94 @@
         public string Status { get; set; } = "active";
         public string Address { get; set; } = "";
         public string Notes { get; set; } = "";
+        public bool IsArchived { get; set; }
 
         public CustomerRec Clone() => (CustomerRec)MemberwiseClone();
     }
 
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
 
+    class Viewport
+    {
+        public double W { get; set; }
+        public double H { get; set; }
+    }
+
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     static readonly string[] TypeOptions = { "retail", "wholesale", "institutional", "walk in" };
 
-    // TODO: kuhaa gikan sa naka-login nga tenant
-    const string BusinessName = "Verdant Agri Ventures";
+    // TODO: get from logged-in tenant / session
+    string BusinessName = "Verdant Agri Ventures";
+    long CurrentBusinessId = 1;
 
     // ---------- STATE ----------
     string searchText = "";
     string toast = "";
     bool showModal;
     bool showErrors;
+    bool nameTaken;
     int? editingId;
     int? openMenuId;
     CustomerRec form = new();
     decimal? limitInput;
     decimal? balanceInput;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    readonly List<CustomerRec> customers = new()
+    bool showDetailsModal;
+    CustomerRec? selectedCustomer;
+
+    bool showArchived;
+    bool showArchiveModal;
+    CustomerRec? customerToArchive;
+
+    private int currentPage = 1;
+    private int pageSize = 5;
+
+    private double menuTop;
+    private double menuLeft;
+
+    List<CustomerRec> customers = new();
+
+    protected override async Task OnInitializedAsync()
     {
-        new() { Id = 1, Name = "Bayanihan Trading",            Type = "wholesale",     Person = "Sofia Ramirez",         Contact = "0917 220 8891", CreditLimit = 50000,  Outstanding = 7900, Status = "active" },
-        new() { Id = 2, Name = "Municipal Market Vendors",     Type = "retail",        Person = "Nestor Padilla",        Contact = "0918 771 2298", CreditLimit = 30000,  Outstanding = 7560, Status = "active" },
-        new() { Id = 3, Name = "Rural Bank Cooperative Store", Type = "institutional", Person = "Evelyn Cortez",         Contact = "0920 553 1140", CreditLimit = 100000, Outstanding = 7000, Status = "active" },
-        new() { Id = 4, Name = "Verdant Fresh Retail",         Type = "retail",        Person = "Kim Torres",            Contact = "0917 889 3355", CreditLimit = 15000,  Outstanding = 0,    Status = "active" },
-        new() { Id = 5, Name = "Barangay Nutrition Program",   Type = "institutional", Person = "Brgy. Sta. Rosa Council", Contact = "0921 664 7788", CreditLimit = 40000, Outstanding = 0,    Status = "active" },
-        new() { Id = 6, Name = "Walk-in customers",            Type = "walk in",       Person = "Counter sales",         Contact = "",              CreditLimit = 0,      Outstanding = 0,    Status = "active" },
-    };
+        var biz = await DbContext.Businesses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.BusinessId == CurrentBusinessId);
+
+        if (biz != null && !string.IsNullOrWhiteSpace(biz.BusinessName))
+        {
+            BusinessName = biz.BusinessName;
+        }
+
+        await LoadCustomersAsync();
+    }
+
+    private async Task LoadCustomersAsync()
+    {
+        var rows = await DbContext.Customers
+            .AsNoTracking()
+            .Where(c => c.BusinessId == CurrentBusinessId && c.IsArchived == showArchived)
+            .OrderBy(c => c.CustomerName)
+            .ToListAsync();
+
+        customers = rows.Select(c => new CustomerRec
+        {
+            Id = c.CustomerId,
+            BusinessId = c.BusinessId,
+            Name = c.CustomerName,
+            Type = string.IsNullOrWhiteSpace(c.CustomerType)
+                ? (string.Equals(c.CustomerName, "Walk-in customers", StringComparison.OrdinalIgnoreCase) ? "walk in" : "retail")
+                : c.CustomerType,
+            Person = c.ContactPerson,
+            Contact = c.ContactNumber,
+            Email = c.Email,
+            Address = c.Address,
+            CreditLimit = c.CreditLimit,
+            Outstanding = c.OutstandingBalance,
+            Status = string.IsNullOrWhiteSpace(c.Status) ? "active" : c.Status,
+            Notes = c.Notes,
+            IsArchived = c.IsArchived
+        }).ToList();
+    }
 
     // ---------- COMPUTED ----------
     List<CustomerRec> Filtered => string.IsNullOrWhiteSpace(searchText)
@@ -259,6 +608,11 @@
             c.Contact.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
             c.Type.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
 
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Filtered.Count / pageSize));
+    private int StartItem => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndItem => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<CustomerRec> PaginatedCustomers => Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
     List<Stat> Stats
     {
         get
@@ -267,16 +621,12 @@
             var bulk = customers.Count(c => c.Type == "wholesale" || c.Type == "institutional");
             return new()
             {
-                new("CUSTOMERS", customers.Count.ToString(), active + " active", "bi-person", ""),
-                new("OUTSTANDING BALANCES", Peso(customers.Sum(c => c.Outstanding)), "", "bi-wallet2", "stat-icon-warn"),
-                new("WHOLESALE & INSTITUTIONAL", bulk.ToString(), "", "bi-basket", "stat-icon-plain"),
+                new("CUSTOMERS", customers.Count.ToString(), $"{active} active", "bi-person-lines-fill", ""),
+                new("OUTSTANDING BALANCES", Peso(customers.Sum(c => c.Outstanding)), "Receivables to collect", "bi-wallet2", "stat-icon-earth"),
+                new("WHOLESALE & INSTITUTIONAL", bulk.ToString(), "Bulk & institutional accounts", "bi-basket", "stat-icon-leaf"),
             };
         }
     }
-
-    bool NameTaken => !string.IsNullOrWhiteSpace(form.Name) &&
-        customers.Any(c => c.Id != (editingId ?? -1) &&
-                           string.Equals(c.Name, form.Name.Trim(), StringComparison.OrdinalIgnoreCase));
 
     bool EmailValid => string.IsNullOrWhiteSpace(form.Email) ||
         System.Text.RegularExpressions.Regex.IsMatch(form.Email.Trim(), @"^[^@\s]+@[^@\s]+\.[^@\s]+$");
@@ -292,80 +642,268 @@
 
     static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
 
-    // "walk in" -> "Walk In"
     static string TypeLabel(string t) =>
         string.Join(" ", (t ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(Cap));
 
-    // ---------- ACTIONS ----------
+    private string CapitalizeWords(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input;
+        return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input.ToLower().Trim());
+    }
+
+    private void FormatContactNumber()
+    {
+        if (string.IsNullOrEmpty(form.Contact)) return;
+
+        var digits = new string(form.Contact.Where(char.IsDigit).ToArray());
+
+        if (string.IsNullOrEmpty(digits))
+        {
+            form.Contact = "";
+            return;
+        }
+
+        if (digits.StartsWith("63") && digits.Length > 2)
+        {
+            digits = "0" + digits.Substring(2);
+        }
+        else if (digits.StartsWith("9"))
+        {
+            digits = "0" + digits;
+        }
+
+        if (digits.Length > 11)
+        {
+            digits = digits.Substring(0, 11);
+        }
+
+        if (digits.Length > 7)
+        {
+            form.Contact = $"{digits.Substring(0, 4)} {digits.Substring(4, 3)} {digits.Substring(7)}";
+        }
+        else if (digits.Length > 4)
+        {
+            form.Contact = $"{digits.Substring(0, 4)} {digits.Substring(4)}";
+        }
+        else
+        {
+            form.Contact = digits;
+        }
+    }
+
+    // ---------- PAGINATION & TABS ----------
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
+
+    private async Task ToggleTabAsync(bool archived)
+    {
+        showArchived = archived;
+        currentPage = 1;
+        openMenuId = null;
+        await LoadCustomersAsync();
+    }
+
+    // ---------- FLOATING MENU ----------
+    private async Task ToggleMenuAsync(MouseEventArgs e, int id)
+    {
+        if (openMenuId == id)
+        {
+            openMenuId = null;
+            return;
+        }
+
+        int itemCount = showArchived ? 1 : 2;
+        const double itemHeight = 42;
+        const double padding = 16;
+        const double menuWidth = 175;
+        double menuHeight = (itemCount * itemHeight) + padding;
+
+        var viewport = await JS.InvokeAsync<Viewport>("eval",
+            "({ w: window.innerWidth, h: window.innerHeight })");
+
+        menuLeft = Math.Min(e.ClientX - menuWidth + 20, viewport.W - menuWidth - 10);
+        menuTop = (e.ClientY + menuHeight > viewport.H)
+            ? e.ClientY - menuHeight - 5
+            : e.ClientY + 15;
+
+        openMenuId = id;
+    }
+
+    void CloseMenu() => openMenuId = null;
+
+    // ---------- MODALS & ACTIONS ----------
     void OpenNew()
     {
-        form = new CustomerRec { Type = "retail", Status = "active" };
+        form = new CustomerRec { BusinessId = CurrentBusinessId, Type = "retail", Status = "active" };
         limitInput = null;
         balanceInput = 0;
         editingId = null;
         showErrors = false;
+        nameTaken = false;
         showModal = true;
     }
 
     void OpenEdit(CustomerRec c)
     {
+        showDetailsModal = false;
         form = c.Clone();
         limitInput = c.CreditLimit;
         balanceInput = c.Outstanding;
         editingId = c.Id;
         showErrors = false;
+        nameTaken = false;
         openMenuId = null;
         showModal = true;
     }
 
     void CloseModal() => showModal = false;
 
-    void Save()
+    void OpenDetails(CustomerRec c)
+    {
+        selectedCustomer = c;
+        showDetailsModal = true;
+    }
+
+    void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedCustomer = null;
+    }
+
+    async Task SaveAsync()
     {
         showErrors = true;
-        if (string.IsNullOrWhiteSpace(form.Name) || NameTaken || !EmailValid || AnyNegative) return;
+        nameTaken = false;
 
-        form.Name = form.Name.Trim();
-        form.Email = (form.Email ?? "").Trim();
-        form.CreditLimit = limitInput ?? 0;
-        form.Outstanding = balanceInput ?? 0;
+        var cleanName = (form.Name ?? "").Trim();
+        var cleanType = string.IsNullOrWhiteSpace(form.Type) ? "retail" : form.Type.Trim();
+        var cleanPerson = (form.Person ?? "").Trim();
+        var cleanContact = (form.Contact ?? "").Trim();
+        var cleanEmail = (form.Email ?? "").Trim();
+        var cleanAddress = (form.Address ?? "").Trim();
+        var cleanStatus = string.IsNullOrWhiteSpace(form.Status) ? "active" : form.Status.Trim();
+        var cleanNotes = (form.Notes ?? "").Trim();
+        var creditLimit = limitInput ?? 0;
+        var outstanding = balanceInput ?? 0;
+
+        if (!string.IsNullOrWhiteSpace(cleanName))
+        {
+            nameTaken = await DbContext.Customers.AnyAsync(c =>
+                c.BusinessId == CurrentBusinessId &&
+                c.CustomerId != (editingId ?? -1) &&
+                c.CustomerName.ToLower() == cleanName.ToLower());
+        }
+
+        if (string.IsNullOrWhiteSpace(cleanName) || nameTaken || !EmailValid || AnyNegative)
+            return;
 
         if (editingId == null)
         {
-            form.Id = customers.Count == 0 ? 1 : customers.Max(c => c.Id) + 1;
-            customers.Add(form);
+            var entity = new AgriNexus.DataLayer.Models.Customer
+            {
+                BusinessId = CurrentBusinessId,
+                CustomerName = cleanName,
+                CustomerType = cleanType,
+                ContactPerson = cleanPerson,
+                ContactNumber = cleanContact,
+                Email = cleanEmail,
+                Address = cleanAddress,
+                CreditLimit = creditLimit,
+                OutstandingBalance = outstanding,
+                Status = cleanStatus,
+                Notes = cleanNotes,
+                IsArchived = false
+            };
+
+            DbContext.Customers.Add(entity);
+            await DbContext.SaveChangesAsync();
+            await ShowToast($"{cleanName} was added.");
         }
         else
         {
-            var idx = customers.FindIndex(c => c.Id == editingId);
-            if (idx >= 0) customers[idx] = form;
+            var entity = await DbContext.Customers.FirstOrDefaultAsync(c => c.CustomerId == editingId.Value);
+            if (entity != null)
+            {
+                entity.CustomerName = cleanName;
+                entity.CustomerType = cleanType;
+                entity.ContactPerson = cleanPerson;
+                entity.ContactNumber = cleanContact;
+                entity.Email = cleanEmail;
+                entity.Address = cleanAddress;
+                entity.CreditLimit = creditLimit;
+                entity.OutstandingBalance = outstanding;
+                entity.Status = cleanStatus;
+                entity.Notes = cleanNotes;
+
+                await DbContext.SaveChangesAsync();
+                await ShowToast($"{cleanName} was updated.");
+            }
         }
+
         showModal = false;
+        await LoadCustomersAsync();
     }
 
-    async Task Delete(CustomerRec c)
+    async Task RequestArchiveAsync(CustomerRec c)
     {
         openMenuId = null;
 
         if (c.Type == "walk in")
         {
-            await ShowToast("The walk-in customer is used for counter sales and can’t be deleted.");
+            await ShowToast("The walk-in customer is used for counter sales and can’t be archived.");
             return;
         }
         if (c.Outstanding > 0)
         {
-            await ShowToast(c.Name + " still has an outstanding balance of " + Peso(c.Outstanding) + ". Collect it before deleting.");
+            await ShowToast($"{c.Name} still has an outstanding balance of {Peso(c.Outstanding)}. Collect it before archiving.");
             return;
         }
 
-        // TODO: kung naay sales transactions ang customer, i-set sa inactive imbes i-delete
-        // aron dili madaot ang sales history
-        customers.Remove(c);
-        await ShowToast(c.Name + " was removed.");
+        customerToArchive = c;
+        showArchiveModal = true;
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
-    void CloseMenu() => openMenuId = null;
+    void CloseArchiveModal()
+    {
+        showArchiveModal = false;
+        customerToArchive = null;
+    }
+
+    async Task ConfirmArchiveAsync()
+    {
+        if (customerToArchive == null) return;
+
+        var entity = await DbContext.Customers.FirstOrDefaultAsync(c => c.CustomerId == customerToArchive.Id);
+        if (entity != null)
+        {
+            entity.IsArchived = true;
+            entity.Status = "inactive";
+            await DbContext.SaveChangesAsync();
+        }
+
+        var name = customerToArchive.Name;
+        CloseArchiveModal();
+        await LoadCustomersAsync();
+        await ShowToast($"{name} was archived.");
+    }
+
+    async Task RestoreCustomerAsync(CustomerRec c)
+    {
+        openMenuId = null;
+
+        var entity = await DbContext.Customers.FirstOrDefaultAsync(x => x.CustomerId == c.Id);
+        if (entity != null)
+        {
+            entity.IsArchived = false;
+            entity.Status = "active";
+            await DbContext.SaveChangesAsync();
+        }
+
+        await ShowToast($"{c.Name} was restored.");
+        await LoadCustomersAsync();
+    }
 
     async Task ShowToast(string message)
     {

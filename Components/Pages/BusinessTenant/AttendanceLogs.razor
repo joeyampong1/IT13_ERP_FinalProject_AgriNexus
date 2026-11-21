@@ -240,20 +240,25 @@
 <!-- DETAILS MODAL (ROW CLICK) -->
 @if (showDetailsModal && selectedLog != null)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1" @onclick="CloseDetailsModal">
         <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
             <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
                 <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
                     <div class="d-flex align-items-center gap-3">
-                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34; flex-shrink: 0;">
                             <i class="bi bi-clock-history fs-4"></i>
                         </div>
                         <div>
                             <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@WorkerNameOf(selectedLog.WorkerId)</h4>
-                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
-                                <i class="bi bi-calendar3 me-1"></i>@selectedLog.WorkDate.ToString("MMMM d, yyyy", Inv)
-                            </span>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+                                <span class="badge px-2 py-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                    <i class="bi bi-calendar3 me-1"></i>@selectedLog.WorkDate.ToString("MMMM d, yyyy", Inv)
+                                </span>
+                                <span class="pill @StatusPillClass(selectedLog.Status)">
+                                    <i class="bi @StatusIcon(selectedLog.Status) me-1"></i>@Cap(selectedLog.Status)
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
@@ -266,16 +271,34 @@
                         </h6>
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="text-muted small fw-bold text-uppercase">Task Performed</label>
-                                <p class="mb-0 fw-semibold fs-6 text-dark">@(string.IsNullOrWhiteSpace(selectedLog.Task) ? "—" : selectedLog.Task)</p>
+                                <label class="text-muted small fw-bold text-uppercase">Worker</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    <i class="bi bi-person text-success me-2"></i>@WorkerNameOf(selectedLog.WorkerId)
+                                </p>
                             </div>
                             <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Work Date</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    <i class="bi bi-calendar-event text-success me-2"></i>@selectedLog.WorkDate.ToString("MMMM d, yyyy", Inv)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Task Performed</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    <i class="bi bi-list-task text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedLog.Task) ? "—" : selectedLog.Task)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase">Plot</label>
-                                <p class="mb-0 fw-semibold fs-6 text-dark">@PlotNameOf(selectedLog.PlotId)</p>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    <i class="bi bi-geo-alt text-success me-2"></i>@PlotNameOf(selectedLog.PlotId)
+                                </p>
                             </div>
                             <div class="col-md-6 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase">Daily Rate</label>
-                                <p class="mb-0 fw-medium text-dark">@Peso(DailyRateOf(selectedLog.WorkerId))</p>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-tag text-success me-2"></i>@Peso(DailyRateOf(selectedLog.WorkerId))
+                                </p>
                             </div>
                             <div class="col-md-6 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase d-block mb-1">Status</label>
@@ -286,7 +309,7 @@
                             <div class="col-12 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase">Notes</label>
                                 <p class="mb-0 text-muted fst-italic">
-                                    @(string.IsNullOrWhiteSpace(selectedLog.Notes) ? "No notes provided." : selectedLog.Notes)
+                                    <i class="bi bi-journal-text text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedLog.Notes) ? "No notes provided." : selectedLog.Notes)
                                 </p>
                             </div>
                         </div>
@@ -298,14 +321,20 @@
                         </h6>
                         <div class="row g-3 text-center">
                             <div class="col-md-6">
-                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
-                                    <h4 class="fw-bolder mb-0" style="color: #0A2B1D;">@Hrs(selectedLog.HoursWorked) hrs</h4>
+                                <div class="p-3 bg-white rounded-3 border h-100 d-flex flex-column align-items-center justify-content-center" style="border-color: #E2ECE6 !important;">
+                                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 34px; height: 34px; background-color: #E8F3EC; color: #0A2B1D;">
+                                        <i class="bi bi-hourglass-split"></i>
+                                    </div>
+                                    <h4 class="fw-bolder mb-1" style="color: #0A2B1D;">@Hrs(selectedLog.HoursWorked) hrs</h4>
                                     <small class="text-muted fw-medium">Hours Worked</small>
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
-                                    <h4 class="fw-bolder mb-0" style="color: #1B5E34;">@Peso(Cost(selectedLog))</h4>
+                                <div class="p-3 bg-white rounded-3 border h-100 d-flex flex-column align-items-center justify-content-center" style="border-color: #E2ECE6 !important;">
+                                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 34px; height: 34px; background-color: #EDF7E8; color: #1B5E34;">
+                                        <i class="bi bi-cash-coin"></i>
+                                    </div>
+                                    <h4 class="fw-bolder mb-1" style="color: #1B5E34;">@Peso(Cost(selectedLog))</h4>
                                     <small class="text-muted fw-medium">Computed Labor Cost</small>
                                 </div>
                             </div>
@@ -314,7 +343,9 @@
                 </div>
 
                 <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
-                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">
+                        <i class="bi bi-x-lg me-1"></i> Close
+                    </button>
                     @if (!string.Equals(selectedLog.Status, "archived", StringComparison.OrdinalIgnoreCase))
                     {
                         <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedLog)">
@@ -330,13 +361,13 @@
 <!-- ADD / EDIT MODAL -->
 @if (showModal)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1" @onclick="CloseModal">
         <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
             <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
-                <div class="modal-header border-0 p-4" style="background-color: #F4F7F5;">
+                <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
                     <div class="d-flex align-items-center gap-3">
-                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34; flex-shrink: 0;">
                             <i class="bi @(editingId == null ? "bi-clock-history" : "bi-pencil-square") fs-5"></i>
                         </div>
                         <div>
@@ -376,14 +407,21 @@
 
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold small text-muted">Work Date</label>
-                                    <input type="date" class="form-control" @bind="form.WorkDate" />
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-calendar3 text-success"></i></span>
+                                        <input type="date" class="form-control" @bind="form.WorkDate" />
+                                    </div>
                                 </div>
 
                                 <div class="col-md-6 mt-4">
                                     <label class="form-label fw-bold small text-muted">Hours Worked <span class="text-danger">*</span></label>
-                                    <input type="number" min="0" max="24" step="0.5"
-                                           class="form-control @(showErrors && HoursInvalid ? "is-invalid" : "")"
-                                           @bind="hoursInput" />
+                                    <div class="input-group modern-input @(showErrors && HoursInvalid ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-hourglass-split text-success"></i></span>
+                                        <input type="number" min="0" max="24" step="0.5"
+                                               class="form-control"
+                                               placeholder="e.g. 8"
+                                               @bind="hoursInput" />
+                                    </div>
                                     @if (showErrors && HoursInvalid)
                                     {
                                         <div class="text-danger small mt-1 fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>Enter hours between 0.5 and 24.</div>
@@ -392,9 +430,12 @@
 
                                 <div class="col-md-6 mt-4">
                                     <label class="form-label fw-bold small text-muted">Task Performed</label>
-                                    <input class="form-control" placeholder="Irrigation, weeding, harvesting..."
-                                           @bind="form.Task"
-                                           @bind:after="() => form.Task = CapitalizeWords(form.Task)" />
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-list-task text-success"></i></span>
+                                        <input class="form-control" placeholder="Irrigation, weeding, harvesting..."
+                                               @bind="form.Task"
+                                               @bind:after="() => form.Task = CapitalizeWords(form.Task)" />
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -406,48 +447,60 @@
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold small text-muted">Plot</label>
-                                    @if (plotOptions.Count > 0)
-                                    {
-                                        <select class="form-select border-0 shadow-sm" @bind="selectedPlotIdStr">
-                                            <option value="">-- Select Plot --</option>
-                                            @foreach (var p in plotOptions)
-                                            {
-                                                <option value="@p.Id">@p.Name</option>
-                                            }
-                                        </select>
-                                    }
-                                    else
-                                    {
-                                        <input type="number" class="form-control border-0 shadow-sm" placeholder="Plot ID (optional)" @bind="form.PlotId" />
-                                    }
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-geo-alt text-success"></i></span>
+                                        @if (plotOptions.Count > 0)
+                                        {
+                                            <select class="form-select border-0 shadow-sm" @bind="selectedPlotIdStr">
+                                                <option value="">-- Select Plot --</option>
+                                                @foreach (var p in plotOptions)
+                                                {
+                                                    <option value="@p.Id">@p.Name</option>
+                                                }
+                                            </select>
+                                        }
+                                        else
+                                        {
+                                            <input type="number" class="form-control border-0 shadow-sm" placeholder="Plot ID (optional)" @bind="form.PlotId" />
+                                        }
+                                    </div>
                                 </div>
 
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold small text-muted">Status</label>
-                                    <select class="form-select border-0 shadow-sm" @bind="form.Status">
-                                        <option value="recorded">recorded</option>
-                                        <option value="approved">approved</option>
-                                    </select>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-check-circle text-success"></i></span>
+                                        <select class="form-select border-0 shadow-sm" @bind="form.Status">
+                                            <option value="recorded">recorded</option>
+                                            <option value="approved">approved</option>
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div class="col-12 mt-3">
                                     <label class="form-label fw-bold small text-muted">Notes</label>
-                                    <textarea class="form-control border-0 shadow-sm" rows="3" @bind="form.Notes"></textarea>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-journal-text text-success"></i></span>
+                                        <textarea class="form-control border-0 shadow-sm" rows="3" placeholder="Optional work remarks..." @bind="form.Notes"></textarea>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         @if (EstimatedCost.HasValue)
                         {
-                            <div class="hint mt-3">
-                                <i class="bi bi-calculator"></i> Computed labor cost: <strong>@Peso(EstimatedCost.Value)</strong> (daily rate ÷ 8 hours × hours worked)
+                            <div class="hint mt-3 p-3 rounded-3 d-flex align-items-center gap-2" style="background-color: #E8F3EC; color: #1B5E34;">
+                                <i class="bi bi-calculator fs-5"></i>
+                                <span>Computed labor cost: <strong>@Peso(EstimatedCost.Value)</strong> (daily rate ÷ 8 hours × hours worked)</span>
                             </div>
                         }
                     </form>
                 </div>
 
                 <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
-                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">
+                        <i class="bi bi-x-lg me-1"></i> Cancel
+                    </button>
                     <button type="button" class="btn-save px-5 shadow-sm" @onclick="PromptSave" disabled="@isSaving">
                         <i class="bi bi-check2-circle me-2"></i>@(editingId == null ? "Save Work Log" : "Update Work Log")
                     </button>

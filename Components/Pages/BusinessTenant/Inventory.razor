@@ -1,12 +1,16 @@
 ﻿@page "/inventory"
 @layout MainLayout
+@using System.IO
 @using System.Globalization
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Maui.Storage
 @using AgriNexus.DataLayer
 @using AgriNexus.DataLayer.Models
+@using AgriNexus.Services
 @inject AgriNexusDbContext DbContext
-@inject AgriNexus.Services.AuthService Auth
+@inject AuthService Auth
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -106,159 +110,183 @@
         }
     </div>
 
-    <div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 340px); overflow: hidden;">
-        <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
-            <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
-                <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
-                    <tr>
-                        <th class="text-muted small fw-bold text-uppercase py-3 px-4">Item</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">Category</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">On hand</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">Stock<br />level</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">Reorder<br />at</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">Unit cost</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">Stock<br />value</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">Supplier</th>
-                        <th class="py-3"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var i in PaginatedItems)
-                    {
-                        <tr style="cursor: pointer;" @onclick="() => OpenDetails(i)">
-                            <td class="px-4">
-                                <div class="d-flex align-items-center gap-3">
-                                    <div class="branch-avatar">
-                                        <i class="bi bi-box-seam"></i>
-                                    </div>
-                                    <div>
-                                        <div class="fw-bold" style="color: #0A2B1D;">@i.ItemName</div>
-                                        <div class="text-muted small mt-1">
-                                            <span class="fw-semibold" style="color: #1B5E34;">@i.ItemCode</span>
-                                            @(string.IsNullOrWhiteSpace(i.StorageLocation) ? "" : " · " + i.StorageLocation)
+    // Table layout
+        <div class="panel shadow-sm bg-white d-flex flex-column" style="border-radius: 16px; border: 1px solid #E2ECE6; max-height: calc(100vh - 340px); overflow: hidden;">
+            <div class="table-responsive" style="flex-grow: 1; overflow-y: auto;">
+                <table class="table table-hover align-middle mb-0 biz-table" style="width: 100%;">
+                    <thead style="position: sticky; top: 0; z-index: 1; background-color: #F7FAF8;">
+                        <tr>
+                            <th class="text-muted small fw-bold text-uppercase py-3 px-4">Item</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">Category</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">On hand</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">Stock<br />level</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">Reorder<br />at</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">Unit cost</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">Stock<br />value</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">Supplier</th>
+                            <th class="py-3"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var i in PaginatedItems)
+                        {
+                            <tr style="cursor: pointer;" @onclick="() => OpenDetails(i)">
+                                <td class="px-4">
+                                    <div class="d-flex align-items-center gap-3">
+                                        @if (!string.IsNullOrWhiteSpace(i.ImageUrl))
+                                        {
+                                            <img src="@i.ImageUrl" alt="@i.ItemName"
+                                                 style="width: 38px; height: 38px; object-fit: cover; border-radius: 10px; border: 1px solid #C6DFCE; flex-shrink: 0;" />
+                                        }
+                                        else
+                                        {
+                                            <div class="branch-avatar">
+                                                <i class="bi bi-box-seam"></i>
+                                            </div>
+                                        }
+                                        <div>
+                                            <div class="fw-bold" style="color: #0A2B1D;">@i.ItemName</div>
+                                            <div class="text-muted small mt-1">
+                                                <span class="fw-semibold" style="color: #1B5E34;">@i.ItemCode</span>
+                                                @(string.IsNullOrWhiteSpace(i.StorageLocation) ? "" : " · " + i.StorageLocation)
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </td>
-                            <td class="text-dark fw-medium">@Cap(i.Category)</td>
-                            <td class="text-nowrap fw-semibold text-dark">@Qty(i.QuantityOnHand) @i.Unit</td>
-                            <td>
-                                @if (i.IsArchived)
-                                {
-                                    <span class="pill pill-earth">
-                                        <i class="bi bi-archive me-1"></i>Archived
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="pill @(IsLow(i) ? "pill-earth" : "pill-forest")">
-                                        <i class="bi @(IsLow(i) ? "bi-exclamation-circle" : "bi-check-circle") me-1"></i>@(IsLow(i) ? "Low Stock" : "Active")
-                                    </span>
-                                }
-                            </td>
-                            <td class="text-muted fw-medium">@(i.ReorderLevel > 0 ? Qty(i.ReorderLevel) : "—")</td>
-                            <td class="text-nowrap text-dark fw-medium">@Peso(i.UnitCost)</td>
-                            <td class="text-nowrap text-dark fw-semibold">@Peso(i.QuantityOnHand * i.UnitCost)</td>
-                            <td class="text-dark fw-medium">@SupplierNameOf(i)</td>
-                            <td class="text-end px-4 action-cell">
-                                <button type="button" class="btn-dots"
-                                        @onclick="(e) => ToggleMenuAsync(e, i.ItemId)"
-                                        @onclick:stopPropagation="true" aria-label="Actions">
-                                    <i class="bi bi-three-dots"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    }
-                    @if (Filtered.Count == 0)
-                    {
-                        <tr>
-                            <td colspan="9" class="text-center text-muted py-5">
-                                <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
-                                @(showArchived ? "No archived items found." : "No items found.")
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-
-        @if (Filtered.Count > 0)
-        {
-            <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
-                <div class="text-muted small mb-2 mb-md-0">
-                    Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> items
-                </div>
-
-                <div class="d-flex gap-1">
-                    <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
-                        <i class="bi bi-chevron-left me-1"></i>Previous
-                    </button>
-
-                    @for (int p = 1; p <= TotalPages; p++)
-                    {
-                        var pageNumber = p;
-                        <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
-                                @onclick="() => GoToPage(pageNumber)">
-                            @pageNumber
-                        </button>
-                    }
-
-                    <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
-                        Next<i class="bi bi-chevron-right ms-1"></i>
-                    </button>
-                </div>
+                                </td>
+                                <td class="text-dark fw-medium">@Cap(i.Category)</td>
+                                <td class="text-nowrap fw-semibold text-dark">@Qty(i.QuantityOnHand) @i.Unit</td>
+                                <td>
+                                    @if (i.IsArchived)
+                                    {
+                                        <span class="pill pill-earth">
+                                            <i class="bi bi-archive me-1"></i>Archived
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pill @(IsLow(i) ? "pill-earth" : "pill-forest")">
+                                            <i class="bi @(IsLow(i) ? "bi-exclamation-circle" : "bi-check-circle") me-1"></i>@(IsLow(i) ? "Low Stock" : "Active")
+                                        </span>
+                                    }
+                                </td>
+                                <td class="text-muted fw-medium">@(i.ReorderLevel > 0 ? Qty(i.ReorderLevel) : "—")</td>
+                                <td class="text-nowrap text-dark fw-medium">@Peso(i.UnitCost)</td>
+                                <td class="text-nowrap text-dark fw-semibold">@Peso(i.QuantityOnHand * i.UnitCost)</td>
+                                <td class="text-dark fw-medium">@SupplierNameOf(i)</td>
+                                <td class="text-end px-4 action-cell">
+                                    <button type="button" class="btn-dots"
+                                            @onclick="(e) => ToggleMenuAsync(e, i.ItemId)"
+                                            @onclick:stopPropagation="true" aria-label="Actions">
+                                        <i class="bi bi-three-dots"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                        @if (Filtered.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="9" class="text-center text-muted py-5">
+                                    <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                                    @(showArchived ? "No archived items found." : "No items found.")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
-        }
-    </div>
-}
 
-<!-- ======================= TAB 2: LOW STOCK MONITORING ======================= -->
-@if (activeTab == "low")
-{
-    <div class="panel shadow-sm bg-white">
-        <div class="panel-head">
-            <div class="panel-title">Low-stock monitoring</div>
-            <div class="panel-sub mb-0">Items at or below their reorder level</div>
+            @if (Filtered.Count > 0)
+            {
+                <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+                    <div class="text-muted small mb-2 mb-md-0">
+                        Showing <span class="fw-bold" style="color: #0A2B1D;">@StartItem</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndItem</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> items
+                    </div>
+
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                            <i class="bi bi-chevron-left me-1"></i>Previous
+                        </button>
+
+                        @for (int p = 1; p <= TotalPages; p++)
+                        {
+                            var pageNumber = p;
+                            <button class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                                    @onclick="() => GoToPage(pageNumber)">
+                                @pageNumber
+                            </button>
+                        }
+
+                        <button class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                            Next<i class="bi bi-chevron-right ms-1"></i>
+                        </button>
+                    </div>
+                </div>
+            }
         </div>
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0 biz-table">
-                <thead style="background-color: #F7FAF8;">
-                    <tr>
-                        <th class="text-muted small fw-bold text-uppercase py-3 px-4">Item</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">Category</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">On hand</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">Reorder at</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">Shortage</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">Suggested order</th>
-                        <th class="text-muted small fw-bold text-uppercase py-3">Supplier</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var i in LowItems)
-                    {
-                        <tr style="cursor: pointer;" @onclick="() => OpenDetails(i)">
-                            <td class="px-4">
-                                <div class="fw-bold" style="color: #0A2B1D;">@i.ItemName</div>
-                                <div class="text-muted small">@i.ItemCode</div>
-                            </td>
-                            <td>@Cap(i.Category)</td>
-                            <td class="text-nowrap fw-semibold neg">@Qty(i.QuantityOnHand) @i.Unit</td>
-                            <td class="text-nowrap">@Qty(i.ReorderLevel) @i.Unit</td>
-                            <td class="text-nowrap">@Qty(Math.Max(0, i.ReorderLevel - i.QuantityOnHand)) @i.Unit</td>
-                            <td class="text-nowrap fw-semibold">@Qty(Math.Max(0, i.ReorderLevel * 2 - i.QuantityOnHand)) @i.Unit</td>
-                            <td>@SupplierNameOf(i)</td>
+    }
+
+    <!-- ======================= TAB 2: LOW STOCK MONITORING ======================= -->
+    @if (activeTab == "low")
+    {
+        <div class="panel shadow-sm bg-white">
+            <div class="panel-head">
+                <div class="panel-title">Low-stock monitoring</div>
+                <div class="panel-sub mb-0">Items at or below their reorder level</div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 biz-table">
+                    <thead style="background-color: #F7FAF8;">
+                        <tr>
+                            <th class="text-muted small fw-bold text-uppercase py-3 px-4">Item</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">Category</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">On hand</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">Reorder at</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">Shortage</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">Suggested order</th>
+                            <th class="text-muted small fw-bold text-uppercase py-3">Supplier</th>
                         </tr>
-                    }
-                    @if (LowItems.Count == 0)
-                    {
-                        <tr><td colspan="7" class="text-center text-muted py-5">All items are above their reorder level.</td></tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var i in LowItems)
+                        {
+                            <tr style="cursor: pointer;" @onclick="() => OpenDetails(i)">
+                                <td class="px-4">
+                                    <div class="d-flex align-items-center gap-3">
+                                        @if (!string.IsNullOrWhiteSpace(i.ImageUrl))
+                                        {
+                                            <img src="@i.ImageUrl" alt="@i.ItemName"
+                                                 style="width: 38px; height: 38px; object-fit: cover; border-radius: 10px; border: 1px solid #C6DFCE; flex-shrink: 0;" />
+                                        }
+                                        else
+                                        {
+                                            <div class="branch-avatar">
+                                                <i class="bi bi-box-seam"></i>
+                                            </div>
+                                        }
+                                        <div>
+                                            <div class="fw-bold" style="color: #0A2B1D;">@i.ItemName</div>
+                                            <div class="text-muted small">@i.ItemCode</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>@Cap(i.Category)</td>
+                                <td class="text-nowrap fw-semibold neg">@Qty(i.QuantityOnHand) @i.Unit</td>
+                                <td class="text-nowrap">@Qty(i.ReorderLevel) @i.Unit</td>
+                                <td class="text-nowrap">@Qty(Math.Max(0, i.ReorderLevel - i.QuantityOnHand)) @i.Unit</td>
+                                <td class="text-nowrap fw-semibold">@Qty(Math.Max(0, i.ReorderLevel * 2 - i.QuantityOnHand)) @i.Unit</td>
+                                <td>@SupplierNameOf(i)</td>
+                            </tr>
+                        }
+                        @if (LowItems.Count == 0)
+                        {
+                            <tr><td colspan="7" class="text-center text-muted py-5">All items are above their reorder level.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </div>
-    <div class="text-muted small mt-2">Suggested order brings each item back to twice its reorder level.</div>
-}
+        <div class="text-muted small mt-2">Suggested order brings each item back to twice its reorder level.</div>
+    }
 
 <!-- ======================= TAB 3: PRODUCE STOCK ======================= -->
 @if (activeTab == "produce")
@@ -410,55 +438,39 @@
 <!-- DETAILS MODAL -->
 @if (showDetailsModal && selectedItem != null)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1" @onclick="CloseDetailsModal">
         <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
             <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
                 <!-- Header -->
                 <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
                     <div class="d-flex align-items-center gap-3">
-                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
-                            <i class="bi bi-box-seam fs-4"></i>
-                        </div>
+                        @if (!string.IsNullOrWhiteSpace(selectedItem.ImageUrl))
+                        {
+                            <div class="position-relative"
+                                 style="cursor: zoom-in; flex-shrink: 0;"
+                                 title="Click to enlarge image"
+                                 @onclick="() => OpenImageZoom(selectedItem.ImageUrl, selectedItem.ItemName)">
+                                <img src="@selectedItem.ImageUrl" alt="@selectedItem.ItemName"
+                                     style="width: 64px; height: 64px; object-fit: cover; border-radius: 14px; border: 2px solid #C6DFCE; background-color: #FFFFFF;" />
+                                <span class="position-absolute bottom-0 end-0 badge rounded-pill shadow-sm"
+                                      style="background-color: #0A2B1D; color: #FFFFFF; font-size: 0.65rem; padding: 3px 5px; transform: translate(20%, 20%);">
+                                    <i class="bi bi-zoom-in"></i>
+                                </span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 56px; height: 56px; background-color: #E8F3EC; color: #1B5E34; flex-shrink: 0;">
+                                <i class="bi bi-box-seam fs-4"></i>
+                            </div>
+                        }
                         <div>
                             <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedItem.ItemName</h4>
-                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
-                                <i class="bi bi-upc-scan me-1"></i>@selectedItem.ItemCode
-                            </span>
-                        </div>
-                    </div>
-                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
-                </div>
-
-                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
-                    <!-- SECTION 1: Item & Storage Information -->
-                    <div class="mb-4">
-                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
-                            <i class="bi bi-info-circle me-2 text-success"></i>Item &amp; Storage Information
-                        </h6>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="text-muted small fw-bold text-uppercase">Category &amp; Type</label>
-                                <p class="mb-0 fw-semibold fs-6 text-dark">@Cap(selectedItem.Category) (@selectedItem.ItemType)</p>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="text-muted small fw-bold text-uppercase">Supplier</label>
-                                <p class="mb-0 fw-semibold fs-6 text-dark">@SupplierNameOf(selectedItem)</p>
-                            </div>
-                            <div class="col-md-6 mt-3">
-                                <label class="text-muted small fw-bold text-uppercase">Storage Location</label>
-                                <p class="mb-0 fw-medium text-dark">
-                                    <i class="bi bi-geo-alt text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedItem.StorageLocation) ? "—" : selectedItem.StorageLocation)
-                                </p>
-                            </div>
-                            <div class="col-md-6 mt-3">
-                                <label class="text-muted small fw-bold text-uppercase">Reorder Level</label>
-                                <p class="mb-0 fw-medium text-dark">
-                                    @(selectedItem.ReorderLevel > 0 ? $"{Qty(selectedItem.ReorderLevel)} {selectedItem.Unit}" : "—")
-                                </p>
-                            </div>
-                            <div class="col-md-6 mt-3">
-                                <label class="text-muted small fw-bold text-uppercase d-block mb-1">Record Status</label>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+                                <span class="badge px-2 py-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                    <i class="bi bi-upc-scan me-1"></i>@selectedItem.ItemCode
+                                </span>
                                 @if (selectedItem.IsArchived)
                                 {
                                     <span class="pill pill-earth"><i class="bi bi-archive me-1"></i>Archived</span>
@@ -470,59 +482,184 @@
                                     </span>
                                 }
                             </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
+                </div>
+
+                <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <!-- SECTION 1: Product, Supplier & Storage Information -->
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
+                            <i class="bi bi-info-circle me-2 text-success"></i>Product &amp; Storage Information
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Product Name</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    <i class="bi bi-box-seam text-success me-2"></i>@selectedItem.ItemName
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Category &amp; Type</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    <i class="bi bi-tags text-success me-2"></i>@Cap(selectedItem.Category) (@selectedItem.ItemType)
+                                </p>
+                            </div>
+
+                            @if (CanViewCostAndSupplier)
+                            {
+                                <div class="col-md-6 mt-3">
+                                    <label class="text-muted small fw-bold text-uppercase">Supplier</label>
+                                    <p class="mb-0 fw-semibold fs-6 text-dark">
+                                        <i class="bi bi-truck text-success me-2"></i>@SupplierNameOf(selectedItem)
+                                    </p>
+                                </div>
+                                <div class="col-md-6 mt-3">
+                                    <label class="text-muted small fw-bold text-uppercase">Supplier Contact Number</label>
+                                    <p class="mb-0 fw-medium text-dark">
+                                        <i class="bi bi-telephone text-success me-2"></i>@SupplierContactOf(selectedItem)
+                                    </p>
+                                </div>
+                            }
+
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Storage Location</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-geo-alt text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedItem.StorageLocation) ? "—" : selectedItem.StorageLocation)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
+                                <label class="text-muted small fw-bold text-uppercase">Reorder Level</label>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-bell text-success me-2"></i>@(selectedItem.ReorderLevel > 0 ? $"{Qty(selectedItem.ReorderLevel)} {selectedItem.Unit}" : "—")
+                                </p>
+                            </div>
+
                             @if (string.Equals(selectedItem.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase))
                             {
                                 <div class="col-md-6 mt-3">
                                     <label class="text-muted small fw-bold text-uppercase">Source Plot</label>
-                                    <p class="mb-0 fw-medium text-dark">@(string.IsNullOrWhiteSpace(selectedItem.SourcePlot) ? "—" : selectedItem.SourcePlot)</p>
+                                    <p class="mb-0 fw-medium text-dark">
+                                        <i class="bi bi-flower2 text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedItem.SourcePlot) ? "—" : selectedItem.SourcePlot)
+                                    </p>
                                 </div>
                             }
+
                             <div class="col-12 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase">Notes</label>
                                 <p class="mb-0 text-muted fst-italic">
-                                    @(string.IsNullOrWhiteSpace(selectedItem.Notes) ? "No notes provided." : selectedItem.Notes)
+                                    <i class="bi bi-journal-text text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedItem.Notes) ? "No notes provided." : selectedItem.Notes)
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <!-- SECTION 2: Quantity & Valuation Summary -->
+                    <!-- SECTION 2: Pricing, Stock & Valuation Summary -->
                     <div class="p-4 rounded-4" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
                         <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
-                            <i class="bi bi-cash-coin me-2 text-success"></i>Stock &amp; Valuation Summary
+                            <i class="bi bi-cash-coin me-2 text-success"></i>Pricing, Stock &amp; Valuation Summary
                         </h6>
                         <div class="row g-3 text-center">
-                            <div class="col-4">
-                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
-                                    <h4 class="fw-bolder mb-0" style="color: #1B5E34;">@Qty(selectedItem.QuantityOnHand) @selectedItem.Unit</h4>
+                            <div class="@(CanViewCostAndSupplier ? "col-6 col-md-3" : "col-6")">
+                                <div class="p-3 bg-white rounded-3 border h-100 d-flex flex-column align-items-center justify-content-center" style="border-color: #E2ECE6 !important;">
+                                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 34px; height: 34px; background-color: #E8F3EC; color: #0A2B1D;">
+                                        <i class="bi bi-boxes"></i>
+                                    </div>
+                                    <h5 class="fw-bolder mb-1" style="color: #0A2B1D;">@Qty(selectedItem.QuantityOnHand) @selectedItem.Unit</h5>
                                     <small class="text-muted fw-medium">On Hand</small>
                                 </div>
                             </div>
-                            <div class="col-4">
-                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
-                                    <h4 class="fw-bolder mb-0" style="color: #4E8D2A;">@Peso(selectedItem.UnitCost)</h4>
-                                    <small class="text-muted fw-medium">Unit Cost</small>
+
+                            @if (CanViewCostAndSupplier)
+                            {
+                                <div class="col-6 col-md-3">
+                                    <div class="p-3 bg-white rounded-3 border h-100 d-flex flex-column align-items-center justify-content-center" style="border-color: #E2ECE6 !important;">
+                                        <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 34px; height: 34px; background-color: #EDF7E8; color: #4E8D2A;">
+                                            <i class="bi bi-tag"></i>
+                                        </div>
+                                        <h5 class="fw-bolder mb-1" style="color: #4E8D2A;">@Peso(selectedItem.UnitCost)</h5>
+                                        <small class="text-muted fw-medium">Unit Cost (Base)</small>
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="@(CanViewCostAndSupplier ? "col-6 col-md-3" : "col-6")">
+                                <div class="p-3 bg-white rounded-3 border h-100 d-flex flex-column align-items-center justify-content-center" style="border-color: #E2ECE6 !important;">
+                                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 34px; height: 34px; background-color: #E8F3EC; color: #1B5E34;">
+                                        <i class="bi bi-cash-stack"></i>
+                                    </div>
+                                    <h5 class="fw-bolder mb-1" style="color: #1B5E34;">@Peso(ResaleValueOf(selectedItem))</h5>
+                                    <small class="text-muted fw-medium">
+                                        Selling Price
+                                        @if (selectedItem.SellingPrice <= 0 && selectedItem.UnitCost > 0)
+                                        {
+                                            <span class="d-block" style="font-size: 0.7rem; color: #7A5230;">(Same as cost)</span>
+                                        }
+                                    </small>
                                 </div>
                             </div>
-                            <div class="col-4">
-                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
-                                    <h4 class="fw-bolder mb-0" style="color: #7A5230;">@Peso(selectedItem.QuantityOnHand * selectedItem.UnitCost)</h4>
-                                    <small class="text-muted fw-medium">Stock Value</small>
+
+                            @if (CanViewCostAndSupplier)
+                            {
+                                <div class="col-6 col-md-3">
+                                    <div class="p-3 bg-white rounded-3 border h-100 d-flex flex-column align-items-center justify-content-center" style="border-color: #E2ECE6 !important;">
+                                        <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 34px; height: 34px; background-color: #F5EFEA; color: #7A5230;">
+                                            <i class="bi bi-wallet2"></i>
+                                        </div>
+                                        <h5 class="fw-bolder mb-1" style="color: #7A5230;">@Peso(selectedItem.QuantityOnHand * selectedItem.UnitCost)</h5>
+                                        <small class="text-muted fw-medium">Total Cost Value</small>
+                                        @if (selectedItem.SellingPrice > 0)
+                                        {
+                                            <span class="d-block mt-1" style="font-size: 0.7rem; color: #1B5E34;">
+                                                Est. Sales: @Peso(selectedItem.QuantityOnHand * selectedItem.SellingPrice)
+                                            </span>
+                                        }
+                                    </div>
                                 </div>
-                            </div>
+                            }
                         </div>
                     </div>
                 </div>
 
                 <!-- Footer -->
                 <div class="modal-footer border-0 p-4 d-flex justify-content-between" style="background-color: #F4F7F5;">
-                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">
+                        <i class="bi bi-x-lg me-1"></i> Close
+                    </button>
                     @if (!selectedItem.IsArchived)
                     {
                         <button type="button" class="btn-save px-5 shadow-sm" @onclick="() => OpenEdit(selectedItem)">
                             <i class="bi bi-pencil-square me-2"></i>Edit Item
                         </button>
                     }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- IMAGE ZOOM LIGHTBOX MODAL -->
+@if (showImageZoomModal && !string.IsNullOrWhiteSpace(zoomedImageUrl))
+{
+    <div class="modal fade show d-block"
+         style="background-color: rgba(10, 43, 29, 0.85); backdrop-filter: blur(6px); z-index: 1080;"
+         tabindex="-1"
+         @onclick="CloseImageZoom">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden bg-white">
+                <div class="modal-header border-0 px-4 py-3 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-image text-success"></i>
+                        <h6 class="modal-title fw-bold mb-0" style="color: #0A2B1D;">@zoomedImageTitle</h6>
+                    </div>
+                    <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2"
+                            @onclick="CloseImageZoom" aria-label="Close" style="width: 30px; height: 30px;"></button>
+                </div>
+                <div class="modal-body p-3 text-center" style="background-color: #0A2B1D;">
+                    <img src="@zoomedImageUrl" alt="@zoomedImageTitle"
+                         class="img-fluid rounded-3"
+                         style="max-height: 75vh; object-fit: contain;" />
                 </div>
             </div>
         </div>
@@ -554,6 +691,44 @@
 
                 <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
                     <form>
+                        <!-- SECTION 0: Product Image -->
+                        <div class="mb-4 p-3 rounded-4 d-flex flex-wrap align-items-center gap-3" style="background-color: #F7FAF8; border: 1px dashed #C6DFCE;">
+                            <div style="width: 78px; height: 78px; border-radius: 14px; background-color: #FFFFFF; border: 1px solid #E2ECE6; overflow: hidden; flex-shrink: 0;"
+                                 class="d-flex align-items-center justify-content-center">
+                                @if (!string.IsNullOrWhiteSpace(imagePreviewUrl))
+                                {
+                                    <img src="@imagePreviewUrl" alt="Preview" style="width: 100%; height: 100%; object-fit: cover;" />
+                                }
+                                else
+                                {
+                                    <i class="bi bi-image text-muted fs-3 opacity-50"></i>
+                                }
+                            </div>
+
+                            <div class="flex-grow-1">
+                                <label class="form-label fw-bold small text-muted mb-1">
+                                    <i class="bi bi-camera me-1 text-success"></i>Product Image (Displayed in Sales / POS)
+                                </label>
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <InputFile OnChange="HandleImageSelectedAsync"
+                                               accept=".jpg,.jpeg,.png,.webp"
+                                               class="form-control form-control-sm"
+                                               style="max-width: 280px;" />
+                                    @if (!string.IsNullOrWhiteSpace(imagePreviewUrl))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-danger rounded-3" @onclick="RemoveImage">
+                                            <i class="bi bi-trash me-1"></i>Remove
+                                        </button>
+                                    }
+                                </div>
+                                <div class="text-muted small mt-1">JPG, PNG, or WEBP · Max 3 MB</div>
+                                @if (!string.IsNullOrEmpty(imageError))
+                                {
+                                    <div class="err">@imageError</div>
+                                }
+                            </div>
+                        </div>
+
                         <!-- SECTION 1: Item Identification -->
                         <div class="mb-4">
                             <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">
@@ -645,6 +820,13 @@
                                 </div>
 
                                 <div class="col-md-6">
+                                    <label class="form-label fw-bold small text-muted">Selling Price (₱)</label>
+                                    <input type="number" min="0" step="0.01"
+                                           class="form-control @(showErrors && Negative(sellingPriceInput) ? "border-danger" : "")"
+                                           @bind="sellingPriceInput" />
+                                </div>
+
+                                <div class="col-12">
                                     <label class="form-label fw-bold small text-muted">Supplier</label>
                                     <select class="form-select" @bind="selectedSupplierIdStr">
                                         <option value="">-- Select Supplier --</option>
@@ -678,7 +860,7 @@
 
                         @if (showErrors && AnyNegative)
                         {
-                            <div class="err mt-3"><i class="bi bi-exclamation-circle"></i> Quantity, reorder level and cost can’t be negative.</div>
+                            <div class="err mt-3"><i class="bi bi-exclamation-circle"></i> Quantity, reorder level, cost, and selling price can’t be negative.</div>
                         }
                     </form>
                 </div>
@@ -754,6 +936,7 @@
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     static readonly string[] CategoryOptions = { "seeds", "fertilizer", "pesticide", "tools", "fuel", "packaging", "supplies" };
     static readonly string[] UnitOptions = { "kg", "sack", "bottle", "liter", "piece", "pair", "box" };
+    const long MaxImageBytes = 3 * 1024 * 1024; // 3 MB
 
     long currentBusinessId;
     long? currentBranchId;
@@ -775,10 +958,21 @@
     int? editingId;
     int? openMenuId;
     InventoryItem form = new();
-    decimal? qtyInput, reorderInput, costInput;
+    decimal? qtyInput, reorderInput, costInput, sellingPriceInput;
 
+    // Image upload state
+    IBrowserFile? selectedImageFile;
+    string? imagePreviewUrl;
+    string imageError = "";
+    bool removeExistingImage;
+
+    // Details & Zoom state
     bool showDetailsModal;
     InventoryItem? selectedItem;
+
+    bool showImageZoomModal;
+    string? zoomedImageUrl;
+    string zoomedImageTitle = "";
 
     bool showConfirmArchiveModal;
     InventoryItem? itemToArchive;
@@ -787,6 +981,10 @@
     private int pageSize = 5;
     private double menuTop;
     private double menuLeft;
+
+    bool CanViewCostAndSupplier =>
+        Auth.CurrentRole == UserRole.TenantAdmin ||
+        Auth.CurrentRole == UserRole.InventoryOfficer;
 
     protected override async Task OnInitializedAsync()
     {
@@ -928,7 +1126,7 @@
         allItems.Any(i => i.ItemId != (editingId ?? -1) &&
                      string.Equals(i.ItemCode, form.ItemCode.Trim(), StringComparison.OrdinalIgnoreCase));
 
-    bool AnyNegative => Negative(qtyInput) || Negative(reorderInput) || Negative(costInput);
+    bool AnyNegative => Negative(qtyInput) || Negative(reorderInput) || Negative(costInput) || Negative(sellingPriceInput);
 
     static bool IsLow(InventoryItem i) => !i.IsArchived && i.ReorderLevel > 0 && i.QuantityOnHand <= i.ReorderLevel;
     static bool Negative(decimal? v) => v.HasValue && v.Value < 0;
@@ -951,6 +1149,23 @@
 
         return "—";
     }
+
+    string SupplierContactOf(InventoryItem item)
+    {
+        if (item.Supplier != null && !string.IsNullOrWhiteSpace(item.Supplier.ContactNumber))
+            return item.Supplier.ContactNumber;
+
+        if (item.SupplierId.HasValue)
+        {
+            var sup = suppliers.FirstOrDefault(s => s.SupplierId == item.SupplierId.Value);
+            if (sup != null && !string.IsNullOrWhiteSpace(sup.ContactNumber))
+                return sup.ContactNumber;
+        }
+
+        return "—";
+    }
+
+    decimal ResaleValueOf(InventoryItem item) => item.SellingPrice > 0 ? item.SellingPrice : item.UnitCost;
 
     string NextSku(string? category)
     {
@@ -1041,6 +1256,78 @@
         selectedItem = null;
     }
 
+    void OpenImageZoom(string? imageUrl, string itemName)
+    {
+        if (string.IsNullOrWhiteSpace(imageUrl)) return;
+        zoomedImageUrl = imageUrl;
+        zoomedImageTitle = itemName;
+        showImageZoomModal = true;
+    }
+
+    void CloseImageZoom()
+    {
+        showImageZoomModal = false;
+        zoomedImageUrl = null;
+        zoomedImageTitle = "";
+    }
+
+    private async Task HandleImageSelectedAsync(InputFileChangeEventArgs e)
+    {
+        imageError = "";
+        var file = e.File;
+        if (file == null) return;
+
+        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (ext is not (".jpg" or ".jpeg" or ".png" or ".webp"))
+        {
+            imageError = "Only JPG, PNG, or WEBP images are allowed.";
+            return;
+        }
+
+        if (file.Size > MaxImageBytes)
+        {
+            imageError = "Image size must be 3 MB or less.";
+            return;
+        }
+
+        selectedImageFile = file;
+        removeExistingImage = false;
+
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(MaxImageBytes).CopyToAsync(ms);
+        imagePreviewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+    }
+
+    private void RemoveImage()
+    {
+        selectedImageFile = null;
+        imagePreviewUrl = null;
+        imageError = "";
+        removeExistingImage = true;
+    }
+
+    private async Task<string?> SaveImageFileAsync()
+    {
+        if (selectedImageFile == null)
+            return removeExistingImage ? null : form.ImageUrl;
+
+        var uploadDir = Path.Combine(FileSystem.AppDataDirectory, "uploads", "inventory");
+        Directory.CreateDirectory(uploadDir);
+
+        var ext = Path.GetExtension(selectedImageFile.Name).ToLowerInvariant();
+        var fileName = $"{Guid.NewGuid():N}{ext}";
+        var fullPath = Path.Combine(uploadDir, fileName);
+
+        await using var fs = new FileStream(fullPath, FileMode.Create);
+        await selectedImageFile.OpenReadStream(MaxImageBytes).CopyToAsync(fs);
+
+        using var ms = new MemoryStream();
+        await using var readStream = File.OpenRead(fullPath);
+        await readStream.CopyToAsync(ms);
+        var mime = ext == ".png" ? "image/png" : ext == ".webp" ? "image/webp" : "image/jpeg";
+        return $"data:{mime};base64,{Convert.ToBase64String(ms.ToArray())}";
+    }
+
     void OpenNew()
     {
         openMenuId = null;
@@ -1054,7 +1341,11 @@
             Unit = "kg"
         };
         selectedSupplierIdStr = "";
-        qtyInput = reorderInput = costInput = null;
+        qtyInput = reorderInput = costInput = sellingPriceInput = null;
+        selectedImageFile = null;
+        imagePreviewUrl = null;
+        imageError = "";
+        removeExistingImage = false;
         editingId = null;
         showErrors = false;
         showModal = true;
@@ -1076,18 +1367,25 @@
             QuantityOnHand = i.QuantityOnHand,
             ReorderLevel = i.ReorderLevel,
             UnitCost = i.UnitCost,
+            SellingPrice = i.SellingPrice,
             Unit = i.Unit,
             StorageLocation = i.StorageLocation,
             SupplierId = i.SupplierId,
             HarvestId = i.HarvestId,
             SourcePlot = i.SourcePlot,
             Notes = i.Notes,
-            IsArchived = i.IsArchived
+            IsArchived = i.IsArchived,
+            ImageUrl = i.ImageUrl
         };
         selectedSupplierIdStr = i.SupplierId?.ToString() ?? "";
         qtyInput = i.QuantityOnHand;
         reorderInput = i.ReorderLevel;
         costInput = i.UnitCost;
+        sellingPriceInput = i.SellingPrice;
+        selectedImageFile = null;
+        imagePreviewUrl = i.ImageUrl;
+        imageError = "";
+        removeExistingImage = false;
         editingId = i.ItemId;
         showErrors = false;
         showModal = true;
@@ -1098,11 +1396,12 @@
     async Task SaveAsync()
     {
         showErrors = true;
-        if (string.IsNullOrWhiteSpace(form.ItemName) || SkuTaken || AnyNegative) return;
+        if (string.IsNullOrWhiteSpace(form.ItemName) || SkuTaken || AnyNegative || !string.IsNullOrEmpty(imageError)) return;
 
         isSaving = true;
         try
         {
+            var savedImageUrl = await SaveImageFileAsync();
             int? parsedSupplierId = int.TryParse(selectedSupplierIdStr, out var supId) && supId > 0 ? supId : null;
             var cleanName = form.ItemName.Trim();
             var cleanSku = string.IsNullOrWhiteSpace(form.ItemCode) ? NextSku(form.Category) : form.ItemCode.Trim().ToUpper();
@@ -1123,11 +1422,13 @@
                     QuantityOnHand = qtyInput ?? 0,
                     ReorderLevel = reorderInput ?? 0,
                     UnitCost = costInput ?? 0,
+                    SellingPrice = sellingPriceInput ?? 0,
                     Unit = string.IsNullOrWhiteSpace(form.Unit) ? "kg" : form.Unit.Trim(),
                     StorageLocation = (form.StorageLocation ?? "").Trim(),
                     SupplierId = parsedSupplierId,
                     Notes = (form.Notes ?? "").Trim(),
-                    IsArchived = false
+                    IsArchived = false,
+                    ImageUrl = savedImageUrl
                 };
 
                 DbContext.InventoryItems.Add(created);
@@ -1145,10 +1446,12 @@
                     existing.QuantityOnHand = qtyInput ?? 0;
                     existing.ReorderLevel = reorderInput ?? 0;
                     existing.UnitCost = costInput ?? 0;
+                    existing.SellingPrice = sellingPriceInput ?? 0;
                     existing.Unit = string.IsNullOrWhiteSpace(form.Unit) ? "kg" : form.Unit.Trim();
                     existing.StorageLocation = (form.StorageLocation ?? "").Trim();
                     existing.SupplierId = parsedSupplierId;
                     existing.Notes = (form.Notes ?? "").Trim();
+                    existing.ImageUrl = savedImageUrl;
 
                     DbContext.InventoryItems.Update(existing);
                     await DbContext.SaveChangesAsync();

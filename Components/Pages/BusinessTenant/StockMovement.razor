@@ -163,20 +163,25 @@
 <!-- DETAILS MODAL (ROW CLICK) -->
 @if (showDetailsModal && selectedMovement != null)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1" @onclick="CloseDetailsModal">
         <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
             <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
                 <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
                     <div class="d-flex align-items-center gap-3">
-                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34;">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background-color: #E8F3EC; color: #1B5E34; flex-shrink: 0;">
                             <i class="bi @TypeIcon(selectedMovement.Kind) fs-4"></i>
                         </div>
                         <div>
                             <h4 class="modal-title fw-bolder mb-0" style="color: #0A2B1D;">@selectedMovement.ItemName</h4>
-                            <span class="badge px-2 py-1 mt-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
-                                <i class="bi bi-upc-scan me-1"></i>@(string.IsNullOrWhiteSpace(selectedMovement.Reference) ? "No Reference" : selectedMovement.Reference)
-                            </span>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+                                <span class="badge px-2 py-1 rounded-pill" style="background-color: #FFFFFF; color: #1B5E34; border: 1px solid #C6DFCE;">
+                                    <i class="bi bi-upc-scan me-1"></i>@(string.IsNullOrWhiteSpace(selectedMovement.Reference) ? "No Reference" : selectedMovement.Reference)
+                                </span>
+                                <span class="pill @TypeClass(selectedMovement.Kind)">
+                                    <i class="bi @TypeIcon(selectedMovement.Kind) me-1"></i>@Cap(selectedMovement.Kind)
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <button type="button" class="btn-close bg-white shadow-sm rounded-circle p-2" @onclick="CloseDetailsModal" aria-label="Close" style="width: 32px; height: 32px;"></button>
@@ -189,12 +194,24 @@
                         </h6>
                         <div class="row g-3">
                             <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Item Name</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    <i class="bi bi-box-seam text-success me-2"></i>@selectedMovement.ItemName
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small fw-bold text-uppercase">Reference No.</label>
+                                <p class="mb-0 fw-semibold fs-6 text-dark">
+                                    <i class="bi bi-hash text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedMovement.Reference) ? "—" : selectedMovement.Reference)
+                                </p>
+                            </div>
+                            <div class="col-md-6 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase">Transaction Date</label>
                                 <p class="mb-0 fw-semibold fs-6 text-dark">
                                     <i class="bi bi-calendar3 text-success me-2"></i>@selectedMovement.Date.ToString("MMMM d, yyyy", Inv)
                                 </p>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-6 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase d-block mb-1">Movement Type</label>
                                 <span class="pill @TypeClass(selectedMovement.Kind)">
                                     <i class="bi @TypeIcon(selectedMovement.Kind) me-1"></i>@Cap(selectedMovement.Kind)
@@ -208,7 +225,9 @@
                             </div>
                             <div class="col-md-6 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase">Reason / Remarks</label>
-                                <p class="mb-0 fw-medium text-dark">@(string.IsNullOrWhiteSpace(selectedMovement.Reason) ? "—" : selectedMovement.Reason)</p>
+                                <p class="mb-0 fw-medium text-dark">
+                                    <i class="bi bi-chat-left-text text-success me-2"></i>@(string.IsNullOrWhiteSpace(selectedMovement.Reason) ? "—" : selectedMovement.Reason)
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -219,20 +238,29 @@
                         </h6>
                         <div class="row g-3 text-center">
                             <div class="col-4">
-                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
-                                    <h4 class="fw-bolder mb-0 @QtyClass(selectedMovement.Kind)">@QtyText(selectedMovement)</h4>
+                                <div class="p-3 bg-white rounded-3 border h-100 d-flex flex-column align-items-center justify-content-center" style="border-color: #E2ECE6 !important;">
+                                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 34px; height: 34px; background-color: #E8F3EC; color: #0A2B1D;">
+                                        <i class="bi @TypeIcon(selectedMovement.Kind)"></i>
+                                    </div>
+                                    <h4 class="fw-bolder mb-1 @QtyClass(selectedMovement.Kind)">@QtyText(selectedMovement)</h4>
                                     <small class="text-muted fw-medium">Movement Qty</small>
                                 </div>
                             </div>
                             <div class="col-4">
-                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
-                                    <h4 class="fw-bolder mb-0" style="color: #4E8D2A;">@Peso(selectedMovement.UnitCost)</h4>
+                                <div class="p-3 bg-white rounded-3 border h-100 d-flex flex-column align-items-center justify-content-center" style="border-color: #E2ECE6 !important;">
+                                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 34px; height: 34px; background-color: #EDF7E8; color: #4E8D2A;">
+                                        <i class="bi bi-tag"></i>
+                                    </div>
+                                    <h4 class="fw-bolder mb-1" style="color: #4E8D2A;">@Peso(selectedMovement.UnitCost)</h4>
                                     <small class="text-muted fw-medium">Unit Cost</small>
                                 </div>
                             </div>
                             <div class="col-4">
-                                <div class="p-3 bg-white rounded-3 border" style="border-color: #E2ECE6 !important;">
-                                    <h4 class="fw-bolder mb-0" style="color: #7A5230;">@Peso(selectedMovement.Qty * selectedMovement.UnitCost)</h4>
+                                <div class="p-3 bg-white rounded-3 border h-100 d-flex flex-column align-items-center justify-content-center" style="border-color: #E2ECE6 !important;">
+                                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width: 34px; height: 34px; background-color: #F5EFEA; color: #7A5230;">
+                                        <i class="bi bi-wallet2"></i>
+                                    </div>
+                                    <h4 class="fw-bolder mb-1" style="color: #7A5230;">@Peso(selectedMovement.Qty * selectedMovement.UnitCost)</h4>
                                     <small class="text-muted fw-medium">Total Value</small>
                                 </div>
                             </div>
@@ -241,7 +269,9 @@
                 </div>
 
                 <div class="modal-footer border-0 p-4 d-flex justify-content-end" style="background-color: #F4F7F5;">
-                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">Close</button>
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseDetailsModal">
+                        <i class="bi bi-x-lg me-1"></i> Close
+                    </button>
                 </div>
             </div>
         </div>
@@ -251,13 +281,13 @@
 <!-- MODAL (Receive / Issue / Adjust) -->
 @if (modal != null)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1">
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 1050;" tabindex="-1" @onclick="CloseModal">
         <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
             <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
 
                 <div class="modal-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: #F4F7F5;">
                     <div class="d-flex align-items-center gap-3">
-                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34;">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background-color: #E8F3EC; color: #1B5E34; flex-shrink: 0;">
                             <i class="bi @ModalIcon fs-5"></i>
                         </div>
                         <div>
@@ -277,28 +307,32 @@
                             <div class="row g-3">
                                 <div class="col-12">
                                     <label class="form-label fw-bold small text-muted">Item <span class="text-danger">*</span></label>
-                                    <select class="form-select @(showErrors && form.ItemId == null ? "border-danger" : "")" @bind="form.ItemId">
-                                        <option value="">-- Select Item --</option>
-                                        @foreach (var i in inventoryItems)
-                                        {
-                                            <option value="@i.ItemId">@i.ItemName (@i.ItemCode)</option>
-                                        }
-                                    </select>
+                                    <div class="input-group modern-input @(showErrors && form.ItemId == null ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi bi-box-seam text-success"></i></span>
+                                        <select class="form-select" @bind="form.ItemId">
+                                            <option value="">-- Select Item --</option>
+                                            @foreach (var i in inventoryItems)
+                                            {
+                                                <option value="@i.ItemId">@i.ItemName (@i.ItemCode)</option>
+                                            }
+                                        </select>
+                                    </div>
                                     @if (showErrors && form.ItemId == null)
                                     {
                                         <div class="err">Please select an item.</div>
                                     }
                                     @if (SelectedItem != null)
                                     {
-                                        <div class="hint">On hand: <strong>@Qty(SelectedItem.QuantityOnHand) @SelectedItem.Unit</strong></div>
+                                        <div class="hint mt-1"><i class="bi bi-info-circle text-success me-1"></i>On hand: <strong>@Qty(SelectedItem.QuantityOnHand) @SelectedItem.Unit</strong></div>
                                     }
                                 </div>
 
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold small text-muted">@(modal == "adjust" ? "New counted balance" : "Quantity") <span class="text-danger">*</span></label>
-                                    <input type="number" min="0" step="any"
-                                           class="form-control @(showErrors && QtyError != null ? "border-danger" : "")"
-                                           @bind="form.Qty" />
+                                    <div class="input-group modern-input @(showErrors && QtyError != null ? "border border-danger rounded-3" : "")">
+                                        <span class="input-group-text bg-white"><i class="bi @ModalIcon text-success"></i></span>
+                                        <input type="number" min="0" step="any" class="form-control" placeholder="0.00" @bind="form.Qty" />
+                                    </div>
                                     @if (showErrors && QtyError != null)
                                     {
                                         <div class="err">@QtyError</div>
@@ -307,7 +341,10 @@
 
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold small text-muted">Date</label>
-                                    <input type="date" class="form-control" @bind="form.Date" />
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-calendar3 text-success"></i></span>
+                                        <input type="date" class="form-control" @bind="form.Date" />
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -321,9 +358,10 @@
                                 {
                                     <div class="col-md-6">
                                         <label class="form-label fw-bold small text-muted">Unit cost (₱)</label>
-                                        <input type="number" min="0" step="0.01"
-                                               class="form-control border-0 shadow-sm @(showErrors && form.Cost < 0 ? "border-danger" : "")"
-                                               @bind="form.Cost" />
+                                        <div class="input-group modern-input @(showErrors && form.Cost < 0 ? "border border-danger rounded-3" : "")">
+                                            <span class="input-group-text bg-white"><i class="bi bi-tag text-success"></i></span>
+                                            <input type="number" min="0" step="0.01" class="form-control border-0 shadow-sm" placeholder="0.00" @bind="form.Cost" />
+                                        </div>
                                         @if (showErrors && form.Cost < 0)
                                         {
                                             <div class="err">Cost can’t be negative.</div>
@@ -331,31 +369,43 @@
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-bold small text-muted">Delivery / DR number</label>
-                                        <input class="form-control border-0 shadow-sm" placeholder="e.g. DR-22050" @bind="form.Reference" />
+                                        <div class="input-group modern-input">
+                                            <span class="input-group-text bg-white"><i class="bi bi-upc-scan text-success"></i></span>
+                                            <input class="form-control border-0 shadow-sm fw-bold" placeholder="e.g. DR-22050" @bind="form.Reference" />
+                                        </div>
                                     </div>
                                 }
                                 else
                                 {
                                     <div class="col-md-6">
                                         <label class="form-label fw-bold small text-muted">Reference</label>
-                                        <input class="form-control border-0 shadow-sm" placeholder="@NextRef(modal)" @bind="form.Reference" />
+                                        <div class="input-group modern-input">
+                                            <span class="input-group-text bg-white"><i class="bi bi-upc-scan text-success"></i></span>
+                                            <input class="form-control border-0 shadow-sm fw-bold" placeholder="@NextRef(modal)" @bind="form.Reference" />
+                                        </div>
                                     </div>
                                 }
 
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold small text-muted">Performed by</label>
-                                    <input class="form-control border-0 shadow-sm" @bind="form.By" />
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-person-badge text-success"></i></span>
+                                        <input class="form-control border-0 shadow-sm" @bind="form.By" />
+                                    </div>
                                 </div>
 
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold small text-muted">Reason / remarks</label>
-                                    <select class="form-select border-0 shadow-sm" @bind="form.Reason">
-                                        <option value="">-- Select Reason --</option>
-                                        @foreach (var r in ReasonOptions)
-                                        {
-                                            <option value="@r">@r</option>
-                                        }
-                                    </select>
+                                    <div class="input-group modern-input">
+                                        <span class="input-group-text bg-white"><i class="bi bi-chat-left-text text-success"></i></span>
+                                        <select class="form-select border-0 shadow-sm" @bind="form.Reason">
+                                            <option value="">-- Select Reason --</option>
+                                            @foreach (var r in ReasonOptions)
+                                            {
+                                                <option value="@r">@r</option>
+                                            }
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -363,7 +413,9 @@
                 </div>
 
                 <div class="modal-footer border-0 p-4 d-flex justify-content-end gap-2" style="background-color: #F4F7F5;">
-                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-light border fw-bold px-4 rounded-3 shadow-sm" @onclick="CloseModal">
+                        <i class="bi bi-x-lg me-1"></i> Cancel
+                    </button>
                     <button type="button" class="btn-save px-5 shadow-sm" @onclick="SaveAsync" disabled="@isSaving">
                         @if (isSaving)
                         {
