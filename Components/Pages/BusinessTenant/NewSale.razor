@@ -1,10 +1,24 @@
 ﻿@page "/new-sale"
+@layout MainLayout
 @using System.Globalization
+@using System.Reflection
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
 @inject AgriNexus.Services.AuthService Auth
+@inject IJSRuntime JS
 
-<div class="mb-4">
-    <h2 class="page-title">New Sale</h2>
-    <p class="text-muted mb-0 page-sub">@ActiveBranch · price and record produce sales, collect payment in full or partially, and issue a receipt.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+        <h2 class="page-title">New Sale</h2>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@ActiveBranch</strong> · pick produce cards, record sales, collect full or partial payment, and issue a receipt.
+        </p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi bi-receipt me-1"></i>@NextNo
+    </span>
 </div>
 
 <!-- STAT CARDS -->
@@ -30,32 +44,104 @@
 </div>
 
 <div class="row g-3">
-    <!-- ======================= SALE ITEMS ======================= -->
+    <!-- ======================= PRODUCE CARDS & CART ======================= -->
     <div class="col-12 col-lg-8">
         <div class="card-box h-100">
-            <div class="panel-title">Sale items and pricing</div>
-            <div class="panel-sub">Harvested produce is drawn from stock as soon as the sale is completed.</div>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                    <div class="panel-title">
+                        <i class="bi bi-grid-3x3-gap text-success me-1"></i>Available produce &amp; sale items
+                    </div>
+                    <div class="panel-sub mb-0">Click an item card to add it to the sale. Stock is deducted automatically upon completion.</div>
+                </div>
 
-            <label class="form-label">Produce availability</label>
-            <div class="d-flex gap-2 mb-3 flex-wrap flex-sm-nowrap">
-                <select class="form-select" @bind="selectedProduceId">
-                    <option value="">Select produce in stock...</option>
-                    @foreach (var p in stock.Where(x => x.Kg > 0))
+                <div class="search-box" style="width: 240px;">
+                    <i class="bi bi-search"></i>
+                    <input type="text" placeholder="Search item or SKU..."
+                           @bind="produceSearch"
+                           @bind:event="oninput" />
+                </div>
+            </div>
+
+            <!-- PRODUCE SELECTION CARDS -->
+            @if (AvailableCatalog.Count == 0)
+            {
+                <div class="empty-box mb-4 py-4">
+                    <div class="empty-icon"><i class="bi bi-box-seam"></i></div>
+                    <div class="fw-semibold mt-2">No produce stock available</div>
+                    <div class="text-muted small">Approve harvests or receive produce stock in Inventory first.</div>
+                </div>
+            }
+            else
+            {
+                <div class="row g-2 mb-4 produce-grid">
+                    @foreach (var p in AvailableCatalog)
                     {
-                        <option value="@p.Id">@p.Crop — Grade @p.Grade · @Qty(p.Kg) kg available</option>
+                        var inCart = lines.FirstOrDefault(l => l.ItemId == p.ItemId);
+                        var inCartQty = inCart?.Qty ?? 0;
+                        var remainingQty = Math.Max(0, p.AvailableQty - inCartQty);
+
+                        <div class="col-6 col-md-4 col-xl-3">
+                            <div class="produce-card h-100 @(inCart != null ? "selected" : "") @(remainingQty <= 0 ? "depleted" : "")"
+                                 @onclick="() => AddProduceCard(p)">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <div class="produce-thumb">
+                                        @if (!string.IsNullOrWhiteSpace(p.ImageUrl))
+                                        {
+                                            <img src="@p.ImageUrl" alt="@p.Name" />
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-flower2 text-success"></i>
+                                        }
+                                    </div>
+                                    <div class="min-w-0 flex-grow-1">
+                                        <div class="fw-bold text-truncate" style="color: #0A2B1D; font-size: .88rem;">@p.Name</div>
+                                        @if (!string.IsNullOrWhiteSpace(p.ItemCode))
+                                        {
+                                            <div class="text-muted" style="font-size: .7rem;">@p.ItemCode</div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-1 mt-auto pt-2 produce-card-footer">
+                                    <span class="fw-bold text-nowrap" style="color: #1B5E34; font-size: .88rem;">
+                                        @Peso(p.SellingPrice)<span class="text-muted fw-normal" style="font-size: .72rem;">/@p.Unit</span>
+                                    </span>
+                                    <span class="stock-tag @(remainingQty <= 0 ? "out" : "")">
+                                        @Qty(remainingQty) @p.Unit
+                                    </span>
+                                </div>
+
+                                @if (inCart != null)
+                                {
+                                    <div class="cart-badge">
+                                        <i class="bi bi-bag-check me-1"></i>@Qty(inCartQty) @p.Unit in cart
+                                    </div>
+                                }
+                            </div>
+                        </div>
                     }
-                </select>
-                <button type="button" class="btn-add" @onclick="AddItem" disabled="@(selectedProduceId == null)">
-                    <i class="bi bi-plus-lg"></i> Add item
-                </button>
+                </div>
+            }
+
+            <!-- SELECTED CART ITEMS -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="fw-bold small text-uppercase text-muted" style="letter-spacing: .5px;">
+                    <i class="bi bi-cart3 text-success me-1"></i>Selected sale items (@lines.Count)
+                </span>
+                @if (lines.Count > 0)
+                {
+                    <span class="small fw-semibold" style="color: #1B5E34;">Items total: @Peso(Subtotal)</span>
+                }
             </div>
 
             @if (lines.Count == 0)
             {
                 <div class="empty-box">
-                    <div class="empty-icon"><i class="bi bi-inbox"></i></div>
+                    <div class="empty-icon"><i class="bi bi-cart"></i></div>
                     <div class="fw-semibold mt-3">No items added yet</div>
-                    <div class="text-muted small">Pick produce from stock to build this sale.</div>
+                    <div class="text-muted small">Click any produce card above to build this sale.</div>
                 </div>
             }
             else
@@ -67,7 +153,7 @@
                                 <th>Item</th>
                                 <th>Qty</th>
                                 <th>Unit price (₱)</th>
-                                <th>Subtotal</th>
+                                <th>Item total</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -76,18 +162,39 @@
                             {
                                 <tr>
                                     <td class="col-item">
-                                        <div class="fw-semibold">@l.Name</div>
-                                        <div class="sub">@Qty(OnHand(l)) kg on hand</div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="mini-thumb">
+                                                @if (!string.IsNullOrWhiteSpace(l.ImageUrl))
+                                                {
+                                                    <img src="@l.ImageUrl" alt="@l.Name" />
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-flower2 text-success"></i>
+                                                }
+                                            </div>
+                                            <div>
+                                                <div class="fw-semibold" style="color: #0A2B1D;">@l.Name</div>
+                                                <div class="sub">@Qty(OnHand(l)) @l.Unit on hand</div>
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>
-                                        <input type="number" min="0" step="any" class="form-control qty-input @(LineQtyBad(l) ? "is-invalid" : "")"
-                                               @bind="l.Qty" @bind:event="oninput" />
+                                        <div class="input-group input-group-sm" style="width: 122px;">
+                                            <input type="number" min="0" step="any"
+                                                   class="form-control qty-input @(LineQtyBad(l) ? "is-invalid" : "")"
+                                                   @bind="l.Qty" @bind:event="oninput" />
+                                            <span class="input-group-text bg-white text-muted">@l.Unit</span>
+                                        </div>
                                     </td>
                                     <td>
-                                        <input type="number" min="0" step="0.01" class="form-control price-input"
-                                               @bind="l.Price" @bind:event="oninput" />
+                                        <div class="input-group input-group-sm" style="width: 132px;">
+                                            <span class="input-group-text bg-white text-success"><i class="bi bi-tag"></i></span>
+                                            <input type="number" min="0" step="0.01" class="form-control price-input"
+                                                   @bind="l.Price" @bind:event="oninput" />
+                                        </div>
                                     </td>
-                                    <td class="fw-semibold text-nowrap">@Peso(LineTotal(l))</td>
+                                    <td class="fw-bold text-nowrap" style="color: #1B5E34;">@Peso(LineTotal(l))</td>
                                     <td class="text-end">
                                         <button type="button" class="btn-remove" @onclick="() => RemoveLine(l)" aria-label="Remove item">
                                             <i class="bi bi-x-lg"></i>
@@ -105,40 +212,58 @@
     <!-- ======================= CUSTOMER & PAYMENT ======================= -->
     <div class="col-12 col-lg-4">
         <div class="card-box h-100">
-            <div class="panel-title">Customer &amp; payment</div>
-            <div class="panel-sub">Partial payments leave the remaining balance outstanding.</div>
+            <div class="panel-title">
+                <i class="bi bi-wallet2 text-success me-1"></i>Customer &amp; payment
+            </div>
+            <div class="panel-sub">Partial payments leave the remaining balance on the customer account.</div>
 
             <div class="mb-3">
-                <label class="form-label">Customer</label>
-                <select class="form-select" @bind="selectedCustomerId">
-                    <option value="">Select customer...</option>
-                    @foreach (var c in customers)
-                    {
-                        <option value="@c.Id">@CustomerLabel(c)</option>
-                    }
-                </select>
+                <label class="form-label"><i class="bi bi-person text-success me-1"></i>Customer</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
+                    <select class="form-select" @bind="selectedCustomerId">
+                        <option value="">Walk-in customer</option>
+                        @foreach (var c in customers)
+                        {
+                            <option value="@c.Id">@CustomerLabel(c)</option>
+                        }
+                    </select>
+                </div>
             </div>
 
             <div class="mb-3">
-                <label class="form-label">Discount (₱)</label>
-                <input type="number" min="0" step="0.01" class="form-control" @bind="discountInput" @bind:event="oninput" />
+                <label class="form-label"><i class="bi bi-percent text-success me-1"></i>Discount (₱)</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="bi bi-tag text-success"></i></span>
+                    <input type="number" min="0" step="0.01" class="form-control" placeholder="0.00"
+                           @bind="discountInput" @bind:event="oninput" />
+                </div>
             </div>
 
             <div class="mb-3">
-                <label class="form-label">Payment method</label>
-                <select class="form-select" @bind="method">
-                    @foreach (var m in MethodOptions)
-                    {
-                        <option value="@m">@m</option>
-                    }
-                </select>
+                <label class="form-label"><i class="bi bi-credit-card text-success me-1"></i>Payment method</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="bi bi-credit-card text-success"></i></span>
+                    <select class="form-select" @bind="method">
+                        @foreach (var m in MethodOptions)
+                        {
+                            <option value="@m">@Cap(m)</option>
+                        }
+                    </select>
+                </div>
             </div>
 
             <div class="mb-1">
-                <label class="form-label">Amount paid now (₱)</label>
-                <input type="number" min="0" step="0.01" class="form-control" @bind="paidInput" @bind:event="oninput" />
+                <label class="form-label"><i class="bi bi-cash-coin text-success me-1"></i>Amount paid now (₱)</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="bi bi-cash-coin text-success"></i></span>
+                    <input type="number" min="0" step="0.01" class="form-control" placeholder="0.00"
+                           @bind="paidInput" @bind:event="oninput" />
+                </div>
             </div>
-            <button type="button" class="link-btn" @onclick="PayInFull">Pay in full</button>
+            <button type="button" class="link-btn" @onclick="PayInFull">
+                <i class="bi bi-check2-all me-1"></i>Pay in full
+            </button>
 
             <hr class="my-3" />
 
@@ -162,64 +287,195 @@
             }
 
             <div class="d-flex gap-2 mt-3">
-                <button type="button" class="btn-complete" @onclick="Complete">Complete sale</button>
-                <button type="button" class="btn-clear" @onclick="Clear">Clear</button>
+                <button type="button" class="btn-complete flex-grow-1" @onclick="CompleteAsync" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        <span>Processing...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-check2-circle me-1"></i>
+                        <span>Complete sale</span>
+                    }
+                </button>
+                <button type="button" class="btn-clear" @onclick="Clear" disabled="@isSaving">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Clear
+                </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- RECEIPT -->
+<!-- AUTO-DISMISS SUCCESSFUL PURCHASE MODAL (~1.5s, NO BUTTON) -->
+@if (showSuccessModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 2100;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 380px;">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
+                <div class="rounded-circle d-inline-flex align-items-center justify-content-center mx-auto mb-3"
+                     style="width: 72px; height: 72px; background-color: #E8F3EC; color: #1B5E34;">
+                    <i class="bi bi-check2-circle" style="font-size: 2.6rem;"></i>
+                </div>
+                <h5 class="fw-bolder mb-1" style="color: #0A2B1D;">Purchase Successful!</h5>
+                <p class="text-muted small mb-0">
+                    Sale <strong>@lastSaleNo</strong> recorded &amp; inventory updated. Opening receipt...
+                </p>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- RECEIPT MODAL (CONVENIENCE STORE RECEIPT + PRINTABLE) -->
 @if (receipt != null)
 {
-    <div class="modal-overlay" @onclick="CloseReceipt">
-        <div class="modal-card" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-start">
-                <div>
-                    <h5 class="modal-heading mb-1">Receipt</h5>
-                    <div class="modal-sub">@BusinessName</div>
-                </div>
-                <button type="button" class="btn-close-x" @onclick="CloseReceipt" aria-label="Close"><i class="bi bi-x-lg"></i></button>
-            </div>
+    var totalLineQty = receipt.Lines.Sum(x => x.Qty);
+    var vatableSales = Math.Round(receipt.Total / 1.12m, 2, MidpointRounding.AwayFromZero);
+    var vatAmount = Math.Max(0m, receipt.Total - vatableSales);
 
-            <div class="receipt-meta">
-                <div><span>Sale no.</span><strong>@receipt.No</strong></div>
-                <div><span>Date</span><strong>@receipt.Date.ToString("MMM d, yyyy", Inv)</strong></div>
-                <div><span>Customer</span><strong>@receipt.Customer</strong></div>
-                <div><span>Served by</span><strong>@(string.IsNullOrWhiteSpace(receipt.By) ? "—" : receipt.By)</strong></div>
-            </div>
-
-            <table class="table receipt-table align-middle mb-0">
-                <thead>
-                    <tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Price</th><th class="text-end">Subtotal</th></tr>
-                </thead>
-                <tbody>
-                    @foreach (var r in receipt.Lines)
+    <div class="modal-overlay receipt-overlay" @onclick="CloseReceipt">
+        <div class="thermal-receipt-card" @onclick:stopPropagation="true">
+            <div class="receipt-printable">
+                <div class="receipt-header-center">
+                    <div class="receipt-biz-name">@BusinessName</div>
+                    <div class="receipt-branch-line">
+                        <i class="bi bi-building text-success me-1"></i>@receipt.Branch
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(receipt.BranchAddress))
                     {
-                        <tr>
-                            <td>@r.Name</td>
-                            <td class="text-end text-nowrap">@Qty(r.Qty) kg</td>
-                            <td class="text-end text-nowrap">@Peso(r.Price)</td>
-                            <td class="text-end text-nowrap">@Peso(r.Qty * r.Price)</td>
-                        </tr>
+                        <div class="receipt-address-line">
+                            <i class="bi bi-geo-alt text-success me-1"></i>@receipt.BranchAddress
+                        </div>
                     }
-                </tbody>
-            </table>
+                    <div class="receipt-doc-tag">OFFICIAL SALES RECEIPT</div>
+                </div>
 
-            <div class="summary mt-3">
-                <div class="row-line"><span>Subtotal</span><span>@Peso(receipt.Subtotal)</span></div>
-                <div class="row-line"><span>Discount</span><span>– @Peso(receipt.Discount)</span></div>
-                <div class="row-line total"><span>Total</span><span>@Peso(receipt.Total)</span></div>
-                <div class="row-line"><span>Paid (@receipt.Method)</span><span>@Peso(receipt.Paid)</span></div>
-                <div class="row-line"><span>Balance</span><span class="@(receipt.Balance > 0 ? "text-warn" : "")">@Peso(receipt.Balance)</span></div>
-                <div class="row-line"><span>Change</span><span>@Peso(receipt.Change)</span></div>
+                <div class="receipt-dash"></div>
+
+                <div class="receipt-info-list">
+                    <div class="receipt-info-row">
+                        <span>Sale No.</span>
+                        <strong>@receipt.No</strong>
+                    </div>
+                    <div class="receipt-info-row">
+                        <span>Date &amp; Time</span>
+                        <strong>@receipt.Date.ToString("MMM d, yyyy · hh:mm tt", Inv)</strong>
+                    </div>
+                    <div class="receipt-info-row">
+                        <span>Staff</span>
+                        <strong>@(string.IsNullOrWhiteSpace(receipt.By) ? "—" : receipt.By)</strong>
+                    </div>
+                    <div class="receipt-info-row">
+                        <span>Customer</span>
+                        <strong>@receipt.Customer</strong>
+                    </div>
+                </div>
+
+                <div class="receipt-dash"></div>
+
+                <table class="thermal-items-table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th class="text-end">Price</th>
+                            <th class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in receipt.Lines)
+                        {
+                            <tr>
+                                <td colspan="3" class="thermal-item-name">
+                                    @r.Name <span class="thermal-qty-inline">(@Qty(r.Qty) @r.Unit)</span>
+                                </td>
+                            </tr>
+                            <tr class="thermal-item-subrow">
+                                <td class="thermal-calc-cell">@Qty(r.Qty) @r.Unit × @Peso(r.Price)</td>
+                                <td class="thermal-num-cell">@Peso(r.Price)</td>
+                                <td class="thermal-num-cell fw-bold">@Peso(r.Qty * r.Price)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <div class="receipt-dash"></div>
+
+                <div class="receipt-totals">
+                    <div class="r-row">
+                        <span>Items / Qty</span>
+                        <strong>@receipt.Lines.Count @(receipt.Lines.Count == 1 ? "item" : "items") (@Qty(totalLineQty) total)</strong>
+                    </div>
+                </div>
+
+                <div class="receipt-dash"></div>
+
+                <div class="receipt-totals">
+                    <div class="r-row">
+                        <span>Subtotal</span>
+                        <span>@Peso(receipt.Subtotal)</span>
+                    </div>
+                    <div class="r-row">
+                        <span>Discount</span>
+                        <span>– @Peso(receipt.Discount)</span>
+                    </div>
+                    <div class="r-row">
+                        <span>Vatable Sales</span>
+                        <span>@Peso(vatableSales)</span>
+                    </div>
+                    <div class="r-row">
+                        <span>VAT (12%)</span>
+                        <span>@Peso(vatAmount)</span>
+                    </div>
+                    <div class="receipt-dash my-1"></div>
+                    <div class="r-row grand">
+                        <span>TOTAL</span>
+                        <span>@Peso(receipt.Total)</span>
+                    </div>
+                </div>
+
+                <div class="receipt-dash"></div>
+
+                <div class="receipt-totals">
+                    <div class="r-row">
+                        <span>Paid (@Cap(receipt.Method))</span>
+                        <span>@Peso(receipt.Paid)</span>
+                    </div>
+                    <div class="r-row">
+                        <span>Balance</span>
+                        <span class="@(receipt.Balance > 0 ? "text-warn" : "")">@Peso(receipt.Balance)</span>
+                    </div>
+                    <div class="r-row">
+                        <span>Change</span>
+                        <span>@Peso(receipt.Change)</span>
+                    </div>
+                </div>
+
+                <div class="receipt-dash"></div>
+
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <span class="small text-muted fw-semibold">Status:</span>
+                    <span class="pill @(receipt.Balance <= 0 ? "pill-green" : receipt.Paid > 0 ? "pill-yellow" : "pill-red")">
+                        <i class="bi @(receipt.Balance <= 0 ? "bi-check-circle" : receipt.Paid > 0 ? "bi-clock-history" : "bi-exclamation-circle") me-1"></i>
+                        @(receipt.Balance <= 0 ? "Paid" : receipt.Paid > 0 ? "Partial" : "Unpaid")
+                    </span>
+                </div>
+
+                <div class="receipt-dash"></div>
+
+                <div class="receipt-footer-note">
+                    Thank you for your purchase!
+                </div>
             </div>
 
-            <div class="d-flex justify-content-between align-items-center mt-4">
-                <span class="pill @(receipt.Balance <= 0 ? "pill-green" : receipt.Paid > 0 ? "pill-yellow" : "pill-red")">
-                    @(receipt.Balance <= 0 ? "Paid" : receipt.Paid > 0 ? "Partial" : "Unpaid")
-                </span>
-                <button type="button" class="btn-save" @onclick="CloseReceipt">Done</button>
+            <div class="receipt-actions no-print d-flex justify-content-between align-items-center gap-2 mt-3">
+                <button type="button" class="btn-receipt-print" @onclick="PrintReceiptAsync">
+                    <i class="bi bi-printer"></i>
+                    <span>Print</span>
+                </button>
+                <button type="button" class="btn-receipt-done" @onclick="CloseReceipt">
+                    <i class="bi bi-check2-circle"></i>
+                    <span>Done</span>
+                </button>
             </div>
         </div>
     </div>
@@ -231,27 +487,31 @@
 }
 
 @code {
-    // ---------- MODELS ----------
-    class ProduceLine
+    class ProduceCardItem
     {
-        public int Id { get; set; }
-        public string Crop { get; set; } = "";
-        public string Grade { get; set; } = "A";
-        public decimal Kg { get; set; }
-        public decimal Price { get; set; }
+        public int ItemId { get; set; }
+        public string Name { get; set; } = "";
+        public string? ItemCode { get; set; }
+        public string Unit { get; set; } = "kg";
+        public decimal AvailableQty { get; set; }
+        public decimal SellingPrice { get; set; }
+        public string? ImageUrl { get; set; }
     }
 
     class CustomerRec
     {
         public int Id { get; set; }
+        public object? Entity { get; set; }
         public string Name { get; set; } = "";
         public decimal Balance { get; set; }
     }
 
     class SaleLine
     {
-        public int ProduceId { get; set; }
+        public int ItemId { get; set; }
         public string Name { get; set; } = "";
+        public string Unit { get; set; } = "kg";
+        public string? ImageUrl { get; set; }
         public decimal? Qty { get; set; }
         public decimal? Price { get; set; }
     }
@@ -259,6 +519,7 @@
     class ReceiptLine
     {
         public string Name { get; set; } = "";
+        public string Unit { get; set; } = "kg";
         public decimal Qty { get; set; }
         public decimal Price { get; set; }
     }
@@ -267,6 +528,8 @@
     {
         public string No { get; set; } = "";
         public DateTime Date { get; set; }
+        public string Branch { get; set; } = "";
+        public string BranchAddress { get; set; } = "";
         public string Customer { get; set; } = "";
         public string By { get; set; } = "";
         public string Method { get; set; } = "cash";
@@ -285,43 +548,222 @@
     static readonly string[] MethodOptions = { "cash", "gcash", "bank", "check", "credit" };
     const string WalkIn = "Walk-in customers";
 
-    // TODO: kuhaa gikan sa naka-login nga tenant / branch
-    const string BusinessName = "Verdant Agri Ventures";
-    const string ActiveBranch = "North Field Branch";
+    long currentBusinessId;
+    long? currentBranchId;
+    string BusinessName = "AgriNexus Farm Operations";
+    string ActiveBranch = "All Branches";
+    string BranchAddress = "";
 
-    // ---------- STATE ----------
     int? selectedProduceId;
     int? selectedCustomerId;
+    string produceSearch = "";
     decimal? discountInput;
     decimal? paidInput;
     string method = "cash";
     bool showErrors;
+    bool isSaving;
+    bool showSuccessModal;
+    string lastSaleNo = "";
     string toast = "";
-    int saleSeq = 15;               // sunod nga sale number: SO-0015
+    int saleSeq = 1;
     SaleRec? receipt;
 
+    readonly List<ProduceCardItem> catalog = new();
+    readonly List<CustomerRec> customers = new();
     readonly List<SaleLine> lines = new();
-    readonly List<SaleRec> sales = new();   // mga sale nga na-complete sa session (wala pa ma-save sa database)
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // Approved harvest stock (gikan sa Inventory "Produce stock")
-    readonly List<ProduceLine> stock = new()
+    protected override async Task OnInitializedAsync()
     {
-        new() { Id = 1, Crop = "Cabbage",  Grade = "A", Kg = 1170, Price = 38 },
-        new() { Id = 2, Crop = "Ampalaya", Grade = "A", Kg = 420,  Price = 45 },
-        new() { Id = 3, Crop = "Cabbage",  Grade = "B", Kg = 180,  Price = 30 },
-        new() { Id = 4, Crop = "Rice",     Grade = "A", Kg = 1200, Price = 22 },
-    };
+        try
+        {
+            User? currentUser = null;
 
-    readonly List<CustomerRec> customers = new()
+            if (Auth.CurrentUserId > 0)
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+            {
+                var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+            }
+            else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+            {
+                currentUser = await DbContext.Users
+                    .Include(u => u.Business)
+                    .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                           || u.FName == Auth.CurrentUserName);
+            }
+
+            if (currentUser?.BusinessId != null)
+            {
+                currentBusinessId = currentUser.BusinessId.Value;
+                currentBranchId = currentUser.BranchId;
+                if (currentUser.Business != null && !string.IsNullOrWhiteSpace(currentUser.Business.BusinessName))
+                    BusinessName = currentUser.Business.BusinessName;
+            }
+            else
+            {
+                var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+                if (firstBiz != null)
+                {
+                    currentBusinessId = firstBiz.BusinessId;
+                    BusinessName = firstBiz.BusinessName;
+                }
+            }
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading POS data: " + ex.Message);
+        }
+    }
+
+    private async Task LoadDataAsync()
     {
-        new() { Id = 1, Name = "Bayanihan Trading",           Balance = 7900 },
-        new() { Id = 2, Name = "Municipal Market Vendors",    Balance = 7560 },
-        new() { Id = 3, Name = "Rural Bank Cooperative Store", Balance = 7000 },
-        new() { Id = 4, Name = "Verdant Fresh Retail",        Balance = 0 },
-        new() { Id = 5, Name = "Barangay Nutrition Program",  Balance = 0 },
-        new() { Id = 6, Name = WalkIn,                        Balance = 0 },
-    };
+        var branch = currentBranchId.HasValue
+            ? await DbContext.Branches.FirstOrDefaultAsync(b => b.BranchId == currentBranchId.Value)
+            : await DbContext.Branches.FirstOrDefaultAsync(b => b.BusinessId == currentBusinessId);
+
+        if (branch != null)
+        {
+            ActiveBranch = branch.BranchName;
+            var bType = branch.GetType();
+            BranchAddress = bType.GetProperty("Address")?.GetValue(branch)?.ToString()
+                         ?? bType.GetProperty("Location")?.GetValue(branch)?.ToString()
+                         ?? "";
+        }
+
+        var items = await DbContext.InventoryItems
+            .Where(i => i.BusinessId == currentBusinessId && !i.IsArchived && i.QuantityOnHand > 0)
+            .OrderBy(i => i.ItemName)
+            .ToListAsync();
+
+        catalog.Clear();
+        foreach (var i in items)
+        {
+            var sellPrice = i.SellingPrice > 0 ? i.SellingPrice : i.UnitCost;
+            catalog.Add(new ProduceCardItem
+            {
+                ItemId = i.ItemId,
+                Name = i.ItemName,
+                ItemCode = i.ItemCode,
+                Unit = string.IsNullOrWhiteSpace(i.Unit) ? "kg" : i.Unit.Trim(),
+                AvailableQty = i.QuantityOnHand,
+                SellingPrice = sellPrice,
+                ImageUrl = i.ImageUrl
+            });
+        }
+
+        await LoadCustomersAsync();
+        saleSeq = await GetNextSaleSequenceAsync();
+    }
+
+    private async Task LoadCustomersAsync()
+    {
+        customers.Clear();
+
+        var dbCustomers = await DbContext.Customers
+            .Where(c => c.BusinessId == currentBusinessId)
+            .ToListAsync();
+
+        if (dbCustomers.Count == 0)
+        {
+            dbCustomers = await DbContext.Customers.ToListAsync();
+        }
+
+        foreach (var c in dbCustomers)
+        {
+            var t = c.GetType();
+
+            var statusVal = t.GetProperty("Status")?.GetValue(c)?.ToString();
+            if (string.Equals(statusVal, "archived", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var isArchivedProp = t.GetProperty("IsArchived");
+            if (isArchivedProp != null && isArchivedProp.GetValue(c) is bool arch && arch)
+                continue;
+
+            var idProp = t.GetProperty("CustomerId") ?? t.GetProperty("Id");
+            var nameProp = t.GetProperty("CustomerName")
+                        ?? t.GetProperty("FullName")
+                        ?? t.GetProperty("Name")
+                        ?? t.GetProperty("BusinessName");
+            var balProp = t.GetProperty("OutstandingBalance")
+                       ?? t.GetProperty("Outstanding")
+                       ?? t.GetProperty("Balance")
+                       ?? t.GetProperty("AccountBalance");
+
+            if (idProp != null && int.TryParse(idProp.GetValue(c)?.ToString(), out var id))
+            {
+                var name = nameProp?.GetValue(c)?.ToString();
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    var fName = t.GetProperty("FName")?.GetValue(c)?.ToString() ?? "";
+                    var lName = t.GetProperty("LName")?.GetValue(c)?.ToString() ?? "";
+                    name = $"{fName} {lName}".Trim();
+                }
+
+                if (string.IsNullOrWhiteSpace(name))
+                    name = $"Customer #{id}";
+
+                decimal.TryParse(balProp?.GetValue(c)?.ToString(), NumberStyles.Any, Inv, out var bal);
+                customers.Add(new CustomerRec
+                {
+                    Id = id,
+                    Entity = c,
+                    Name = name.Trim(),
+                    Balance = bal
+                });
+            }
+        }
+
+        customers.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<int> GetNextSaleSequenceAsync()
+    {
+        var prop = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.Name.Equals("SalesOrders", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("Sales", StringComparison.OrdinalIgnoreCase));
+
+        if (prop?.GetValue(DbContext) is IQueryable queryable)
+        {
+            var list = await queryable.Cast<object>().ToListAsync();
+            var max = 0;
+            foreach (var s in list)
+            {
+                var no = s.GetType().GetProperty("SaleNumber")?.GetValue(s)?.ToString()
+                      ?? s.GetType().GetProperty("OrderNumber")?.GetValue(s)?.ToString()
+                      ?? s.GetType().GetProperty("SaleNo")?.GetValue(s)?.ToString();
+                if (!string.IsNullOrWhiteSpace(no) && no.StartsWith("SO-", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (int.TryParse(no.Substring(3), out var n))
+                        max = Math.Max(max, n);
+                }
+            }
+            return max + 1;
+        }
+        return 1;
+    }
+
+    List<ProduceCardItem> AvailableCatalog
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(produceSearch))
+                return catalog;
+
+            return catalog.Where(p =>
+                p.Name.Contains(produceSearch, StringComparison.OrdinalIgnoreCase) ||
+                (p.ItemCode ?? "").Contains(produceSearch, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
 
     // ---------- COMPUTED ----------
     decimal Subtotal => lines.Sum(LineTotal);
@@ -337,10 +779,10 @@
 
     List<Stat> Stats => new()
     {
-        new("PRODUCE LINES AVAILABLE", stock.Count(p => p.Kg > 0).ToString(), "Approved harvest stock", "bi-cart", ""),
-        new("CUSTOMERS ON FILE", customers.Count.ToString(), "", "bi-check-circle", "stat-icon-blue"),
-        new("NEXT SALE NUMBER", NextNo, "", "bi-cart", "stat-icon-plain"),
-        new("SALE TOTAL", Peso(Total), Balance > 0 && Total > 0 ? Peso(Balance) + " balance" : "Fully paid", "bi-cart", ""),
+        new("ITEMS IN STOCK", catalog.Count(p => p.AvailableQty > 0).ToString(), "Ready for POS", "bi-grid-3x3-gap", ""),
+        new("CUSTOMERS ON FILE", customers.Count.ToString(), "Active accounts", "bi-people", "stat-icon-leaf"),
+        new("NEXT SALE NUMBER", NextNo, "Auto-generated", "bi-receipt", "stat-icon-earth"),
+        new("SALE TOTAL", Peso(Total), Balance > 0 && Total > 0 ? Peso(Balance) + " balance" : "Fully paid", "bi-cash-coin", ""),
     };
 
     List<string> Errors
@@ -348,30 +790,31 @@
         get
         {
             var list = new List<string>();
-            if (lines.Count == 0) { list.Add("Add at least one item."); return list; }
+            if (lines.Count == 0) { list.Add("Select at least one item card to add to the sale."); return list; }
 
             foreach (var l in lines)
             {
-                if ((l.Qty ?? 0) <= 0) list.Add(l.Name + ": enter a quantity.");
-                else if (LineQtyBad(l)) list.Add(l.Name + ": only " + Qty(OnHand(l)) + " kg available.");
+                if ((l.Qty ?? 0) <= 0) list.Add(l.Name + ": enter a quantity greater than zero.");
+                else if (LineQtyBad(l)) list.Add(l.Name + ": only " + Qty(OnHand(l)) + " " + l.Unit + " available.");
                 if ((l.Price ?? 0) < 0) list.Add(l.Name + ": price can’t be negative.");
             }
             if (Discount > Subtotal) list.Add("Discount can’t be more than the subtotal.");
-            if (Balance > 0 && (SelectedCustomer == null || SelectedCustomer.Name == WalkIn))
+            if (Balance > 0 && SelectedCustomer == null)
                 list.Add("Select a customer to leave a balance, or pay in full.");
             return list;
         }
     }
 
     // ---------- HELPERS ----------
+    static string Cap(string? s) => string.IsNullOrWhiteSpace(s) ? "" : char.ToUpper(s[0]) + s.Substring(1);
     static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
 
     static decimal LineTotal(SaleLine l) => (l.Qty ?? 0) * (l.Price ?? 0);
 
-    ProduceLine? Find(int id) => stock.FirstOrDefault(p => p.Id == id);
+    ProduceCardItem? Find(int itemId) => catalog.FirstOrDefault(p => p.ItemId == itemId);
 
-    decimal OnHand(SaleLine l) => Find(l.ProduceId)?.Kg ?? 0;
+    decimal OnHand(SaleLine l) => Find(l.ItemId)?.AvailableQty ?? 0;
 
     bool LineQtyBad(SaleLine l) => (l.Qty ?? 0) > OnHand(l);
 
@@ -379,28 +822,26 @@
         c.Balance > 0 ? c.Name + " · " + Peso(c.Balance) + " balance" : c.Name;
 
     // ---------- ACTIONS ----------
-    void AddItem()
+    void AddProduceCard(ProduceCardItem p)
     {
-        if (selectedProduceId == null) return;
-        var p = Find(selectedProduceId.Value);
-        if (p == null) return;
-
-        var existing = lines.FirstOrDefault(l => l.ProduceId == p.Id);
+        var existing = lines.FirstOrDefault(l => l.ItemId == p.ItemId);
         if (existing != null)
         {
-            existing.Qty = (existing.Qty ?? 0) + 1;
+            if ((existing.Qty ?? 0) < p.AvailableQty)
+                existing.Qty = (existing.Qty ?? 0) + 1;
         }
-        else
+        else if (p.AvailableQty > 0)
         {
             lines.Add(new SaleLine
             {
-                ProduceId = p.Id,
-                Name = p.Crop + " — Grade " + p.Grade,
+                ItemId = p.ItemId,
+                Name = p.Name,
+                Unit = p.Unit,
+                ImageUrl = p.ImageUrl,
                 Qty = 1,
-                Price = p.Price
+                Price = p.SellingPrice
             });
         }
-        selectedProduceId = null;
     }
 
     void RemoveLine(SaleLine l) => lines.Remove(l);
@@ -418,46 +859,216 @@
         showErrors = false;
     }
 
-    async Task Complete()
+    async Task CompleteAsync()
     {
         showErrors = true;
-        if (Errors.Count > 0) return;
+        if (Errors.Count > 0 || isSaving) return;
 
-        var sale = new SaleRec
+        isSaving = true;
+        try
         {
-            No = NextNo,
-            Date = DateTime.Today,
-            Customer = SelectedCustomer?.Name ?? WalkIn,
-            By = Auth.CurrentUserName ?? "",
-            Method = method,
-            Lines = lines.Select(l => new ReceiptLine { Name = l.Name, Qty = l.Qty ?? 0, Price = l.Price ?? 0 }).ToList(),
-            Subtotal = Subtotal,
-            Discount = Discount,
-            Total = Total,
-            Paid = Paid,
-            Balance = Balance,
-            Change = Change
-        };
+            var saleNo = NextNo;
+            var saleDate = DateTime.Now;
+            var servedBy = Auth.CurrentUserName ?? "";
+            var custName = SelectedCustomer?.Name ?? WalkIn;
 
-        // Kuhaa ang quantity gikan sa stock
-        foreach (var l in lines)
+            var saleRecord = new SaleRec
+            {
+                No = saleNo,
+                Date = saleDate,
+                Branch = ActiveBranch,
+                BranchAddress = BranchAddress,
+                Customer = custName,
+                By = servedBy,
+                Method = method,
+                Lines = lines.Select(l => new ReceiptLine
+                {
+                    Name = l.Name,
+                    Unit = l.Unit,
+                    Qty = l.Qty ?? 0,
+                    Price = l.Price ?? 0
+                }).ToList(),
+                Subtotal = Subtotal,
+                Discount = Discount,
+                Total = Total,
+                Paid = Paid,
+                Balance = Balance,
+                Change = Change
+            };
+
+            // 1. Auto-deduct from InventoryItems in database
+            foreach (var l in lines)
+            {
+                var qtyToDeduct = l.Qty ?? 0;
+                var dbItem = await DbContext.InventoryItems.FindAsync(l.ItemId);
+                if (dbItem != null)
+                {
+                    dbItem.QuantityOnHand = Math.Max(0, dbItem.QuantityOnHand - qtyToDeduct);
+                    DbContext.InventoryItems.Update(dbItem);
+                }
+            }
+
+            // 2. Update customer balance if unpaid balance remains
+            if (Balance > 0 && SelectedCustomer?.Entity != null)
+            {
+                var cType = SelectedCustomer.Entity.GetType();
+                var balProp = cType.GetProperty("OutstandingBalance")
+                           ?? cType.GetProperty("Outstanding")
+                           ?? cType.GetProperty("Balance")
+                           ?? cType.GetProperty("AccountBalance");
+                if (balProp != null && balProp.CanWrite)
+                {
+                    var underlying = Nullable.GetUnderlyingType(balProp.PropertyType) ?? balProp.PropertyType;
+                    var newBal = SelectedCustomer.Balance + Balance;
+                    if (underlying == typeof(decimal))
+                        balProp.SetValue(SelectedCustomer.Entity, newBal);
+                    else if (underlying == typeof(double))
+                        balProp.SetValue(SelectedCustomer.Entity, Convert.ToDouble(newBal, Inv));
+
+                    DbContext.Update(SelectedCustomer.Entity);
+                }
+            }
+
+            // 3. Save SalesOrder & SalesItem rows if present in DbContext
+            await TrySaveSalesOrderAsync(saleRecord);
+
+            await DbContext.SaveChangesAsync();
+
+            Clear();
+            await LoadDataAsync();
+
+            // Show auto-dismissing Successful Purchase modal (~1.5s), then open Receipt
+            lastSaleNo = saleNo;
+            showSuccessModal = true;
+            await InvokeAsync(StateHasChanged);
+
+            await Task.Delay(1500);
+            showSuccessModal = false;
+            receipt = saleRecord;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
         {
-            var p = Find(l.ProduceId);
-            if (p != null) p.Kg -= l.Qty ?? 0;
+            await ShowToast("Error completing sale: " + ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    async Task PrintReceiptAsync()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private static void TrySetProp(object target, string propName, object? value, params string[] aliases)
+    {
+        var allNames = new[] { propName }.Concat(aliases);
+        var prop = target.GetType()
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.CanWrite && allNames.Any(a => p.Name.Equals(a, StringComparison.OrdinalIgnoreCase)));
+
+        if (prop == null) return;
+
+        if (value == null)
+        {
+            var targetType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+            if (!prop.PropertyType.IsValueType || Nullable.GetUnderlyingType(prop.PropertyType) != null)
+            {
+                prop.SetValue(target, null);
+            }
+            else if (targetType == typeof(int)) prop.SetValue(target, 0);
+            else if (targetType == typeof(long)) prop.SetValue(target, 0L);
+            else if (targetType == typeof(decimal)) prop.SetValue(target, 0m);
+            return;
         }
 
-        // Idugang ang balance sa customer
-        if (sale.Balance > 0 && SelectedCustomer != null)
-            SelectedCustomer.Balance += sale.Balance;
+        var underlying = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+        try
+        {
+            if (underlying.IsInstanceOfType(value))
+            {
+                prop.SetValue(target, value);
+            }
+            else if (underlying == typeof(long))
+            {
+                prop.SetValue(target, Convert.ToInt64(value, Inv));
+            }
+            else if (underlying == typeof(int))
+            {
+                prop.SetValue(target, Convert.ToInt32(value, Inv));
+            }
+            else if (underlying == typeof(decimal))
+            {
+                prop.SetValue(target, Convert.ToDecimal(value, Inv));
+            }
+            else if (underlying == typeof(DateTime))
+            {
+                prop.SetValue(target, Convert.ToDateTime(value, Inv));
+            }
+            else if (underlying == typeof(string))
+            {
+                prop.SetValue(target, value.ToString());
+            }
+        }
+        catch
+        {
+            // Skip incompatible property type
+        }
+    }
 
-        // TODO: i-save ang sale sa database, i-update ang Inventory (produce stock),
-        // i-log ang bayad sa Payments & Collections / Cash Drawer, ug i-log sa Audit Logs
-        sales.Add(sale);
-        saleSeq++;
-        receipt = sale;
+    private async Task TrySaveSalesOrderAsync(SaleRec saleRecord)
+    {
+        var ordersProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.Name.Equals("SalesOrders", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("Sales", StringComparison.OrdinalIgnoreCase));
 
-        Clear();
-        await ShowToast(sale.No + " completed.");
+        if (ordersProp?.GetValue(DbContext) == null) return;
+
+        var orderEntity = new SalesOrder();
+        TrySetProp(orderEntity, "BusinessId", currentBusinessId);
+        TrySetProp(orderEntity, "BranchId", currentBranchId);
+        TrySetProp(orderEntity, "CustomerId", SelectedCustomer?.Id);
+        TrySetProp(orderEntity, "SaleNumber", saleRecord.No, "OrderNumber", "SaleNo", "InvoiceNo", "ReferenceNo");
+        TrySetProp(orderEntity, "SaleDate", saleRecord.Date, "OrderDate", "Date", "CreatedAt");
+        TrySetProp(orderEntity, "Subtotal", saleRecord.Subtotal, "SubTotal");
+        TrySetProp(orderEntity, "Discount", saleRecord.Discount);
+        TrySetProp(orderEntity, "TotalAmount", saleRecord.Total, "Total", "GrandTotal");
+        TrySetProp(orderEntity, "AmountPaid", saleRecord.Paid, "Paid");
+        TrySetProp(orderEntity, "BalanceDue", saleRecord.Balance, "Balance");
+        TrySetProp(orderEntity, "ChangeAmount", saleRecord.Change, "Change");
+        TrySetProp(orderEntity, "PaymentMethod", saleRecord.Method, "Method");
+        TrySetProp(orderEntity, "Status", saleRecord.Balance <= 0 ? "Paid" : (saleRecord.Paid > 0 ? "Partial" : "Unpaid"));
+        TrySetProp(orderEntity, "RecordedBy", saleRecord.By, "ServedBy", "CreatedBy");
+
+        DbContext.Add(orderEntity);
+        await DbContext.SaveChangesAsync();
+
+        var orderIdProp = orderEntity.GetType().GetProperty("SaleId")
+            ?? orderEntity.GetType().GetProperty("SalesOrderId")
+            ?? orderEntity.GetType().GetProperty("Id");
+
+        var saleId = orderIdProp != null && int.TryParse(orderIdProp.GetValue(orderEntity)?.ToString(), out var id) ? id : 0;
+
+        if (saleId > 0)
+        {
+            foreach (var l in lines)
+            {
+                var qty = l.Qty ?? 0;
+                var price = l.Price ?? 0;
+                var salesItem = new SalesItem
+                {
+                    SaleId = saleId,
+                    ItemId = l.ItemId,
+                    Unit = l.Unit,
+                    Quantity = qty,
+                    UnitPrice = price,
+                    Subtotal = qty * price
+                };
+                DbContext.Add(salesItem);
+            }
+        }
     }
 
     void CloseReceipt() => receipt = null;
