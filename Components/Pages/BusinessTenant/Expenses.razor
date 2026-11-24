@@ -1,10 +1,24 @@
 ﻿@page "/expenses"
+@layout MainLayout
 @using System.Globalization
+@using System.Reflection
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
 @inject AgriNexus.Services.AuthService Auth
 
-<div class="mb-4">
-    <h2 class="page-title">Expense Management</h2>
-    <p class="text-muted mb-0 page-sub">@ActiveBranch · operating costs by category, plot and status.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+        <h2 class="page-title">Expense Management</h2>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@ActiveBranch</strong> · operating costs by category, plot and status.
+        </p>
+    </div>
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE;">
+        <i class="bi @(IsBusinessTenant ? "bi-shield-check" : "bi-person-badge") me-1"></i>
+        @(IsBusinessTenant ? "Business Tenant Access" : CurrentRoleLabel)
+    </span>
 </div>
 
 <!-- STAT CARDS -->
@@ -29,20 +43,43 @@
     }
 </div>
 
-<!-- TOOLBAR -->
-<div class="toolbar mb-3">
+<!-- TOOLBAR WITH ACTIVE / ARCHIVED TABS & SEARCH -->
+<div class="toolbar mb-3 d-flex flex-wrap align-items-center gap-3">
+    <div class="btn-group shadow-sm" role="group" aria-label="Expense Tabs">
+        <input type="radio" class="btn-check" name="expViewTabs" id="tabExpActive" autocomplete="off"
+               checked="@(!showArchived)" @onchange="() => ToggleTab(false)">
+        <label class="btn btn-outline-success fw-bold" for="tabExpActive">
+            <i class="bi bi-check-circle me-1"></i> Active
+        </label>
+
+        <input type="radio" class="btn-check" name="expViewTabs" id="tabExpArchived" autocomplete="off"
+               checked="@showArchived" @onchange="() => ToggleTab(true)">
+        <label class="btn btn-outline-secondary fw-bold" for="tabExpArchived">
+            <i class="bi bi-archive me-1"></i> Archived
+        </label>
+    </div>
+
     <div class="search-box">
         <i class="bi bi-search"></i>
-        <input type="text" placeholder="Search expenses..." @bind="searchText" @bind:event="oninput" />
+        <input type="text" placeholder="Search expenses..."
+               @bind="searchText"
+               @bind:event="oninput" />
     </div>
-    <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "expense" : "expenses")</span>
-    <button type="button" class="btn-new ms-auto" @onclick="OpenNew">
-        <i class="bi bi-plus-lg"></i> New expense
-    </button>
+
+    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #FFFFFF; color: #0A2B1D; border: 1px solid #E2ECE6;">
+        <i class="bi bi-receipt me-1 text-success"></i>@Filtered.Count @(Filtered.Count == 1 ? "expense" : "expenses")
+    </span>
+
+    @if (!showArchived)
+    {
+        <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNew">
+            <i class="bi bi-plus-lg"></i> New expense
+        </button>
+    }
 </div>
 
 <!-- TABLE -->
-<div class="panel">
+<div class="panel shadow-sm bg-white">
     <div class="table-wrap">
         <table class="table data-table align-middle mb-0">
             <thead>
@@ -63,7 +100,7 @@
                     <tr>
                         <td class="col-date">@x.Date.ToString("MMM d, yyyy", Inv)</td>
                         <td class="col-desc">
-                            <div class="fw-semibold">@x.Description</div>
+                            <div class="fw-semibold" style="color: #0A2B1D;">@x.Description</div>
                             <div class="sub">
                                 @if (!string.IsNullOrWhiteSpace(x.Vendor))
                                 {
@@ -75,15 +112,19 @@
                                 }
                                 @if (!string.IsNullOrWhiteSpace(x.Plot))
                                 {
-                                    <span class="plot">@x.Plot</span>
+                                    <span class="plot"><i class="bi bi-geo-alt me-1"></i>@x.Plot</span>
                                 }
                             </div>
                         </td>
                         <td>@Cap(x.Category)</td>
-                        <td class="fw-medium text-nowrap">@Peso(x.Amount)</td>
+                        <td class="fw-bold text-nowrap" style="color: #0A2B1D;">@Peso(x.Amount)</td>
                         <td>@Cap(x.Method)</td>
                         <td class="col-by">@(string.IsNullOrWhiteSpace(x.RecordedBy) ? "—" : x.RecordedBy)</td>
-                        <td><span class="pill @StatusClass(x.Status)">@Cap(x.Status)</span></td>
+                        <td>
+                            <span class="pill @StatusClass(x.Status)">
+                                <i class="bi @StatusIcon(x.Status) me-1"></i>@Cap(x.Status)
+                            </span>
+                        </td>
                         <td class="text-end action-cell">
                             <button type="button" class="btn-dots" @onclick="() => ToggleMenu(x.Id)" aria-label="Actions">
                                 <i class="bi bi-three-dots"></i>
@@ -91,23 +132,38 @@
                             @if (openMenuId == x.Id)
                             {
                                 <div class="menu-backdrop" @onclick="CloseMenu"></div>
-                                <div class="row-menu">
-                                    <button type="button" class="row-menu-item" @onclick="() => OpenEdit(x)">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </button>
-                                    <button type="button" class="row-menu-item" @onclick="() => Approve(x)">
-                                        <i class="bi bi-check-circle"></i> Approve
-                                    </button>
-                                    <button type="button" class="row-menu-item" @onclick="() => MarkPaid(x)">
-                                        <i class="bi bi-cash-coin"></i> Mark as paid
-                                    </button>
-                                    <button type="button" class="row-menu-item plain" @onclick="() => Reject(x)">
-                                        Reject
-                                    </button>
-                                    <div class="menu-sep"></div>
-                                    <button type="button" class="row-menu-item text-danger" @onclick="() => Delete(x)">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
+                                <div class="row-menu shadow-lg">
+                                    @if (!showArchived)
+                                    {
+                                        <button type="button" class="row-menu-item" @onclick="() => OpenEdit(x)">
+                                            <i class="bi bi-pencil-square text-success"></i> Edit
+                                        </button>
+
+                                        @if (IsBusinessTenant)
+                                        {
+                                            <button type="button" class="row-menu-item text-success" @onclick="() => AcceptExpenseAsync(x)">
+                                                <i class="bi bi-check-circle"></i> Accept
+                                            </button>
+                                            <button type="button" class="row-menu-item text-danger" @onclick="() => RejectExpenseAsync(x)">
+                                                <i class="bi bi-x-circle"></i> Reject
+                                            </button>
+                                        }
+
+                                        <button type="button" class="row-menu-item" @onclick="() => MarkPaidAsync(x)">
+                                            <i class="bi bi-cash-coin text-success"></i> Mark as paid
+                                        </button>
+
+                                        <div class="menu-sep"></div>
+                                        <button type="button" class="row-menu-item text-danger" @onclick="() => PromptArchive(x)">
+                                            <i class="bi bi-archive"></i> Archive
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="row-menu-item text-success" @onclick="() => RestoreExpenseAsync(x)">
+                                            <i class="bi bi-arrow-counterclockwise"></i> Restore
+                                        </button>
+                                    }
                                 </div>
                             }
                         </td>
@@ -115,30 +171,50 @@
                 }
                 @if (Filtered.Count == 0)
                 {
-                    <tr><td colspan="8" class="text-center text-muted py-5">No expenses found.</td></tr>
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-50"></i>
+                            @(showArchived ? "No archived expenses found." : "No expenses found.")
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
     </div>
 </div>
 
-<!-- MODAL -->
+<!-- ADD / EDIT MODAL -->
 @if (showModal)
 {
     <div class="modal-overlay" @onclick="CloseModal">
         <div class="modal-card" @onclick:stopPropagation="true">
             <div class="d-flex justify-content-between align-items-start mb-3">
-                <h5 class="modal-heading mb-0">@(editingId == null ? "New expense" : "Edit expense")</h5>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center"
+                         style="width: 44px; height: 44px; background-color: #E8F3EC; color: #1B5E34; flex-shrink: 0;">
+                        <i class="bi @(editingId == null ? "bi-receipt" : "bi-pencil-square") fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-heading mb-0">@(editingId == null ? "New expense" : "Edit expense")</h5>
+                        <div class="text-muted small">
+                            @(editingId == null
+                                ? (IsBusinessTenant ? "Saved directly with confirmation modal." : "Submitted for Business Tenant review (Pending).")
+                                : "Update expense details.")
+                        </div>
+                    </div>
+                </div>
                 <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
             </div>
 
             <div class="row g-3">
                 <div class="col-12">
                     <label class="form-label">Description <span class="req">*</span></label>
-                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Description) ? "is-invalid" : "")" @bind="form.Description" />
+                    <input class="form-control @(showErrors && string.IsNullOrWhiteSpace(form.Description) ? "is-invalid" : "")"
+                           placeholder="e.g. Urea fertilizer, diesel, harvest crew wages..."
+                           @bind="form.Description" />
                     @if (showErrors && string.IsNullOrWhiteSpace(form.Description))
                     {
-                        <div class="err">Description is required.</div>
+                        <div class="err"><i class="bi bi-exclamation-triangle me-1"></i>Description is required.</div>
                     }
                 </div>
 
@@ -148,16 +224,19 @@
                         <option value="">Select...</option>
                         @foreach (var c in CategoryOptions)
                         {
-                            <option value="@c">@c</option>
+                            <option value="@c">@Cap(c)</option>
                         }
                     </select>
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Amount (₱) <span class="req">*</span></label>
-                    <input type="number" min="0" step="0.01" class="form-control @(showErrors && AmountInvalid ? "is-invalid" : "")" @bind="amountInput" />
+                    <input type="number" min="0" step="0.01"
+                           class="form-control @(showErrors && AmountInvalid ? "is-invalid" : "")"
+                           @bind="amountInput" />
                     @if (showErrors && AmountInvalid)
                     {
-                        <div class="err">Enter an amount greater than zero.</div>
+                        <div class="err"><i class="bi bi-exclamation-triangle me-1"></i>Enter an amount greater than zero.</div>
                     }
                 </div>
 
@@ -165,12 +244,13 @@
                     <label class="form-label">Date</label>
                     <input type="date" class="form-control" @bind="form.Date" />
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Payment method</label>
                     <select class="form-select" @bind="form.Method">
                         @foreach (var m in MethodOptions)
                         {
-                            <option value="@m">@m</option>
+                            <option value="@m">@Cap(m)</option>
                         }
                     </select>
                 </div>
@@ -179,6 +259,7 @@
                     <label class="form-label">Vendor / payee</label>
                     <input class="form-control" @bind="form.Vendor" />
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Charged to plot (optional)</label>
                     <input class="form-control" list="plotList" @bind="form.Plot" />
@@ -192,16 +273,24 @@
 
                 <div class="col-md-6">
                     <label class="form-label">Recorded by</label>
-                    <input class="form-control" @bind="form.RecordedBy" />
+                    <input class="form-control" @bind="form.RecordedBy" readonly="@(!IsBusinessTenant)" />
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Status</label>
-                    <select class="form-select" @bind="form.Status">
-                        @foreach (var s in StatusOptions)
-                        {
-                            <option value="@s">@s</option>
-                        }
-                    </select>
+                    @if (IsBusinessTenant)
+                    {
+                        <select class="form-select" @bind="form.Status">
+                            @foreach (var s in StatusOptions)
+                            {
+                                <option value="@s">@Cap(s)</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <input class="form-control bg-light" value="Pending (Awaiting Business Tenant)" readonly />
+                    }
                 </div>
 
                 <div class="col-md-6">
@@ -217,7 +306,85 @@
 
             <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
                 <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="Save">Save</button>
+                <button type="button" class="btn-save" @onclick="PromptOrSaveAsync" disabled="@isSaving">
+                    <i class="bi bi-check2-circle me-1"></i>Save
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- CONFIRMATION MODAL (FOR NON-OWNER STAFF OR EDITING) -->
+@if (showConfirmSaveModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 2100;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
+                <div class="rounded-circle d-inline-flex align-items-center justify-content-center mx-auto mb-3"
+                     style="width: 68px; height: 68px; background-color: #E8F3EC; color: #1B5E34;">
+                    <i class="bi bi-question-circle" style="font-size: 2.3rem;"></i>
+                </div>
+                <h5 class="fw-bolder mb-2" style="color: #0A2B1D;">
+                    @(editingId == null ? "Submit Expense Entry?" : "Save Expense Changes?")
+                </h5>
+                <p class="text-muted small mb-4">
+                    @if (editingId == null && !IsBusinessTenant)
+                    {
+                        <span>This expense will be saved as <strong>Pending</strong> for Business Tenant review.</span>
+                    }
+                    else
+                    {
+                        <span>Confirm saving changes for <strong>@form.Description</strong>?</span>
+                    }
+                </p>
+                <div class="d-flex justify-content-center gap-2">
+                    <button type="button" class="btn-clear" @onclick="() => showConfirmSaveModal = false">Cancel</button>
+                    <button type="button" class="btn-save" disabled="@isSaving" @onclick="CommitSaveAsync">
+                        <i class="bi bi-check2 me-1"></i>Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ARCHIVE CONFIRMATION MODAL -->
+@if (showConfirmArchiveModal && expenseToArchive != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(4px); z-index: 2100;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
+                <div class="rounded-circle d-inline-flex align-items-center justify-content-center mx-auto mb-3"
+                     style="width: 68px; height: 68px; background-color: #F5EFEA; color: #7A5230;">
+                    <i class="bi bi-archive" style="font-size: 2.3rem;"></i>
+                </div>
+                <h5 class="fw-bolder mb-2" style="color: #0A2B1D;">Archive Expense?</h5>
+                <p class="text-muted small mb-4">
+                    Archive <strong>@expenseToArchive.Description</strong> (@Peso(expenseToArchive.Amount))? You can restore it anytime from the Archived tab.
+                </p>
+                <div class="d-flex justify-content-center gap-2">
+                    <button type="button" class="btn-clear" @onclick="CancelArchive">Cancel</button>
+                    <button type="button" class="btn btn-danger rounded-3 fw-semibold px-4" disabled="@isSaving" @onclick="ConfirmArchiveAsync">
+                        <i class="bi bi-archive me-1"></i>Yes, Archive
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- SAVE SUCCESSFUL MODAL -->
+@if (showSaveSuccessModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 2200;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 380px;">
+            <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
+                <div class="rounded-circle d-inline-flex align-items-center justify-content-center mx-auto mb-3"
+                     style="width: 72px; height: 72px; background-color: #E8F3EC; color: #1B5E34;">
+                    <i class="bi bi-check2-circle" style="font-size: 2.6rem;"></i>
+                </div>
+                <h5 class="fw-bolder mb-1" style="color: #0A2B1D;">Save Successful!</h5>
+                <p class="text-muted small mb-0">@successModalMessage</p>
             </div>
         </div>
     </div>
@@ -226,25 +393,27 @@
 @if (!string.IsNullOrEmpty(toast))
 {
     <div class="toast-note @(toastWarn ? "warn" : "")">
-        <i class="bi @(toastWarn ? "bi-info-circle-fill" : "bi-check-circle-fill")"></i> @toast
+        <i class="bi @(toastWarn ? "bi-exclamation-triangle" : "bi-check2")"></i>
+        <span>@toast</span>
     </div>
 }
 
 @code {
-    // ---------- MODELS ----------
     class ExpenseRec
     {
         public int Id { get; set; }
+        public object? DbEntity { get; set; }
         public DateTime Date { get; set; } = DateTime.Today;
         public string Description { get; set; } = "";
         public string Vendor { get; set; } = "";
         public string Plot { get; set; } = "";
-        public string Category { get; set; } = "";
+        public string Category { get; set; } = "other";
         public decimal Amount { get; set; }
         public string Method { get; set; } = "cash";
         public string RecordedBy { get; set; } = "";
-        public string Status { get; set; } = "pending";   // pending | approved | paid | rejected
+        public string Status { get; set; } = "pending";
         public string Branch { get; set; } = "";
+        public bool IsArchived { get; set; }
 
         public ExpenseRec Clone() => (ExpenseRec)MemberwiseClone();
     }
@@ -252,66 +421,203 @@
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
-
     static readonly string[] CategoryOptions = { "labor", "supplies", "fuel", "utilities", "transport", "equipment", "maintenance", "other" };
     static readonly string[] MethodOptions = { "cash", "gcash", "bank", "check" };
     static readonly string[] StatusOptions = { "pending", "approved", "paid", "rejected" };
 
-    // TODO: kuhaa gikan sa naka-login nga tenant ug sa Branches / Farms & Plots modules
-    const string ActiveBranch = "North Field Branch";
-    readonly string[] branchNames = { "North Field Branch", "South Valley Branch", "Central Packing Branch" };
-    readonly string[] plotOptions =
-    {
-        "North Plot A", "North Plot B", "North Plot C", "South Plot D", "South Plot E", "Central Plot F",
-    };
+    long currentBusinessId;
+    long? currentBranchId;
+    long? currentUserId;
+    string CurrentRoleLabel = "Staff";
+    bool IsBusinessTenant;
 
-    // ---------- STATE ----------
+    string ActiveBranch = "North Field Branch";
+    readonly List<string> branchNames = new() { "North Field Branch", "South Valley Branch", "Central Packing Branch" };
+    readonly List<string> plotOptions = new() { "North Plot A", "North Plot B", "South Plot D", "South Plot E" };
+
+    bool showArchived;
     string searchText = "";
     string toast = "";
     bool toastWarn;
     bool showModal;
     bool showErrors;
+    bool isSaving;
+    bool showConfirmSaveModal;
+    bool showConfirmArchiveModal;
+    bool showSaveSuccessModal;
+    string successModalMessage = "Expense record has been saved.";
     int? editingId;
     int? openMenuId;
+    ExpenseRec? expenseToArchive;
     ExpenseRec form = new();
     decimal? amountInput;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // Ang order sa list parehas sa prototype. Ang bag-ong expense mo-gawas sa taas.
-    readonly List<ExpenseRec> expenses = new()
+    readonly List<ExpenseRec> expenses = new();
+
+    protected override async Task OnInitializedAsync()
     {
-        new() { Id = 1,  Date = new(2026, 10, 21), Description = "Daily wages payout — ampalaya harvest crew", Vendor = "Farm workers payroll", Plot = "South Plot E", Category = "labor",       Amount = 8400,  Method = "cash", RecordedBy = "Marites Aquino",   Status = "paid",     Branch = "South Valley Branch" },
-        new() { Id = 2,  Date = new(2026, 10, 18), Description = "Urea fertilizer purchase — 20 sacks",          Vendor = "Central Luzon Agri Supply", Category = "supplies",   Amount = 29000, Method = "bank", RecordedBy = "Bernardo Ocampo", Status = "approved", Branch = "North Field Branch" },
-        new() { Id = 3,  Date = new(2026, 10, 20), Description = "Diesel for water pump and hauling truck",     Vendor = "Valley Fuel Station",       Category = "fuel",       Amount = 8500,  Method = "cash", RecordedBy = "Allan Mercado",   Status = "paid",     Branch = "North Field Branch" },
-        new() { Id = 4,  Date = new(2026, 10, 5),  Description = "Daily wages payout — cabbage harvest crew",    Vendor = "Farm workers payroll", Plot = "South Plot D", Category = "labor",     Amount = 9600,  Method = "cash", RecordedBy = "Marites Aquino",   Status = "paid",     Branch = "South Valley Branch" },
-        new() { Id = 5,  Date = new(2026, 6, 12),  Description = "Certified rice seeds — 60 kg",                Vendor = "Pioneer Seeds Depot", Plot = "North Plot A", Category = "supplies",   Amount = 3300,  Method = "cash", RecordedBy = "Allan Mercado",   Status = "paid",     Branch = "North Field Branch" },
-        new() { Id = 6,  Date = new(2026, 10, 3),  Description = "Irrigation pump electricity — September",     Vendor = "Nueva Ecija Electric Coop", Category = "utilities",  Amount = 4600,  Method = "bank", RecordedBy = "Bernardo Ocampo", Status = "approved", Branch = "North Field Branch" },
-        new() { Id = 7,  Date = new(2026, 10, 18), Description = "Delivery hauls to Cabanatuan market",         Vendor = "J&T Hauling Services",      Category = "transport",  Amount = 2800,  Method = "cash", RecordedBy = "Paolo Gutierrez", Status = "paid",     Branch = "North Field Branch" },
-        new() { Id = 8,  Date = new(2026, 10, 14), Description = "Repair of knapsack sprayer nozzles",          Vendor = "FarmTech Machinery & Tools", Category = "equipment", Amount = 1250,  Method = "cash", RecordedBy = "Cristina Yabut",  Status = "pending",  Branch = "South Valley Branch" },
+        try
+        {
+            await ResolveUserAndRoleAsync();
+            await LoadExpensesAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading expenses: " + ex.Message, true);
+        }
+    }
 
-        // Mga entries nga wala makita sa screenshot (gi-balance aron mo-match ang totals)
-        new() { Id = 9,  Date = new(2026, 10, 9),  Description = "Daily wages payout — packing and sorting crew", Vendor = "Farm workers payroll", Plot = "Central Plot F", Category = "labor", Amount = 3360, Method = "cash", RecordedBy = "Noel Bautista",   Status = "paid",     Branch = "Central Packing Branch" },
-        new() { Id = 10, Date = new(2026, 9, 18),  Description = "Diesel for tractor — land preparation",       Vendor = "Valley Fuel Station", Plot = "North Plot C", Category = "fuel",       Amount = 3200,  Method = "cash", RecordedBy = "Allan Mercado",   Status = "paid",     Branch = "North Field Branch" },
-        new() { Id = 11, Date = new(2026, 10, 8),  Description = "Irrigation service fee — third quarter",      Vendor = "Nueva Ecija Irrigators Association", Category = "utilities", Amount = 2400, Method = "bank", RecordedBy = "Bernardo Ocampo", Status = "approved", Branch = "North Field Branch" },
-        new() { Id = 12, Date = new(2026, 10, 19), Description = "Canal clearing and dike repair",              Vendor = "Local labor contractor", Plot = "North Plot B", Category = "maintenance", Amount = 6500, Method = "cash", RecordedBy = "Ramon Delos Santos", Status = "approved", Branch = "North Field Branch" },
-        new() { Id = 13, Date = new(2026, 10, 6),  Description = "Barangay clearance and business permit fees", Vendor = "Municipal Treasurer’s Office", Category = "other",     Amount = 1800,  Method = "cash", RecordedBy = "Noel Bautista",   Status = "approved", Branch = "Central Packing Branch" },
-        new() { Id = 14, Date = new(2026, 10, 23), Description = "Insecticide and herbicide restock",           Vendor = "GreenShield Crop Protection", Category = "supplies", Amount = 9200,  Method = "bank", RecordedBy = "Cristina Yabut",  Status = "pending",  Branch = "South Valley Branch" },
-        new() { Id = 15, Date = new(2026, 10, 23), Description = "Hand trowels and work gloves restock",       Vendor = "FarmTech Machinery & Tools", Category = "supplies", Amount = 2800,  Method = "cash", RecordedBy = "Ramon Delos Santos", Status = "pending", Branch = "North Field Branch" },
-    };
+    private async Task ResolveUserAndRoleAsync()
+    {
+        User? currentUser = null;
 
-    // ---------- COMPUTED ----------
-    // Ang rejected dili apil sa totals
-    IEnumerable<ExpenseRec> Counted => expenses.Where(x => x.Status != "rejected");
+        if (Auth.CurrentUserId > 0)
+        {
+            currentUser = await DbContext.Users
+                .Include(u => u.Business)
+                .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+        }
+        else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+        {
+            var email = Auth.CurrentUserEmail.Trim().ToLower();
+            currentUser = await DbContext.Users
+                .Include(u => u.Business)
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == email);
+        }
 
-    List<ExpenseRec> Filtered => string.IsNullOrWhiteSpace(searchText)
-        ? expenses
-        : expenses.Where(x =>
-            x.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            x.Vendor.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            x.Plot.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            x.Category.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            x.RecordedBy.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-            x.Status.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (currentUser != null)
+        {
+            currentUserId = currentUser.UserId;
+            if (currentUser.BusinessId.HasValue)
+                currentBusinessId = currentUser.BusinessId.Value;
+            currentBranchId = currentUser.BranchId;
+
+            var roleProp = currentUser.GetType().GetProperty("Role")
+                        ?? currentUser.GetType().GetProperty("UserRole")
+                        ?? currentUser.GetType().GetProperty("RoleName");
+            var roleVal = roleProp?.GetValue(currentUser)?.ToString() ?? "";
+
+            var authRole = Auth.GetType().GetProperty("CurrentUserRole")?.GetValue(Auth)?.ToString()
+                        ?? Auth.GetType().GetProperty("Role")?.GetValue(Auth)?.ToString()
+                        ?? "";
+
+            var effectiveRole = !string.IsNullOrWhiteSpace(roleVal) ? roleVal : authRole;
+            CurrentRoleLabel = string.IsNullOrWhiteSpace(effectiveRole) ? "Business Tenant" : effectiveRole;
+
+            IsBusinessTenant = string.IsNullOrWhiteSpace(effectiveRole)
+                || effectiveRole.Contains("Business", StringComparison.OrdinalIgnoreCase)
+                || effectiveRole.Contains("Owner", StringComparison.OrdinalIgnoreCase)
+                || effectiveRole.Contains("Tenant", StringComparison.OrdinalIgnoreCase)
+                || effectiveRole.Contains("Admin", StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+            if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+            IsBusinessTenant = true;
+            CurrentRoleLabel = "Business Tenant";
+        }
+
+        var dbBranches = await DbContext.Branches
+            .Where(b => b.BusinessId == currentBusinessId)
+            .ToListAsync();
+
+        if (dbBranches.Count > 0)
+        {
+            branchNames.Clear();
+            foreach (var b in dbBranches)
+                branchNames.Add(b.BranchName);
+
+            var active = currentBranchId.HasValue
+                ? dbBranches.FirstOrDefault(b => b.BranchId == currentBranchId.Value)
+                : dbBranches.FirstOrDefault();
+
+            if (active != null)
+                ActiveBranch = active.BranchName;
+        }
+    }
+
+    private async Task LoadExpensesAsync()
+    {
+        expenses.Clear();
+
+        var expProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.Name.Equals("Expenses", StringComparison.OrdinalIgnoreCase));
+
+        if (expProp?.GetValue(DbContext) is IQueryable queryable)
+        {
+            var list = await queryable.Cast<object>().ToListAsync();
+            foreach (var e in list)
+            {
+                var t = e.GetType();
+                var bizVal = t.GetProperty("BusinessId")?.GetValue(e);
+                if (bizVal != null && long.TryParse(bizVal.ToString(), out var bId) && currentBusinessId > 0 && bId != currentBusinessId)
+                    continue;
+
+                var idVal = t.GetProperty("ExpenseId")?.GetValue(e) ?? t.GetProperty("Id")?.GetValue(e);
+                if (idVal == null || !int.TryParse(idVal.ToString(), out var id)) continue;
+
+                var isArch = t.GetProperty("IsArchived")?.GetValue(e) is bool arch && arch;
+                var status = t.GetProperty("Status")?.GetValue(e)?.ToString() ?? "pending";
+                if (string.Equals(status, "archived", StringComparison.OrdinalIgnoreCase))
+                    isArch = true;
+
+                var dateObj = t.GetProperty("ExpenseDate")?.GetValue(e) ?? t.GetProperty("Date")?.GetValue(e);
+                var dt = dateObj is DateTime d ? d : DateTime.Today;
+
+                decimal.TryParse(t.GetProperty("Amount")?.GetValue(e)?.ToString(), NumberStyles.Any, Inv, out var amt);
+
+                var branchIdObj = t.GetProperty("BranchId")?.GetValue(e);
+                var branchName = ActiveBranch;
+                if (branchIdObj != null && long.TryParse(branchIdObj.ToString(), out var brId))
+                {
+                    var br = await DbContext.Branches.FirstOrDefaultAsync(b => b.BranchId == brId);
+                    if (br != null) branchName = br.BranchName;
+                }
+
+                expenses.Add(new ExpenseRec
+                {
+                    Id = id,
+                    DbEntity = e,
+                    Date = dt,
+                    Description = t.GetProperty("Description")?.GetValue(e)?.ToString() ?? "",
+                    Vendor = t.GetProperty("Vendor")?.GetValue(e)?.ToString() ?? "",
+                    Plot = t.GetProperty("Plot")?.GetValue(e)?.ToString() ?? "",
+                    Category = t.GetProperty("Category")?.GetValue(e)?.ToString() ?? "other",
+                    Amount = amt,
+                    Method = t.GetProperty("PaymentMethod")?.GetValue(e)?.ToString()
+                          ?? t.GetProperty("Method")?.GetValue(e)?.ToString()
+                          ?? "cash",
+                    RecordedBy = t.GetProperty("RecordedBy")?.GetValue(e)?.ToString() ?? "",
+                    Status = status.ToLowerInvariant(),
+                    Branch = branchName,
+                    IsArchived = isArch
+                });
+            }
+        }
+
+        expenses.Sort((a, b) => b.Id.CompareTo(a.Id));
+    }
+
+    IEnumerable<ExpenseRec> ActiveNonArchived => expenses.Where(x => !x.IsArchived);
+    IEnumerable<ExpenseRec> Counted => ActiveNonArchived.Where(x => !string.Equals(x.Status, "rejected", StringComparison.OrdinalIgnoreCase));
+
+    List<ExpenseRec> Filtered
+    {
+        get
+        {
+            var baseList = expenses.Where(x => x.IsArchived == showArchived).ToList();
+            if (string.IsNullOrWhiteSpace(searchText)) return baseList;
+
+            return baseList.Where(x =>
+                x.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                x.Vendor.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                x.Plot.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                x.Category.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                x.RecordedBy.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                x.Status.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
 
     List<Stat> Stats
     {
@@ -319,41 +625,57 @@
         {
             var t = DateTime.Today;
             var month = Counted.Where(x => x.Date.Year == t.Year && x.Date.Month == t.Month).ToList();
-            var pending = expenses.Where(x => x.Status == "pending").ToList();
-            var paid = expenses.Count(x => x.Status == "paid");
+            var pending = ActiveNonArchived.Where(x => string.Equals(x.Status, "pending", StringComparison.OrdinalIgnoreCase)).ToList();
+            var paid = ActiveNonArchived.Count(x => string.Equals(x.Status, "paid", StringComparison.OrdinalIgnoreCase));
 
             return new()
             {
-                new("TOTAL RECORDED", Peso(Counted.Sum(x => x.Amount)), Counted.Count() + " entries", "bi-coin", ""),
-                new("THIS MONTH", Peso(month.Sum(x => x.Amount)), month.Count + (month.Count == 1 ? " entry" : " entries"), "bi-graph-down-arrow", "stat-icon-plain"),
-                new("AWAITING APPROVAL", pending.Count.ToString(), Peso(pending.Sum(x => x.Amount)), "bi-cash-stack", "stat-icon-warn"),
-                new("PAID ENTRIES", paid.ToString(), "", "bi-check-circle", ""),
+                new("TOTAL RECORDED", Peso(Counted.Sum(x => x.Amount)), Counted.Count() + " active entries", "bi-coin", ""),
+                new("THIS MONTH", Peso(month.Sum(x => x.Amount)), month.Count + (month.Count == 1 ? " entry" : " entries"), "bi-graph-down-arrow", "stat-icon-leaf"),
+                new("AWAITING APPROVAL", pending.Count.ToString(), Peso(pending.Sum(x => x.Amount)), "bi-hourglass-split", "stat-icon-earth"),
+                new("PAID ENTRIES", paid.ToString(), "Settled expenses", "bi-check-circle", ""),
             };
         }
     }
 
     bool AmountInvalid => !amountInput.HasValue || amountInput.Value <= 0;
 
-    // ---------- HELPERS ----------
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
+    static string Cap(string? s) => string.IsNullOrWhiteSpace(s) ? "" : char.ToUpper(s[0]) + s.Substring(1);
 
-    static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
-
-    static string StatusClass(string s) => s switch
+    static string StatusClass(string? s) => s?.ToLowerInvariant() switch
     {
         "paid" or "approved" => "pill-green",
         "rejected" => "pill-red",
         _ => "pill-yellow"
     };
 
-    // ---------- ACTIONS ----------
+    static string StatusIcon(string? s) => s?.ToLowerInvariant() switch
+    {
+        "paid" => "bi-cash-coin",
+        "approved" => "bi-check-circle",
+        "rejected" => "bi-x-circle",
+        _ => "bi-hourglass-split"
+    };
+
+    void ToggleTab(bool archived)
+    {
+        showArchived = archived;
+        openMenuId = null;
+    }
+
+    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
+    void CloseMenu() => openMenuId = null;
+
     void OpenNew()
     {
+        openMenuId = null;
         form = new ExpenseRec
         {
             Date = DateTime.Today,
             Method = "cash",
-            Status = "pending",
+            Category = "other",
+            Status = IsBusinessTenant ? "approved" : "pending",
             Branch = ActiveBranch,
             RecordedBy = Auth.CurrentUserName ?? ""
         };
@@ -365,94 +687,260 @@
 
     void OpenEdit(ExpenseRec x)
     {
+        openMenuId = null;
         form = x.Clone();
         amountInput = x.Amount;
         editingId = x.Id;
         showErrors = false;
-        openMenuId = null;
         showModal = true;
     }
 
     void CloseModal() => showModal = false;
 
-    void Save()
+    async Task PromptOrSaveAsync()
     {
         showErrors = true;
         if (string.IsNullOrWhiteSpace(form.Description) || AmountInvalid) return;
 
-        form.Description = form.Description.Trim();
-        form.Amount = amountInput!.Value;
-        if (string.IsNullOrWhiteSpace(form.Category)) form.Category = "other";
-        if (string.IsNullOrWhiteSpace(form.RecordedBy)) form.RecordedBy = Auth.CurrentUserName ?? "";
-
-        if (editingId == null)
+        // If Business Tenant creating a new expense: NO confirmation modal, straight to Save + Save Successful modal
+        if (editingId == null && IsBusinessTenant)
         {
-            form.Id = expenses.Count == 0 ? 1 : expenses.Max(x => x.Id) + 1;
-            expenses.Insert(0, form);
-        }
-        else
-        {
-            var idx = expenses.FindIndex(x => x.Id == editingId);
-            if (idx >= 0) expenses[idx] = form;
-        }
-        // TODO: i-save sa database ug i-log sa Audit Logs (Create / Update · Expenses)
-        showModal = false;
-    }
-
-    async Task Approve(ExpenseRec x)
-    {
-        openMenuId = null;
-        if (x.Status == "paid") { await ShowToast("This expense is already paid.", true); return; }
-        if (x.Status == "approved") { await ShowToast("This expense is already approved.", true); return; }
-
-        x.Status = "approved";
-        // TODO: i-log sa Audit Logs (Approve · Expenses)
-        await ShowToast("Expense approved.");
-    }
-
-    async Task MarkPaid(ExpenseRec x)
-    {
-        openMenuId = null;
-        if (x.Status == "paid") { await ShowToast("This expense is already paid.", true); return; }
-        if (x.Status == "rejected") { await ShowToast("Rejected expenses can’t be paid. Approve it first.", true); return; }
-
-        x.Status = "paid";
-        // TODO: kung cash, i-log ang gawas sa Cash Drawer; i-apil sa Production Costing ug Financial Reports
-        await ShowToast("Marked as paid: " + Peso(x.Amount) + ".");
-    }
-
-    async Task Reject(ExpenseRec x)
-    {
-        openMenuId = null;
-        if (x.Status == "paid") { await ShowToast("Paid expenses can’t be rejected.", true); return; }
-
-        x.Status = "rejected";
-        // TODO: i-log sa Audit Logs (Reject · Expenses)
-        await ShowToast("Expense rejected. It no longer counts in the totals.");
-    }
-
-    async Task Delete(ExpenseRec x)
-    {
-        openMenuId = null;
-        if (x.Status == "paid")
-        {
-            await ShowToast("Paid expenses are part of the financial records and can’t be deleted.", true);
+            await CommitSaveAsync();
             return;
         }
 
-        expenses.Remove(x);
-        await ShowToast("Expense removed.");
+        showConfirmSaveModal = true;
     }
 
-    void ToggleMenu(int id) => openMenuId = openMenuId == id ? null : id;
-    void CloseMenu() => openMenuId = null;
+    async Task CommitSaveAsync()
+    {
+        if (isSaving) return;
+        isSaving = true;
+        try
+        {
+            var cleanDesc = form.Description.Trim();
+            var cleanAmt = amountInput!.Value;
+            var cleanCat = string.IsNullOrWhiteSpace(form.Category) ? "other" : form.Category.Trim().ToLowerInvariant();
+            var cleanBy = string.IsNullOrWhiteSpace(form.RecordedBy) ? (Auth.CurrentUserName ?? "") : form.RecordedBy.Trim();
+            var cleanStatus = IsBusinessTenant
+                ? (string.IsNullOrWhiteSpace(form.Status) ? "approved" : form.Status.Trim().ToLowerInvariant())
+                : "pending";
+
+            var expProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .FirstOrDefault(p => p.Name.Equals("Expenses", StringComparison.OrdinalIgnoreCase));
+
+            if (expProp?.GetValue(DbContext) != null)
+            {
+                if (editingId == null)
+                {
+                    var entity = new Expense();
+                    SetExpenseEntityProps(entity, cleanDesc, cleanCat, cleanAmt, form.Date, cleanStatus, cleanBy, form.Vendor, form.Plot, form.Method, form.Branch);
+                    DbContext.Add(entity);
+                    await DbContext.SaveChangesAsync();
+                }
+                else
+                {
+                    var target = expenses.FirstOrDefault(e => e.Id == editingId.Value)?.DbEntity;
+                    if (target != null)
+                    {
+                        SetExpenseEntityProps(target, cleanDesc, cleanCat, cleanAmt, form.Date, cleanStatus, cleanBy, form.Vendor, form.Plot, form.Method, form.Branch);
+                        DbContext.Update(target);
+                        await DbContext.SaveChangesAsync();
+                    }
+                }
+            }
+
+            showConfirmSaveModal = false;
+            showModal = false;
+            await LoadExpensesAsync();
+
+            successModalMessage = editingId == null
+                ? (IsBusinessTenant ? "New expense recorded." : "Expense submitted as Pending for approval.")
+                : "Expense details updated.";
+            await ShowSaveSuccessAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error saving expense: " + ex.Message, true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void SetExpenseEntityProps(object entity, string desc, string cat, decimal amt, DateTime dt, string status, string by, string vendor, string plot, string payMethod, string branchName)
+    {
+        var t = entity.GetType();
+        var br = DbContext.Branches.FirstOrDefault(b => b.BranchName == branchName && b.BusinessId == currentBusinessId)
+              ?? DbContext.Branches.FirstOrDefault(b => b.BusinessId == currentBusinessId);
+
+        TrySet(t, entity, "BusinessId", currentBusinessId);
+        if (br != null) TrySet(t, entity, "BranchId", br.BranchId);
+        TrySet(t, entity, "Description", desc);
+        TrySet(t, entity, "Category", cat);
+        TrySet(t, entity, "Amount", amt);
+        TrySet(t, entity, "TaxAmount", Math.Round(amt - (amt / 1.12m), 2, MidpointRounding.AwayFromZero));
+        TrySet(t, entity, "ExpenseDate", dt);
+        TrySet(t, entity, "Status", status);
+        TrySet(t, entity, "RecordedBy", by);
+        TrySet(t, entity, "RecordedByUserId", currentUserId);
+        TrySet(t, entity, "Vendor", (vendor ?? "").Trim());
+        TrySet(t, entity, "Plot", (plot ?? "").Trim());
+        TrySet(t, entity, "PaymentMethod", payMethod);
+
+        if (status == "approved" || status == "paid")
+        {
+            TrySet(t, entity, "ApprovedBy", currentUserId);
+            TrySet(t, entity, "ApprovedDate", DateTime.Now);
+        }
+    }
+
+    private static void TrySet(Type t, object target, string propName, object? val)
+    {
+        var p = t.GetProperty(propName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        if (p == null || !p.CanWrite) return;
+
+        if (val == null)
+        {
+            if (!p.PropertyType.IsValueType || Nullable.GetUnderlyingType(p.PropertyType) != null)
+                p.SetValue(target, null);
+            return;
+        }
+
+        var u = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+        try
+        {
+            if (u.IsInstanceOfType(val)) p.SetValue(target, val);
+            else if (u == typeof(long)) p.SetValue(target, Convert.ToInt64(val, Inv));
+            else if (u == typeof(int)) p.SetValue(target, Convert.ToInt32(val, Inv));
+            else if (u == typeof(decimal)) p.SetValue(target, Convert.ToDecimal(val, Inv));
+            else if (u == typeof(DateTime)) p.SetValue(target, Convert.ToDateTime(val, Inv));
+            else if (u == typeof(string)) p.SetValue(target, val.ToString());
+        }
+        catch { }
+    }
+
+    async Task AcceptExpenseAsync(ExpenseRec x)
+    {
+        openMenuId = null;
+        if (!IsBusinessTenant) return;
+        if (x.Status == "paid") { await ShowToast("This expense is already paid.", true); return; }
+
+        x.Status = "approved";
+        if (x.DbEntity != null)
+        {
+            TrySet(x.DbEntity.GetType(), x.DbEntity, "Status", "approved");
+            TrySet(x.DbEntity.GetType(), x.DbEntity, "ApprovedBy", currentUserId);
+            TrySet(x.DbEntity.GetType(), x.DbEntity, "ApprovedDate", DateTime.Now);
+            DbContext.Update(x.DbEntity);
+            await DbContext.SaveChangesAsync();
+        }
+        await ShowToast("Expense accepted & approved.");
+    }
+
+    async Task RejectExpenseAsync(ExpenseRec x)
+    {
+        openMenuId = null;
+        if (!IsBusinessTenant) return;
+        if (x.Status == "paid") { await ShowToast("Paid expenses can’t be rejected.", true); return; }
+
+        x.Status = "rejected";
+        if (x.DbEntity != null)
+        {
+            TrySet(x.DbEntity.GetType(), x.DbEntity, "Status", "rejected");
+            DbContext.Update(x.DbEntity);
+            await DbContext.SaveChangesAsync();
+        }
+        await ShowToast("Expense rejected.");
+    }
+
+    async Task MarkPaidAsync(ExpenseRec x)
+    {
+        openMenuId = null;
+        if (x.Status == "paid") { await ShowToast("This expense is already paid.", true); return; }
+        if (x.Status == "rejected") { await ShowToast("Rejected expenses can’t be marked paid.", true); return; }
+
+        x.Status = "paid";
+        if (x.DbEntity != null)
+        {
+            TrySet(x.DbEntity.GetType(), x.DbEntity, "Status", "paid");
+            DbContext.Update(x.DbEntity);
+            await DbContext.SaveChangesAsync();
+        }
+        await ShowToast("Marked as paid: " + Peso(x.Amount) + ".");
+    }
+
+    void PromptArchive(ExpenseRec x)
+    {
+        openMenuId = null;
+        expenseToArchive = x;
+        showConfirmArchiveModal = true;
+    }
+
+    void CancelArchive()
+    {
+        showConfirmArchiveModal = false;
+        expenseToArchive = null;
+    }
+
+    async Task ConfirmArchiveAsync()
+    {
+        if (expenseToArchive == null || isSaving) return;
+        isSaving = true;
+        try
+        {
+            expenseToArchive.IsArchived = true;
+            if (expenseToArchive.DbEntity != null)
+            {
+                TrySet(expenseToArchive.DbEntity.GetType(), expenseToArchive.DbEntity, "IsArchived", true);
+                TrySet(expenseToArchive.DbEntity.GetType(), expenseToArchive.DbEntity, "ArchivedDate", DateTime.Now);
+                DbContext.Update(expenseToArchive.DbEntity);
+                await DbContext.SaveChangesAsync();
+            }
+
+            showConfirmArchiveModal = false;
+            var name = expenseToArchive.Description;
+            expenseToArchive = null;
+            await LoadExpensesAsync();
+            await ShowToast($"Archived \"{name}\".");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    async Task RestoreExpenseAsync(ExpenseRec x)
+    {
+        openMenuId = null;
+        x.IsArchived = false;
+        if (x.DbEntity != null)
+        {
+            TrySet(x.DbEntity.GetType(), x.DbEntity, "IsArchived", false);
+            TrySet(x.DbEntity.GetType(), x.DbEntity, "ArchivedDate", null);
+            DbContext.Update(x.DbEntity);
+            await DbContext.SaveChangesAsync();
+        }
+        await LoadExpensesAsync();
+        await ShowToast("Expense restored to Active.");
+    }
+
+    async Task ShowSaveSuccessAsync()
+    {
+        showSaveSuccessModal = true;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(1500);
+        showSaveSuccessModal = false;
+        await InvokeAsync(StateHasChanged);
+    }
 
     async Task ShowToast(string message, bool warn = false)
     {
         toast = message;
         toastWarn = warn;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3200);
+        await Task.Delay(3000);
         toast = "";
         await InvokeAsync(StateHasChanged);
     }

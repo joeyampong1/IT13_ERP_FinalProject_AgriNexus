@@ -226,3 +226,59 @@ input[type="password"]::-webkit-textfield-decoration-container {
 .form-check-input:hover {
     border-color: #1B5E34 !important;
 }
+.login-suite-badge {
+    background-color: rgba(78, 141, 42, 0.22);
+    color: #A7F3D0;
+    border: 1px solid rgba(78, 141, 42, 0.55);
+}
+
+.login-erp-label {
+    color: #A7F3D0;
+    font-size: 0.65rem;
+    letter-spacing: 1.5px;
+}
+
+.auth-erp-label {
+    color: #78BE3F !important;
+    font-size: 0.65rem;
+    letter-spacing: 1.5px;
+}
+
+.auth-hero-badge {
+    background-color: rgba(7, 30, 20, 0.42) !important;
+    color: #78BE3F !important;
+    border: 1px solid rgba(120, 190, 63, 0.65) !important;
+}
+
+    .auth-hero-badge i {
+        color: #78BE3F !important;
+    }
+.auth-brand-nexus {
+    color: #78BE3F !important;
+    font-weight: 800;
+}
+.auth-hero-badge {
+    background-color: rgba(7, 30, 20, 0.42) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(120, 190, 63, 0.65) !important;
+}
+
+    .auth-hero-badge i {
+        color: #78BE3F !important;
+    }
+.glass-pill {
+    background-color: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(120, 190, 63, 0.45) !important;
+    color: #FFFFFF !important;
+    border-radius: 999px;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+
+    .glass-pill i {
+        color: #78BE3F !important;
+    }

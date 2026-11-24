@@ -230,7 +230,7 @@
         "Harvest Hills Agri Corp", "Bicol River Organic Growers",
     };
 
-    // TODO: kuhaa sa database ang branches kada business
+    // TODO: get from database the branches every business
     static readonly Dictionary<string, string[]> BranchesByBusiness = new()
     {
         ["Verdant Agri Ventures"] = new[] { "North Field Branch", "South Valley Branch", "Central Packing Branch" },
@@ -241,8 +241,8 @@
 
     void OnBusinessChanged() => branch = CurrentBranches[0];
 
-    // ---------- TEMPORARY DATA (North Field Branch, ilisi sa database later) ----------
-    // 13 ka items, total stock value = ₱167,604.00
+    // ---------- TEMPORARY DATA (North Field Branch,) ----------
+    // 13 items, total stock value = ₱167,604.00
     readonly List<Item> items = new()
     {
         new("Diesel",                           "Fuel",       38,   "liter",  60,  63,    "Valley Fuel Depot"),
@@ -260,7 +260,7 @@
         new("Rice (produce lot)",               "Produce",    1170, "kg",     0,   2,     "Own harvest"),
     };
 
-    // 9 ka movements sa kasaysayan, 0 karong bulana (Nov)
+    // 9 movements for history, or current moth 
     readonly List<Movement> movements = new()
     {
         new("Insecticide (lambda-cyhalothrin)", "Adjusted", 2,   "bottle", new(2026, 10, 20), "ADJ-0044"),
@@ -274,16 +274,27 @@
         new("Fungicide (mancozeb)",             "Received", 6,   "bottle", new(2026, 10, 5),  "DR-21047"),
     };
 
-    // Harvest summary (hangtod naa na ang Harvest module)
+    // Harvest summary (while in Harvest module)
     const decimal HarvestKgEquivalent = 1450;
     const int HarvestRecords = 2;
     const int HarvestAwaiting = 0;
 
-    // Fixed nga order ug kolor sa categories (parehas sa screenshot)
+    // Fixed order and for categories 
     static readonly (string Name, string Color)[] Categories =
     {
-        ("Pesticide", "#1F6B3B"), ("Fertilizer", "#62A834"), ("Tools", "#92D050"), ("Fuel", "#A86B4C"),
-        ("Supplies", "#3B9AA8"), ("Seeds", "#7FBFA8"), ("Produce", "#1F6B3B"),
+        ("Seeds", "#7FBFA8"),
+        ("Fertilizer", "#62A834"),
+        ("Pesticide", "#1F6B3B"),
+        ("Herbicide", "#4E8D2A"),
+        ("Soil Conditioner", "#7A5230"),
+        ("Irrigation", "#3B9AA8"),
+        ("Tools", "#92D050"),
+        ("Equipment & Parts", "#5C768D"),
+        ("Fuel & Lubricants", "#A86B4C"),
+        ("Packaging", "#C49A6C"),
+        ("Supplies", "#2E7D6B"),
+        ("Produce", "#1B5E34"),
+        ("Other", "#94A3B8"),
     };
 
     // ---------- COMPUTED ----------
@@ -301,10 +312,10 @@
             c.Color))
         .ToList();
 
-    // Bar axis: 4 ka intervals, i-round up sa 300
+    // Bar axis: 4 intervals, round up to 300
     double BarMax => Math.Max(300, Math.Ceiling((double)CategoryTotals.Max(c => c.Qty) / 300) * 300);
 
-    // Donut: share sa item records kada category
+    // Donut: share item records every category
     List<Segment> DonutSegments
     {
         get
