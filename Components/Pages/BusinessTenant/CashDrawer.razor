@@ -1,13 +1,49 @@
 ﻿@page "/cash-drawer"
+@using System.Collections
 @using System.Globalization
+@using System.Reflection
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
 @inject AgriNexus.Services.AuthService Auth
 
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <h2 class="page-title">Cash Session / Cash Drawer</h2>
-        <p class="text-muted mb-0 page-sub">@ActiveBranch · open the drawer, track cash movements, and close with a counted balance.</p>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@ActiveBranch</strong> · open the drawer, track cash movements, and close with a counted balance.
+        </p>
     </div>
-    <div class="d-flex gap-2 flex-wrap">
+
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        @if (canSelectBranch)
+        {
+            <div class="dashboard-filter-wrap">
+                <i class="bi bi-shop dashboard-filter-icon"></i>
+                <select class="dashboard-filter-select" value="@selectedBranchIdStr" @onchange="OnBranchChanged" aria-label="Filter branch">
+                    <option value="all">All Branches</option>
+                    @foreach (var b in businessBranches)
+                    {
+                        <option value="@b.BranchId">@b.BranchName</option>
+                    }
+                </select>
+                <i class="bi bi-chevron-down dashboard-filter-caret"></i>
+            </div>
+        }
+
+        <div class="dashboard-filter-wrap">
+            <i class="bi bi-funnel dashboard-filter-icon"></i>
+            <select class="dashboard-filter-select" value="@selectedPeriod" @onchange="OnPeriodChanged" aria-label="Filter period">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+            </select>
+            <i class="bi bi-chevron-down dashboard-filter-caret"></i>
+        </div>
+
         @if (isOpen)
         {
             <button type="button" class="btn-outline-lg" @onclick='() => OpenMove("in")'>
@@ -16,158 +52,186 @@
             <button type="button" class="btn-outline-lg" @onclick='() => OpenMove("out")'>
                 <i class="bi bi-arrow-up-circle"></i> Cash out
             </button>
-            <button type="button" class="btn-solid" @onclick="OpenClose">
+            <button type="button" class="btn-solid shadow-sm" @onclick="OpenClose">
                 <i class="bi bi-lock"></i> Close session
             </button>
         }
         else
         {
-            <button type="button" class="btn-solid" @onclick="OpenSessionModal">
+            <button type="button" class="btn-solid shadow-sm" @onclick="OpenSessionModal">
                 <i class="bi bi-unlock"></i> Open session
             </button>
         }
     </div>
 </div>
 
-<!-- STAT CARDS -->
-<div class="row g-3 mb-4">
-    @foreach (var s in Stats)
-    {
-        <div class="col-12 col-sm-6 col-xl-3">
-            <div class="stat-card h-100">
-                <div class="d-flex justify-content-between align-items-start gap-2">
-                    <span class="card-title">@s.Title</span>
-                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+@if (isLoading)
+{
+    <div class="panel">
+        <div class="text-muted py-5 text-center">
+            <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+            Loading cash drawer data...
+        </div>
+    </div>
+}
+else
+{
+    <!-- STAT CARDS -->
+    <div class="row g-3 mb-4">
+        @foreach (var s in Stats)
+        {
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="stat-card h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <span class="card-title">@s.Title</span>
+                        <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="card-value">@s.Value</div>
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    </div>
                 </div>
-                <div class="mt-3">
-                    <div class="card-value">@s.Value</div>
-                    <div class="text-muted small mt-1">@s.Note</div>
+            </div>
+        }
+    </div>
+
+    <!-- CURRENT SESSION SUMMARY -->
+    <div class="card-box mb-4">
+        <div class="panel-title">Current session summary</div>
+        <div class="panel-sub">Expected drawer balance is computed from opening float, cash received and cash paid out.</div>
+
+        <div class="row g-3">
+            <div class="col-12 col-md-4">
+                <div class="mini-stat">
+                    <div class="mini-label">Collections recorded</div>
+                    <div class="mini-value">@Peso(isOpen ? Received : 0)</div>
                 </div>
             </div>
-        </div>
-    }
-</div>
-
-<!-- CURRENT SESSION SUMMARY -->
-<div class="card-box mb-4">
-    <div class="panel-title">Current session summary</div>
-    <div class="panel-sub">Expected drawer balance is computed from opening float, cash received and cash paid out.</div>
-
-    <div class="row g-3">
-        <div class="col-12 col-md-4">
-            <div class="mini-stat">
-                <div class="mini-label">Collections recorded</div>
-                <div class="mini-value">@Peso(isOpen ? Received : 0)</div>
+            <div class="col-12 col-md-4">
+                <div class="mini-stat">
+                    <div class="mini-label">Expected cash in drawer</div>
+                    <div class="mini-value">@Peso(isOpen ? Expected : 0)</div>
+                </div>
             </div>
-        </div>
-        <div class="col-12 col-md-4">
-            <div class="mini-stat">
-                <div class="mini-label">Expected cash in drawer</div>
-                <div class="mini-value">@Peso(isOpen ? Expected : 0)</div>
-            </div>
-        </div>
-        <div class="col-12 col-md-4">
-            <div class="mini-stat">
-                <div class="mini-label">Movements logged</div>
-                <div class="mini-value">@(isOpen ? movements.Count : 0)</div>
+            <div class="col-12 col-md-4">
+                <div class="mini-stat">
+                    <div class="mini-label">Movements logged</div>
+                    <div class="mini-value">@(isOpen ? ActiveSessionMovements.Count : 0)</div>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<div class="row g-3">
-    <!-- CASH MOVEMENTS -->
-    <div class="col-12 col-lg-6">
-        <div class="panel h-100">
-            <div class="panel-head">
-                <div class="panel-title">Cash movements</div>
-                <div class="panel-sub mb-0">Movements on the open session</div>
-            </div>
-
-            @if (!isOpen || movements.Count == 0)
-            {
-                <div class="empty-state">
-                    <div class="empty-icon"><i class="bi bi-inbox"></i></div>
-                    <div class="fw-semibold mt-3">@(isOpen ? "No cash movements recorded" : "The drawer is closed")</div>
-                    @if (!isOpen)
-                    {
-                        <div class="text-muted small mt-1">Open a session to start recording cash movements.</div>
-                    }
+    <div class="row g-3">
+        <!-- CASH MOVEMENTS -->
+        <div class="col-12 col-lg-6">
+            <div class="panel h-100">
+                <div class="panel-head">
+                    <div class="panel-title">Cash movements</div>
+                    <div class="panel-sub mb-0">Movements on the open session</div>
                 </div>
-            }
-            else
-            {
+
+                @if (!isOpen || ActiveSessionMovements.Count == 0)
+                {
+                    <div class="empty-state">
+                        <div class="empty-icon"><i class="bi bi-inbox"></i></div>
+                        <div class="fw-semibold mt-3">@(isOpen ? "No cash movements recorded" : "The drawer is closed")</div>
+                        @if (!isOpen)
+                        {
+                            <div class="text-muted small mt-1">Open a session to start recording cash movements.</div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="table data-table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    @if (canSelectBranch && !effectiveBranchFilter.HasValue)
+                                    {
+                                        <th>Branch</th>
+                                    }
+                                    <th>Type</th>
+                                    <th>Reason</th>
+                                    <th>Amount</th>
+                                    <th>By</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var m in ActiveSessionMovements.OrderByDescending(x => x.When))
+                                {
+                                    <tr>
+                                        <td class="text-nowrap">@m.When.ToString("h:mm tt", Inv)</td>
+                                        @if (canSelectBranch && !effectiveBranchFilter.HasValue)
+                                        {
+                                            <td class="text-nowrap">@m.BranchName</td>
+                                        }
+                                        <td><span class="pill @(m.Type == "in" ? "pill-green" : "pill-yellow")">@(m.Type == "in" ? "Cash in" : "Cash out")</span></td>
+                                        <td class="col-reason">@m.Reason</td>
+                                        <td class="fw-semibold text-nowrap @(m.Type == "in" ? "qty-in" : "qty-out")">@(m.Type == "in" ? "+ " : "− ")@Peso(m.Amount)</td>
+                                        <td class="text-nowrap">@m.By</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- SESSION HISTORY -->
+        <div class="col-12 col-lg-6">
+            <div class="panel h-100">
+                <div class="panel-head">
+                    <div class="panel-title">Session history</div>
+                    <div class="panel-sub mb-0">Closed drawers with counted cash and variance (@PeriodLabel)</div>
+                </div>
                 <div class="table-wrap">
                     <table class="table data-table align-middle mb-0">
                         <thead>
                             <tr>
-                                <th>Time</th>
-                                <th>Type</th>
-                                <th>Reason</th>
-                                <th>Amount</th>
-                                <th>By</th>
+                                <th>Date</th>
+                                @if (canSelectBranch && !effectiveBranchFilter.HasValue)
+                                {
+                                    <th>Branch</th>
+                                }
+                                <th>Cashier</th>
+                                <th class="text-end">Expected</th>
+                                <th class="text-end">Counted</th>
+                                <th class="text-end">Variance</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var m in movements.OrderByDescending(x => x.When))
+                            @foreach (var h in FilteredHistory)
                             {
+                                var v = h.Variance != 0 ? h.Variance : (h.Counted - h.Expected);
                                 <tr>
-                                    <td class="text-nowrap">@m.When.ToString("h:mm tt", Inv)</td>
-                                    <td><span class="pill @(m.Type == "in" ? "pill-green" : "pill-yellow")">@(m.Type == "in" ? "Cash in" : "Cash out")</span></td>
-                                    <td class="col-reason">@m.Reason</td>
-                                    <td class="fw-medium text-nowrap @(m.Type == "in" ? "qty-in" : "qty-out")">@(m.Type == "in" ? "+ " : "− ")@Peso(m.Amount)</td>
-                                    <td class="text-nowrap">@m.By</td>
+                                    <td class="text-nowrap">@h.Date.ToString("MMM d, yy", Inv)</td>
+                                    @if (canSelectBranch && !effectiveBranchFilter.HasValue)
+                                    {
+                                        <td class="text-nowrap">@h.BranchName</td>
+                                    }
+                                    <td class="fw-medium" style="color: #0A2B1D;">@h.Cashier</td>
+                                    <td class="text-end text-muted text-nowrap">@Peso(h.Expected)</td>
+                                    <td class="text-end fw-bold text-nowrap" style="color: #0A2B1D;">@Peso(h.Counted)</td>
+                                    <td class="text-end fw-bold text-nowrap @VarTextClass(v)">@PesoSigned(v)</td>
+                                    <td><span class="pill @VarPill(v)">@VarLabel(v)</span></td>
                                 </tr>
+                            }
+                            @if (FilteredHistory.Count == 0)
+                            {
+                                <tr><td colspan="@((canSelectBranch && !effectiveBranchFilter.HasValue) ? 7 : 6)" class="text-center text-muted py-5">No closed sessions yet.</td></tr>
                             }
                         </tbody>
                     </table>
                 </div>
-            }
-        </div>
-    </div>
-
-    <!-- SESSION HISTORY -->
-    <div class="col-12 col-lg-6">
-        <div class="panel h-100">
-            <div class="panel-head">
-                <div class="panel-title">Session history</div>
-                <div class="panel-sub mb-0">Closed drawers with counted cash and variance</div>
-            </div>
-            <div class="table-wrap">
-                <table class="table data-table align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Cashier</th>
-                            <th class="text-end">Expected</th>
-                            <th class="text-end">Counted</th>
-                            <th class="text-end">Variance</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var h in SortedHistory)
-                        {
-                            var v = h.Counted - h.Expected;
-                            <tr>
-                                <td>@h.Date.ToString("MMM d, yy", Inv)</td>
-                                <td class="fw-medium text-dark">@h.Cashier</td>
-                                <td class="text-end text-muted">@Peso(h.Expected)</td>
-                                <td class="text-end fw-bold text-dark">@Peso(h.Counted)</td>
-                                <td class="text-end fw-bold @VarTextClass(v)">@PesoSigned(v)</td>
-                                <td><span class="pill @VarPill(v)">@VarLabel(v)</span></td>
-                            </tr>
-                        }
-                        @if (SortedHistory.Count == 0)
-                        {
-                            <tr><td colspan="6" class="text-center text-muted py-5">No closed sessions yet.</td></tr>
-                        }
-                    </tbody>
-                </table>
             </div>
         </div>
     </div>
-</div>
+}
 
 <!-- ======================= MODAL: CASH IN / CASH OUT ======================= -->
 @if (modal == "in" || modal == "out")
@@ -213,7 +277,9 @@
 
             <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
                 <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="SaveMove">Record movement</button>
+                <button type="button" class="btn-save" @onclick="SaveMove" disabled="@isSaving">
+                    @(isSaving ? "Saving..." : "Record movement")
+                </button>
             </div>
         </div>
     </div>
@@ -252,7 +318,9 @@
 
             <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
                 <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="CloseSession">Close session</button>
+                <button type="button" class="btn-save" @onclick="CloseSession" disabled="@isSaving">
+                    @(isSaving ? "Closing..." : "Close session")
+                </button>
             </div>
         </div>
     </div>
@@ -288,7 +356,9 @@
 
             <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
                 <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="StartSession">Open session</button>
+                <button type="button" class="btn-save" @onclick="StartSession" disabled="@isSaving">
+                    @(isSaving ? "Opening..." : "Open session")
+                </button>
             </div>
         </div>
     </div>
@@ -296,7 +366,7 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+    <div class="toast-note"><i class="bi bi-check-circle"></i> @toast</div>
 }
 
 @code {
@@ -304,6 +374,9 @@
     class Movement
     {
         public int Id { get; set; }
+        public int SessionId { get; set; }
+        public long BranchId { get; set; }
+        public string BranchName { get; set; } = "";
         public DateTime When { get; set; }
         public string Type { get; set; } = "in";   // in | out
         public decimal Amount { get; set; }
@@ -314,22 +387,34 @@
     class SessionRec
     {
         public int Id { get; set; }
+        public long BranchId { get; set; }
+        public string BranchName { get; set; } = "";
         public DateTime Date { get; set; }
         public string Cashier { get; set; } = "";
         public decimal Expected { get; set; }
         public decimal Counted { get; set; }
+        public decimal Variance { get; set; }
     }
 
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    // TODO: kuhaa gikan sa naka-login nga tenant / branch
-    const string ActiveBranch = "North Field Branch";
+    long currentBusinessId;
+    long currentUserId;
+    long? assignedBranchId;
+    bool canSelectBranch;
+    string selectedBranchIdStr = "all";
+    long? effectiveBranchFilter => canSelectBranch
+        ? (long.TryParse(selectedBranchIdStr, out var bid) && bid > 0 ? bid : null)
+        : assignedBranchId;
 
-    // ---------- STATE ----------
-    bool isOpen = true;
-    string? modal;                  // in | out | close | open
+    string ActiveBranch = "All Branches";
+    string selectedPeriod = "all";
+
+    bool isLoading = true;
+    bool isSaving;
+    string? modal;
     bool showErrors;
     string toast = "";
 
@@ -339,38 +424,377 @@
     decimal? countedInput;
     decimal? openingInput;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // Karon nga session (gikan sa prototype)
-    DateTime sessionDate = new(2026, 10, 24);
-    string cashier = "Paolo Gutierrez";
-    decimal opening = 2000;
+    CashDrawerSession? activeSession;
+    string activeCashierName = "";
+    decimal sessionSalesCollections;
+    decimal sessionExpensesPaid;
 
-    // Kini kay gikan sa ubang modules (Payments & Collections / Expenses), constants pa karon:
-    decimal collections = 7000;      // cash payments nga na-collect sulod sa session
-    decimal expensesPaid = 500;      // expenses nga gibayran gikan sa drawer
-
+    List<Branch> businessBranches = new();
+    readonly Dictionary<long, string> branchNames = new();
+    readonly Dictionary<long, string> userNames = new();
+    readonly List<CashDrawerSession> allSessions = new();
     readonly List<Movement> movements = new();
+    readonly List<SessionRec> history = new();
 
-    readonly List<SessionRec> history = new()
+    bool isOpen => activeSession != null;
+    decimal opening => activeSession?.OpeningFloat ?? 0m;
+
+    string PeriodLabel => selectedPeriod switch
     {
-        new() { Id = 1, Date = new(2026, 10, 23), Cashier = "Paolo Gutierrez", Expected = 4600,  Counted = 4600 },
-        new() { Id = 2, Date = new(2026, 10, 21), Cashier = "Jhoanna Reyes",   Expected = 11280, Counted = 11130 },
-        new() { Id = 3, Date = new(2026, 10, 16), Cashier = "Jhoanna Reyes",   Expected = 4360,  Counted = 4360 },
-        new() { Id = 4, Date = new(2026, 10, 12), Cashier = "Noel Bautista",   Expected = 6000,  Counted = 6000 },
+        "today" => "Today",
+        "week" => "This Week",
+        "month" => "This Month",
+        "year" => "This Year",
+        _ => "All Time"
     };
 
-    // ---------- COMPUTED ----------
-    // Expected cash in drawer = opening float + cash received − cash paid out
-    decimal Received => collections + movements.Where(m => m.Type == "in").Sum(m => m.Amount);
-    decimal PaidOut => expensesPaid + movements.Where(m => m.Type == "out").Sum(m => m.Amount);
-    decimal Expected => opening + Received - PaidOut;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await ResolveTenantAndRoleScopeAsync();
+            UpdateActiveBranchLabel();
+            await LoadDrawerDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading cash drawer: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
 
-    List<SessionRec> SortedHistory => history.OrderByDescending(h => h.Date).ThenByDescending(h => h.Id).ToList();
+    private async Task ResolveTenantAndRoleScopeAsync()
+    {
+        User? currentUser = null;
+
+        if (Auth.CurrentUserId > 0)
+        {
+            currentUser = await DbContext.Users
+                .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+        }
+        else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+        {
+            var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+            currentUser = await DbContext.Users
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+        }
+        else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+        {
+            currentUser = await DbContext.Users
+                .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                       || u.FName == Auth.CurrentUserName);
+        }
+
+        if (currentUser != null)
+        {
+            currentUserId = currentUser.UserId;
+            if (currentUser.BusinessId != null)
+                currentBusinessId = currentUser.BusinessId.Value;
+            assignedBranchId = currentUser.BranchId;
+        }
+        else
+        {
+            var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+            if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+        }
+
+        var roleText = (currentUser?.Role ?? "").Trim().ToLowerInvariant();
+        var isTenantOwnerOrAdmin = string.IsNullOrEmpty(roleText)
+            || roleText.Contains("tenant")
+            || roleText.Contains("owner")
+            || roleText.Contains("admin")
+            || roleText.Contains("superadmin")
+            || roleText.Contains("director");
+
+        canSelectBranch = isTenantOwnerOrAdmin || !assignedBranchId.HasValue;
+        if (!canSelectBranch && assignedBranchId.HasValue)
+        {
+            selectedBranchIdStr = assignedBranchId.Value.ToString();
+        }
+
+        businessBranches = await DbContext.Branches
+            .Where(b => b.BusinessId == currentBusinessId)
+            .OrderBy(b => b.BranchName)
+            .ToListAsync();
+
+        branchNames.Clear();
+        foreach (var b in businessBranches)
+        {
+            branchNames[b.BranchId] = b.BranchName;
+        }
+
+        var bizUsers = await DbContext.Users
+            .Where(u => u.BusinessId == currentBusinessId)
+            .ToListAsync();
+
+        userNames.Clear();
+        foreach (var u in bizUsers)
+        {
+            var fullName = $"{u.FName} {u.LName}".Trim();
+            userNames[u.UserId] = string.IsNullOrWhiteSpace(fullName) ? (u.Email ?? $"User #{u.UserId}") : fullName;
+        }
+    }
+
+    private void UpdateActiveBranchLabel()
+    {
+        if (!canSelectBranch && assignedBranchId.HasValue)
+        {
+            ActiveBranch = branchNames.TryGetValue(assignedBranchId.Value, out var bName)
+                ? bName
+                : "Assigned Branch";
+            return;
+        }
+
+        if (effectiveBranchFilter.HasValue)
+        {
+            ActiveBranch = branchNames.TryGetValue(effectiveBranchFilter.Value, out var bName)
+                ? bName
+                : "Selected Branch";
+            return;
+        }
+
+        ActiveBranch = businessBranches.Count == 1
+            ? businessBranches[0].BranchName
+            : "All Branches (Overall)";
+    }
+
+    private async Task LoadDrawerDataAsync()
+    {
+        allSessions.Clear();
+        history.Clear();
+
+        var branchIds = businessBranches.Select(b => b.BranchId).ToList();
+        var defaultBranchId = assignedBranchId ?? effectiveBranchFilter ?? businessBranches.FirstOrDefault()?.BranchId ?? 0L;
+
+        // 1. Load CashDrawerSessions from DbContext
+        var dbSessions = await DbContext.CashDrawerSessions
+            .Where(s => branchIds.Contains(s.BranchId) || s.BranchId == 0)
+            .OrderByDescending(s => s.OpenedAt)
+            .ThenByDescending(s => s.SessionId)
+            .ToListAsync();
+
+        allSessions.AddRange(dbSessions);
+
+        // Pick active Open session matching current scope
+        activeSession = allSessions
+            .Where(s => string.Equals(s.Status, "Open", StringComparison.OrdinalIgnoreCase) && s.ClosedAt == null)
+            .FirstOrDefault(s => MatchesScope(s.BranchId > 0 ? s.BranchId : defaultBranchId));
+
+        if (activeSession != null)
+        {
+            activeCashierName = activeSession.CashierId > 0 && userNames.TryGetValue(activeSession.CashierId, out var cName)
+                ? cName
+                : (Auth.CurrentUserName ?? "Cashier");
+        }
+        else
+        {
+            activeCashierName = "";
+        }
+
+        // Populate closed Session History
+        foreach (var s in allSessions.Where(s => !string.Equals(s.Status, "Open", StringComparison.OrdinalIgnoreCase) || s.ClosedAt != null))
+        {
+            var bId = s.BranchId > 0 ? s.BranchId : defaultBranchId;
+            var bName = branchNames.TryGetValue(bId, out var bn) ? bn : "Main Branch";
+            var cName = s.CashierId > 0 && userNames.TryGetValue(s.CashierId, out var uName)
+                ? uName
+                : (Auth.CurrentUserName ?? "Cashier");
+
+            history.Add(new SessionRec
+            {
+                Id = s.SessionId,
+                BranchId = bId,
+                BranchName = bName,
+                Date = s.ClosedAt ?? s.OpenedAt,
+                Cashier = cName,
+                Expected = s.ExpectedCash,
+                Counted = s.CountedCash,
+                Variance = s.Variance
+            });
+        }
+
+        // 2. Load CashMovements from DbContext if DbSet exists
+        var moveSetProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.Name.Equals("CashMovements", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("CashDrawerMovements", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("DrawerMovements", StringComparison.OrdinalIgnoreCase));
+
+        if (moveSetProp?.GetValue(DbContext) is IQueryable rawMoveQuery)
+        {
+            movements.Clear();
+            var dbMoves = await rawMoveQuery.Cast<object>().ToListAsync();
+            foreach (var m in dbMoves)
+            {
+                var mt = m.GetType();
+                var mSessionId = (int)(GetLongProp(mt, m, "SessionId", "CashSessionId") ?? 0);
+                var bId = GetLongProp(mt, m, "BranchId") ?? defaultBranchId;
+                var bName = branchNames.TryGetValue(bId, out var bn) ? bn : "Main Branch";
+                var rawType = (mt.GetProperty("MovementType")?.GetValue(m)?.ToString()
+                            ?? mt.GetProperty("Type")?.GetValue(m)?.ToString()
+                            ?? "in").Trim().ToLowerInvariant();
+                var normType = rawType.Contains("out") ? "out" : "in";
+
+                movements.Add(new Movement
+                {
+                    Id = (int)(GetLongProp(mt, m, "MovementId", "CashMovementId", "Id") ?? (movements.Count + 1)),
+                    SessionId = mSessionId,
+                    BranchId = bId,
+                    BranchName = bName,
+                    When = GetDateProp(mt, m, "CreatedAt", "MovementDate", "When", "Date") ?? DateTime.Now,
+                    Type = normType,
+                    Amount = GetDecimalProp(mt, m, "Amount"),
+                    Reason = mt.GetProperty("Reason")?.GetValue(m)?.ToString() ?? "",
+                    By = mt.GetProperty("PerformedBy")?.GetValue(m)?.ToString()
+                      ?? mt.GetProperty("CreatedBy")?.GetValue(m)?.ToString()
+                      ?? Auth.CurrentUserName ?? ""
+                });
+            }
+        }
+
+        // 3. Compute Cash Collections ONLY for the currently Open session (since activeSession.OpenedAt)
+        await ComputeActiveSessionCollectionsAsync(branchIds, defaultBranchId);
+    }
+
+    private async Task ComputeActiveSessionCollectionsAsync(List<long> branchIds, long defaultBranchId)
+    {
+        sessionSalesCollections = 0m;
+        sessionExpensesPaid = 0m;
+
+        if (activeSession == null) return;
+
+        var sessionStart = activeSession.OpenedAt;
+        var sessionBranchId = activeSession.BranchId > 0 ? activeSession.BranchId : defaultBranchId;
+
+        var orders = await DbContext.SalesOrders
+            .Where(s => (branchIds.Contains(s.BranchId) || s.BranchId == 0) && s.SaleDate >= sessionStart.Date)
+            .ToListAsync();
+
+        foreach (var o in orders)
+        {
+            var oType = o.GetType();
+            var bId = o.BranchId > 0 ? o.BranchId : defaultBranchId;
+            if (sessionBranchId > 0 && bId != sessionBranchId) continue;
+            if (o.SaleDate < sessionStart && o.SaleDate.Date != sessionStart.Date) continue;
+
+            var isVoided = GetBoolProp(oType, o, "IsVoided", "Voided")
+                        || string.Equals(o.Status, "Voided", StringComparison.OrdinalIgnoreCase);
+            if (isVoided) continue;
+
+            var method = (oType.GetProperty("PaymentMethod")?.GetValue(o)?.ToString() ?? "cash").Trim().ToLowerInvariant();
+            if (method == "cash" && o.AmountPaid > 0)
+            {
+                sessionSalesCollections += o.AmountPaid;
+            }
+        }
+    }
+
+    static long? GetLongProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && long.TryParse(p.GetValue(obj)?.ToString(), out var v))
+                return v;
+        }
+        return null;
+    }
+
+    static decimal GetDecimalProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && decimal.TryParse(p.GetValue(obj)?.ToString(), NumberStyles.Any, Inv, out var v))
+                return v;
+        }
+        return 0m;
+    }
+
+    static DateTime? GetDateProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && p.GetValue(obj) is DateTime dt)
+                return dt;
+        }
+        return null;
+    }
+
+    static bool GetBoolProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && p.GetValue(obj) is bool b)
+                return b;
+        }
+        return false;
+    }
+
+    bool MatchesScope(long branchId)
+    {
+        if (!canSelectBranch && assignedBranchId.HasValue)
+            return branchId == assignedBranchId.Value;
+
+        if (effectiveBranchFilter.HasValue)
+            return branchId == effectiveBranchFilter.Value;
+
+        return true;
+    }
+
+    bool IsInSelectedPeriod(DateTime date)
+    {
+        if (selectedPeriod == "all") return true;
+
+        var d = date.Date;
+        var today = DateTime.Today;
+
+        return selectedPeriod switch
+        {
+            "today" => d == today,
+            "week" => GetWeekStart(d) == GetWeekStart(today),
+            "year" => d.Year == today.Year,
+            _ => d.Year == today.Year && d.Month == today.Month,
+        };
+    }
+
+    static DateTime GetWeekStart(DateTime date)
+    {
+        var diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
+        return date.AddDays(-diff).Date;
+    }
+
+    // ---------- COMPUTED ----------
+    List<Movement> ActiveSessionMovements
+    {
+        get
+        {
+            if (activeSession == null) return new List<Movement>();
+            return movements
+                .Where(m => m.SessionId == activeSession.SessionId || (m.SessionId == 0 && m.When >= activeSession.OpenedAt))
+                .ToList();
+        }
+    }
+
+    List<SessionRec> FilteredHistory => history
+        .Where(h => MatchesScope(h.BranchId) && IsInSelectedPeriod(h.Date))
+        .OrderByDescending(h => h.Date).ThenByDescending(h => h.Id)
+        .ToList();
+
+    decimal Received => sessionSalesCollections + ActiveSessionMovements.Where(m => m.Type == "in").Sum(m => m.Amount);
+    decimal PaidOut => sessionExpensesPaid + ActiveSessionMovements.Where(m => m.Type == "out").Sum(m => m.Amount);
+    decimal Expected => opening + Received - PaidOut;
 
     List<Stat> Stats => new()
     {
         new("DRAWER STATUS", isOpen ? "Open" : "Closed",
-            isOpen ? "Opened for " + sessionDate.ToString("MMM d, yyyy", Inv) + " · " + cashier : "No open session",
+            isOpen && activeSession != null
+                ? "Opened for " + activeSession.OpenedAt.ToString("MMM d, yyyy", Inv) + (string.IsNullOrWhiteSpace(activeCashierName) ? "" : " · " + activeCashierName)
+                : "No open session",
             "bi-wallet2", ""),
         new("OPENING CASH", Peso(isOpen ? opening : 0), "Float at start of session", "bi-arrow-down-circle", ""),
         new("CASH RECEIVED", Peso(isOpen ? Received : 0), "Sales and cash-in movements", "bi-arrow-down-circle", "stat-icon-plain"),
@@ -403,9 +827,23 @@
     static string VarTextClass(decimal v) => v < 0 ? "neg" : v > 0 ? "warn" : "";
 
     // ---------- ACTIONS ----------
+    async Task OnBranchChanged(ChangeEventArgs e)
+    {
+        if (!canSelectBranch) return;
+        selectedBranchIdStr = e.Value?.ToString() ?? "all";
+        UpdateActiveBranchLabel();
+        await LoadDrawerDataAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task OnPeriodChanged(ChangeEventArgs e)
+    {
+        selectedPeriod = e.Value?.ToString() ?? "all";
+        await InvokeAsync(StateHasChanged);
+    }
+
     void CloseModal() => modal = null;
 
-    // Cash in / Cash out
     void OpenMove(string type)
     {
         modal = type;
@@ -418,59 +856,146 @@
     async Task SaveMove()
     {
         showErrors = true;
-        if (AmountError != null || ReasonMissing) return;
+        if (AmountError != null || ReasonMissing || isSaving || activeSession == null) return;
 
-        var type = modal == "in" ? "in" : "out";
-        var amount = amountInput!.Value;
-
-        movements.Add(new Movement
+        isSaving = true;
+        try
         {
-            Id = movements.Count == 0 ? 1 : movements.Max(m => m.Id) + 1,
-            When = DateTime.Now,
-            Type = type,
-            Amount = amount,
-            Reason = reasonInput.Trim(),
-            By = string.IsNullOrWhiteSpace(byInput) ? (Auth.CurrentUserName ?? "") : byInput.Trim()
-        });
+            var type = modal == "in" ? "in" : "out";
+            var amount = amountInput!.Value;
+            var bId = activeSession.BranchId > 0 ? activeSession.BranchId : (effectiveBranchFilter ?? assignedBranchId ?? businessBranches.FirstOrDefault()?.BranchId ?? 0L);
+            var bName = branchNames.TryGetValue(bId, out var bn) ? bn : ActiveBranch;
+            var actor = string.IsNullOrWhiteSpace(byInput) ? (Auth.CurrentUserName ?? "") : byInput.Trim();
 
-        // TODO: i-save sa database ug i-log sa Audit Logs (Cash in / Cash out · Cash Drawer)
-        modal = null;
-        await ShowToast((type == "in" ? "Cash in of " : "Cash out of ") + Peso(amount) + " recorded.");
+            movements.Add(new Movement
+            {
+                Id = movements.Count == 0 ? 1 : movements.Max(m => m.Id) + 1,
+                SessionId = activeSession.SessionId,
+                BranchId = bId,
+                BranchName = bName,
+                When = DateTime.Now,
+                Type = type,
+                Amount = amount,
+                Reason = reasonInput.Trim(),
+                By = actor
+            });
+
+            // Persist CashMovement entity if DbSet exists on DbContext
+            TryPersistMovementToDb(activeSession.SessionId, bId, type, amount, reasonInput.Trim(), actor);
+
+            // Update ExpectedCash on the open CashDrawerSession record in DB
+            var dbSession = await DbContext.CashDrawerSessions.FindAsync(activeSession.SessionId);
+            if (dbSession != null)
+            {
+                dbSession.ExpectedCash = Expected;
+                activeSession.ExpectedCash = Expected;
+            }
+
+            await DbContext.SaveChangesAsync();
+
+            modal = null;
+            await ShowToast((type == "in" ? "Cash in of " : "Cash out of ") + Peso(amount) + " recorded.");
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error recording movement: " + ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
-    // Close session
+    void TryPersistMovementToDb(int sessionId, long branchId, string type, decimal amount, string reason, string actor)
+    {
+        var moveSetProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.Name.Equals("CashMovements", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("CashDrawerMovements", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("DrawerMovements", StringComparison.OrdinalIgnoreCase));
+
+        if (moveSetProp == null) return;
+
+        var entityType = moveSetProp.PropertyType.GetGenericArguments().FirstOrDefault();
+        if (entityType == null) return;
+
+        var entity = Activator.CreateInstance(entityType);
+        if (entity == null) return;
+
+        SetPropIfExists(entityType, entity, sessionId, "SessionId", "CashSessionId");
+        SetPropIfExists(entityType, entity, branchId, "BranchId");
+        SetPropIfExists(entityType, entity, currentBusinessId, "BusinessId");
+        SetPropIfExists(entityType, entity, type == "in" ? "In" : "Out", "MovementType", "Type");
+        SetPropIfExists(entityType, entity, amount, "Amount");
+        SetPropIfExists(entityType, entity, reason, "Reason");
+        SetPropIfExists(entityType, entity, actor, "PerformedBy", "CreatedBy");
+        SetPropIfExists(entityType, entity, DateTime.Now, "CreatedAt", "MovementDate", "Date");
+
+        DbContext.Add(entity);
+    }
+
+    static void SetPropIfExists(Type t, object obj, object? value, params string[] names)
+    {
+        if (value == null) return;
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && p.CanWrite)
+            {
+                try
+                {
+                    var targetType = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+                    p.SetValue(obj, Convert.ChangeType(value, targetType, Inv));
+                    return;
+                }
+                catch { }
+            }
+        }
+    }
+
     void OpenClose()
     {
         modal = "close";
-        countedInput = Expected;   // default: parehas sa expected
+        countedInput = Expected;
         showErrors = false;
     }
 
     async Task CloseSession()
     {
         showErrors = true;
-        if (CountedInvalid) return;
+        if (CountedInvalid || isSaving || activeSession == null) return;
 
-        var expected = Expected;
-        var counted = countedInput!.Value;
-
-        history.Add(new SessionRec
+        isSaving = true;
+        try
         {
-            Id = history.Count == 0 ? 1 : history.Max(h => h.Id) + 1,
-            Date = sessionDate,
-            Cashier = cashier,
-            Expected = expected,
-            Counted = counted
-        });
+            var expected = Expected;
+            var counted = countedInput!.Value;
+            var variance = counted - expected;
 
-        // TODO: i-save sa database ug i-log sa Audit Logs (Close session · Cash Drawer)
-        var v = counted - expected;
-        isOpen = false;
-        modal = null;
-        await ShowToast("Session closed. Counted " + Peso(counted) + (v == 0 ? " · balanced." : " · " + VarLabel(v).ToLower() + " by " + Peso(Math.Abs(v)) + "."));
+            var dbSession = await DbContext.CashDrawerSessions.FindAsync(activeSession.SessionId);
+            if (dbSession != null)
+            {
+                dbSession.ExpectedCash = expected;
+                dbSession.CountedCash = counted;
+                dbSession.Variance = variance;
+                dbSession.Status = "Closed";
+                dbSession.ClosedAt = DateTime.Now;
+                await DbContext.SaveChangesAsync();
+            }
+
+            modal = null;
+            await LoadDrawerDataAsync();
+            await ShowToast("Session closed. Counted " + Peso(counted) + (variance == 0 ? " · balanced." : " · " + VarLabel(variance).ToLower() + " by " + Peso(Math.Abs(variance)) + "."));
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error closing session: " + ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
-    // Open session (human ma-close ang miaging session)
     void OpenSessionModal()
     {
         modal = "open";
@@ -482,18 +1007,43 @@
     async Task StartSession()
     {
         showErrors = true;
-        if (OpeningInvalid) return;
+        if (OpeningInvalid || isSaving) return;
 
-        isOpen = true;
-        sessionDate = DateTime.Today;
-        cashier = string.IsNullOrWhiteSpace(byInput) ? (Auth.CurrentUserName ?? "") : byInput.Trim();
-        opening = openingInput!.Value;
-        collections = 0;       // TODO: i-compute gikan sa cash payments sa bag-ong session
-        expensesPaid = 0;      // TODO: i-compute gikan sa cash expenses sa bag-ong session
-        movements.Clear();
+        isSaving = true;
+        try
+        {
+            var bId = effectiveBranchFilter ?? assignedBranchId ?? businessBranches.FirstOrDefault()?.BranchId ?? 0L;
+            var floatAmt = openingInput!.Value;
 
-        modal = null;
-        await ShowToast("Cash session opened with a float of " + Peso(opening) + ".");
+            var newSession = new CashDrawerSession
+            {
+                BranchId = bId,
+                CashierId = currentUserId,
+                OpeningFloat = floatAmt,
+                ExpectedCash = floatAmt,
+                CountedCash = 0m,
+                Variance = 0m,
+                Status = "Open",
+                OpenedAt = DateTime.Now,
+                ClosedAt = null
+            };
+
+            DbContext.CashDrawerSessions.Add(newSession);
+            await DbContext.SaveChangesAsync();
+
+            movements.Clear();
+            modal = null;
+            await LoadDrawerDataAsync();
+            await ShowToast("Cash session opened with a float of " + Peso(floatAmt) + ".");
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error opening session: " + ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
     async Task ShowToast(string message)

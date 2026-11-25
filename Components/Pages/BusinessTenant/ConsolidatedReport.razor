@@ -1,184 +1,287 @@
 ﻿@page "/tenant-reports"
+@using System.Collections
 @using System.Globalization
+@using System.Reflection
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
+@inject AgriNexus.Services.AuthService Auth
 @inject NavigationManager Nav
 
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <h2 class="page-title">Consolidated Business Reports</h2>
-        <p class="text-muted mb-0 page-sub">@BusinessName · revenue, cost, harvest output and branch comparison.</p>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@BusinessName</strong> · <strong>@ActiveBranch</strong> · revenue, cost, harvest output and branch comparison.
+        </p>
     </div>
-    <button type="button" class="btn-outline-lg" @onclick="GoFinancials">Financial reports</button>
-</div>
 
-<!-- STAT CARDS -->
-<div class="row g-3 mb-4">
-    @foreach (var s in Stats)
-    {
-        <div class="col-12 col-sm-6 col-xl-3">
-            <div class="stat-card h-100">
-                <div class="d-flex justify-content-between align-items-start gap-2">
-                    <span class="card-title">@s.Title</span>
-                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
-                </div>
-                <div class="mt-3">
-                    <div class="card-value">@s.Value</div>
-                    @if (!string.IsNullOrEmpty(s.Note))
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        @if (canSelectBranch)
+        {
+            <div class="dashboard-filter-wrap">
+                <i class="bi bi-shop dashboard-filter-icon"></i>
+                <select class="dashboard-filter-select" value="@selectedBranchIdStr" @onchange="OnBranchChanged" aria-label="Filter branch">
+                    <option value="all">All Branches</option>
+                    @foreach (var b in businessBranches)
                     {
-                        <div class="text-muted small mt-1">@s.Note</div>
+                        <option value="@b.BranchId">@b.BranchName</option>
                     }
-                </div>
+                </select>
+                <i class="bi bi-chevron-down dashboard-filter-caret"></i>
             </div>
+        }
+
+        <div class="dashboard-filter-wrap">
+            <i class="bi bi-funnel dashboard-filter-icon"></i>
+            <select class="dashboard-filter-select" value="@selectedPeriod" @onchange="OnPeriodChanged" aria-label="Filter period">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+            </select>
+            <i class="bi bi-chevron-down dashboard-filter-caret"></i>
         </div>
-    }
-</div>
 
-<!-- CHARTS -->
-<div class="row g-3 mb-4">
-    <div class="col-12 col-lg-7">
-        <div class="stat-card h-100">
-            <div class="panel-title">Revenue vs operating cost</div>
-            <div class="panel-sub">Last 6 months</div>
-
-            <svg viewBox="0 0 640 300" class="w-100" style="max-height:340px" role="img" aria-label="Revenue vs operating cost">
-                @for (int i = 0; i <= 4; i++)
-                {
-                    var y = 20 + i * 60;
-                    var val = AxisMax / 4 * (4 - i);
-                    <g>
-                        <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
-                        <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
-                    </g>
-                }
-                @for (int i = 0; i < trend.Count; i++)
-                {
-                    var t = trend[i];
-                    var slot = 568.0 / trend.Count;
-                    var barW = slot * 0.3;
-                    var gap = slot * 0.04;
-                    var start = 62 + i * slot + (slot - (barW * 2 + gap)) / 2;
-                    var hRev = t.Revenue / AxisMax * 240;
-                    var hExp = t.Expenses / AxisMax * 240;
-                    <g>
-                        <rect x="@F(start)" y="@F(260 - hRev)" width="@F(barW)" height="@F(hRev)" rx="3" fill="#62A834" />
-                        <rect x="@F(start + barW + gap)" y="@F(260 - hExp)" width="@F(barW)" height="@F(hExp)" rx="3" fill="#A86B4C" />
-                        <text x="@F(62 + i * slot + slot / 2)" y="282" text-anchor="middle" font-size="11" fill="#475569">@t.Month</text>
-                    </g>
-                }
-            </svg>
-
-            <div class="d-flex justify-content-center gap-3 small text-muted mt-1">
-                <span><span class="legend-dot" style="background:#62A834"></span>Revenue</span>
-                <span><span class="legend-dot" style="background:#A86B4C"></span>Expenses</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-12 col-lg-5">
-        <div class="stat-card h-100">
-            <div class="panel-title">Harvest output by crop</div>
-            <div class="panel-sub">Approved harvest quantities</div>
-
-            <div class="d-flex justify-content-center my-3">
-                <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Harvest output by crop">
-                    @{
-                        double offset = 0;
-                    }
-                    @foreach (var c in crops)
-                    {
-                        var len = c.Kg / CropTotal * Circ;
-                        var dash = Math.Max(len - 2, 0.5);
-                        <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@c.Color" stroke-width="30"
-                                stroke-dasharray="@F(dash) @F(Circ - dash)"
-                                stroke-dashoffset="@F(-offset)"
-                                transform="rotate(-90 100 100)" />
-                        offset += len;
-                    }
-                </svg>
-            </div>
-
-            <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
-                @foreach (var c in LegendCrops)
-                {
-                    <span><span class="legend-dot" style="background:@c.Color"></span>@c.Name</span>
-                }
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- BRANCH COMPARISON -->
-<div class="panel mb-4">
-    <div class="panel-head d-flex justify-content-between align-items-start">
-        <div>
-            <div class="panel-title">Branch comparison</div>
-            <div class="panel-sub mb-0">Sales, cost, harvest and labor per branch</div>
-        </div>
-        <button type="button" class="btn-icon" @onclick="GoFarms" aria-label="Farms and plots" title="Farms &amp; Plots">
-            <i class="bi bi-flower1"></i>
+        <button type="button" class="btn-outline-lg" @onclick="GoFinancials">
+            <i class="bi bi-file-earmark-bar-graph text-success"></i> Financial reports
         </button>
     </div>
-    <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Branch</th>
-                    <th>Sales</th>
-                    <th>Expenses</th>
-                    <th>Labor cost</th>
-                    <th>Harvest (kg)</th>
-                    <th>Contribution</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var b in branches)
-                {
-                    var contribution = b.Sales - b.Expenses - b.Labor;
-                    <tr>
-                        <td class="fw-semibold">@b.Name</td>
-                        <td class="text-nowrap">@Peso(b.Sales)</td>
-                        <td class="text-nowrap">@Peso(b.Expenses)</td>
-                        <td class="text-nowrap">@Peso(b.Labor)</td>
-                        <td>@b.HarvestKg.ToString("N0", Inv)</td>
-                        <td class="text-nowrap fw-medium @(contribution < 0 ? "neg" : "pos")">@PesoSigned(contribution)</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
 </div>
 
-<!-- COST ALLOCATION -->
-<div class="panel">
-    <div class="panel-head">
-        <div class="panel-title">Cost allocation summary</div>
-        <div class="panel-sub mb-0">How operating cost is distributed by category</div>
+@if (isLoading)
+{
+    <div class="panel">
+        <div class="text-muted py-5 text-center">
+            <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+            Loading consolidated reports...
+        </div>
     </div>
-    <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
-            <thead>
-                <tr>
-                    <th class="w-category">Category</th>
-                    <th class="w-amount">Amount</th>
-                    <th>Share</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var c in costs)
-                {
+}
+else
+{
+    <!-- STAT CARDS -->
+    <div class="row g-3 mb-4">
+        @foreach (var s in Stats)
+        {
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="stat-card h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <span class="card-title">@s.Title</span>
+                        <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="card-value @s.ValueClass">@s.Value</div>
+                        @if (!string.IsNullOrEmpty(s.Note))
+                        {
+                            <div class="text-muted small mt-1">@s.Note</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- CHARTS -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-lg-7">
+            <div class="stat-card h-100">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div>
+                        <div class="panel-title">Revenue vs operating cost</div>
+                        <div class="panel-sub">@TrendSubtitle (@ActiveBranch)</div>
+                    </div>
+                    <div class="stat-icon stat-icon-leaf"><i class="bi bi-bar-chart"></i></div>
+                </div>
+
+                <svg viewBox="0 0 640 300" class="w-100" style="max-height:340px" role="img" aria-label="Revenue vs operating cost">
+                    <defs>
+                        <linearGradient id="tenantRevGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#78BE3F" />
+                            <stop offset="100%" stop-color="#1B5E34" />
+                        </linearGradient>
+                        <linearGradient id="tenantExpGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#9B6E46" />
+                            <stop offset="100%" stop-color="#5C3A1E" />
+                        </linearGradient>
+                    </defs>
+
+                    @for (int i = 0; i <= 4; i++)
+                    {
+                        var y = 20 + i * 60;
+                        var val = AxisMax / 4 * (4 - i);
+                        <g>
+                            <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2ECE6" stroke-dasharray="3 4" />
+                            <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
+                        </g>
+                    }
+                    @for (int i = 0; i < trend.Count; i++)
+                    {
+                        var t = trend[i];
+                        var slot = 568.0 / Math.Max(trend.Count, 1);
+                        var barW = slot * 0.3;
+                        var gap = slot * 0.04;
+                        var start = 62 + i * slot + (slot - (barW * 2 + gap)) / 2;
+                        var hRev = AxisMax > 0 ? Math.Min(t.Revenue / AxisMax * 240, 240) : 0;
+                        var hExp = AxisMax > 0 ? Math.Min(t.Expenses / AxisMax * 240, 240) : 0;
+                        <g>
+                            @if (hRev > 0)
+                            {
+                                <rect x="@F(start)" y="@F(260 - hRev)" width="@F(barW)" height="@F(hRev)" rx="4" fill="url(#tenantRevGrad)" />
+                            }
+                            @if (hExp > 0)
+                            {
+                                <rect x="@F(start + barW + gap)" y="@F(260 - hExp)" width="@F(barW)" height="@F(hExp)" rx="4" fill="url(#tenantExpGrad)" />
+                            }
+                            <text x="@F(62 + i * slot + slot / 2)" y="282" text-anchor="middle" font-size="11" font-weight="600" fill="#475569">@t.Month</text>
+                        </g>
+                    }
+                </svg>
+
+                <div class="d-flex justify-content-center gap-4 small text-muted fw-medium mt-1">
+                    <span><span class="legend-dot" style="background:#1B5E34"></span>Revenue</span>
+                    <span><span class="legend-dot" style="background:#5C3A1E"></span>Expenses</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-5">
+            <div class="stat-card h-100 d-flex flex-column justify-content-between">
+                <div>
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <div>
+                            <div class="panel-title">Harvest output by crop</div>
+                            <div class="panel-sub">Recorded harvest quantities (@PeriodLabel)</div>
+                        </div>
+                        <div class="stat-icon"><i class="bi bi-pie-chart"></i></div>
+                    </div>
+
+                    <div class="d-flex justify-content-center my-3 position-relative">
+                        <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Harvest output by crop">
+                            @if (CropTotal > 0)
+                            {
+                                double offset = 0;
+                                @foreach (var c in crops.Where(x => x.Kg > 0))
+                                {
+                                    var len = c.Kg / CropTotal * Circ;
+                                    var dash = Math.Max(len - 2, 0.5);
+                                    <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@c.Color" stroke-width="28"
+                                            stroke-dasharray="@F(dash) @F(Circ - dash)"
+                                            stroke-dashoffset="@F(-offset)"
+                                            transform="rotate(-90 100 100)" />
+                                    offset += len;
+                                }
+                            }
+                            else
+                            {
+                                <circle cx="100" cy="100" r="@Radius" fill="none" stroke="#E2ECE6" stroke-width="28" />
+                            }
+                        </svg>
+                        <div class="position-absolute top-50 start-50 translate-middle text-center">
+                            <div class="fw-bolder" style="font-size: 1.1rem; color: #0A2B1D;">@CropTotal.ToString("0.#", Inv) kg</div>
+                            <div class="text-muted fw-semibold" style="font-size: 0.68rem;">HARVESTED</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-center gap-3 small text-muted fw-medium flex-wrap">
+                    @foreach (var c in LegendCrops)
+                    {
+                        <span><span class="legend-dot" style="background:@c.Color"></span>@c.Name</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BRANCH COMPARISON -->
+    <div class="panel mb-4">
+        <div class="panel-head d-flex justify-content-between align-items-start">
+            <div>
+                <div class="panel-title">Branch comparison</div>
+                <div class="panel-sub mb-0">Sales, cost, harvest and labor per branch (@PeriodLabel)</div>
+            </div>
+            <button type="button" class="btn-icon" @onclick="GoFarms" aria-label="Farms and plots" title="Farms &amp; Plots">
+                <i class="bi bi-flower1"></i>
+            </button>
+        </div>
+        <div class="table-wrap">
+            <table class="table table-hover data-table align-middle mb-0">
+                <thead>
                     <tr>
-                        <td>@c.Category</td>
-                        <td class="text-nowrap">@Peso(c.Amount)</td>
-                        <td>@Share(c.Amount)%</td>
+                        <th>Branch</th>
+                        <th>Sales</th>
+                        <th>Expenses</th>
+                        <th>Labor cost</th>
+                        <th>Harvest (kg)</th>
+                        <th>Contribution</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var b in branches)
+                    {
+                        var contribution = b.Sales - b.Expenses - b.Labor;
+                        <tr>
+                            <td class="fw-bold" style="color: #0A2B1D;">@b.Name</td>
+                            <td class="text-nowrap">@Peso(b.Sales)</td>
+                            <td class="text-nowrap">@Peso(b.Expenses)</td>
+                            <td class="text-nowrap">@Peso(b.Labor)</td>
+                            <td>@b.HarvestKg.ToString("N0", Inv)</td>
+                            <td class="text-nowrap fw-semibold @(contribution < 0 ? "neg" : "pos")">@PesoSigned(contribution)</td>
+                        </tr>
+                    }
+                    @if (branches.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">No branch comparison data available.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
-</div>
+
+    <!-- COST ALLOCATION -->
+    <div class="panel">
+        <div class="panel-head">
+            <div class="panel-title">Cost allocation summary</div>
+            <div class="panel-sub mb-0">How operating cost is distributed by category (@ActiveBranch · @PeriodLabel)</div>
+        </div>
+        <div class="table-wrap">
+            <table class="table table-hover data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="w-category">Category</th>
+                        <th class="w-amount">Amount</th>
+                        <th>Share</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in costs)
+                    {
+                        <tr>
+                            <td class="fw-medium">@c.Category</td>
+                            <td class="text-nowrap">@Peso(c.Amount)</td>
+                            <td>@Share(c.Amount)%</td>
+                        </tr>
+                    }
+                    @if (costs.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="3" class="text-center text-muted py-4">No cost allocation records for this filter.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
 
 @code {
     // ---------- MODELS ----------
-    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass, string ValueClass = "");
     record TrendPoint(string Month, double Revenue, double Expenses);
     record CropSlice(string Name, double Kg, string Color);
     record BranchRow(string Name, decimal Sales, decimal Expenses, decimal Labor, int HarvestKg);
@@ -187,86 +290,607 @@
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     const double Radius = 70;
     static readonly double Circ = 2 * Math.PI * Radius;
-    const double AxisMax = 80000;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // TODO: kuhaa ang business name gikan sa naka-login nga tenant
-    const string BusinessName = "Verdant Agri Ventures";
-
-    // Mohaum sa totals: revenue = 123,280 ug expenses = 96,710
-    readonly List<TrendPoint> trend = new()
+    static readonly string[] CropPalette =
     {
-        new("Jun", 8800, 3200),
-        new("Jul", 14000, 3300),
-        new("Aug", 23000, 4210),
-        new("Sep", 25000, 6500),
-        new("Oct", 52480, 79500),
-        new("Nov", 0, 0),
+        "#1B5E34",
+        "#78BE3F",
+        "#5C3A1E",
+        "#2E7D43",
+        "#8BA896",
+        "#9B6E46",
+        "#123D24",
+        "#A8D063"
     };
 
-    // Clockwise gikan sa taas
-    readonly List<CropSlice> crops = new()
+    static readonly (string Key, string Label)[] CostCategories =
     {
-        new("Ampalaya", 560, "#206A3B"),
-        new("Rice", 1380, "#92D050"),
-        new("Cabbage", 820, "#62A834"),
+        ("labor", "Labor"),
+        ("supplies", "Supplies"),
+        ("fuel", "Fuel"),
+        ("utilities", "Utilities"),
+        ("transport", "Transport"),
+        ("equipment", "Equipment"),
+        ("maintenance", "Maintenance"),
+        ("other", "Other"),
     };
 
-    readonly List<BranchRow> branches = new()
+    long currentBusinessId;
+    long? assignedBranchId;
+    bool canSelectBranch;
+    string selectedBranchIdStr = "all";
+    long? effectiveBranchFilter => canSelectBranch
+        ? (long.TryParse(selectedBranchIdStr, out var bid) && bid > 0 ? bid : null)
+        : assignedBranchId;
+
+    string BusinessName = "AgriNexus";
+    string ActiveBranch = "All Branches";
+    string selectedPeriod = "all";
+    bool isLoading = true;
+
+    List<Branch> businessBranches = new();
+    readonly Dictionary<long, string> branchNames = new();
+
+    List<TrendPoint> trend = new();
+    List<CropSlice> crops = new();
+    List<BranchRow> branches = new();
+    List<CostRow> costs = new();
+
+    int salesTransactionsCount;
+    int expenseEntriesCount;
+    int cropCyclesCount;
+    decimal laborHoursTotal;
+    decimal periodSalesTotal;
+    decimal periodExpensesTotal;
+    decimal periodLaborTotal;
+    int periodHarvestKg;
+
+    string PeriodLabel => selectedPeriod switch
     {
-        new("North Field Branch", 50680m, 63100m, 3875m, 1450),
-        new("South Valley Branch", 55300m, 28450m, 2510m, 1310),
-        new("Central Packing Branch", 17300m, 5160m, 420m, 0),
+        "today" => "Today",
+        "week" => "This Week",
+        "month" => "This Month",
+        "year" => "This Year",
+        _ => "All Time"
     };
 
-    readonly List<CostRow> costs = new()
+    string TrendSubtitle => selectedPeriod switch
     {
-        new("Labor", 21360m),
-        new("Supplies", 44300m),
-        new("Fuel", 11700m),
-        new("Utilities", 7000m),
-        new("Transport", 2800m),
-        new("Equipment", 1250m),
-        new("Maintenance", 6500m),
-        new("Other", 1800m),
+        "today" => "Hourly sales vs expenses (Today)",
+        "week" => "Daily sales vs expenses (This Week)",
+        "year" => "Monthly sales vs expenses (This Year)",
+        _ => "Last 6 months sales vs expenses"
     };
 
-    // Temporary counts (i-compute gikan sa Sales, Expenses, Harvest ug Labor modules kung naa na)
-    const int SalesTransactions = 14;
-    const int ExpenseEntries = 15;
-    const int CropCycles = 5;
-    const int LaborHours = 125;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await ResolveTenantAndRoleScopeAsync();
+            UpdateActiveBranchLabel();
+            await LoadReportDataAsync();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ResolveTenantAndRoleScopeAsync()
+    {
+        User? currentUser = null;
+
+        if (Auth.CurrentUserId > 0)
+        {
+            currentUser = await DbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+        }
+        else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+        {
+            var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+            currentUser = await DbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+        }
+        else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+        {
+            currentUser = await DbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                       || u.FName == Auth.CurrentUserName);
+        }
+
+        if (currentUser?.BusinessId != null)
+        {
+            currentBusinessId = currentUser.BusinessId.Value;
+            assignedBranchId = currentUser.BranchId;
+        }
+        else
+        {
+            var firstBiz = await DbContext.Businesses
+                .AsNoTracking()
+                .Where(b => !b.IsArchived)
+                .FirstOrDefaultAsync();
+            if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+        }
+
+        var biz = await DbContext.Businesses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.BusinessId == currentBusinessId);
+
+        if (biz != null && !string.IsNullOrWhiteSpace(biz.BusinessName))
+            BusinessName = biz.BusinessName.Trim();
+
+        var roleText = (currentUser?.Role ?? "").Trim().ToLowerInvariant();
+        var isTenantOwnerOrAdmin = string.IsNullOrEmpty(roleText)
+            || roleText.Contains("tenant")
+            || roleText.Contains("owner")
+            || roleText.Contains("admin")
+            || roleText.Contains("superadmin")
+            || roleText.Contains("director");
+
+        canSelectBranch = isTenantOwnerOrAdmin || !assignedBranchId.HasValue;
+        if (!canSelectBranch && assignedBranchId.HasValue)
+        {
+            selectedBranchIdStr = assignedBranchId.Value.ToString();
+        }
+
+        businessBranches = await DbContext.Branches
+            .AsNoTracking()
+            .Where(b => b.BusinessId == currentBusinessId)
+            .OrderBy(b => b.BranchName)
+            .ToListAsync();
+
+        branchNames.Clear();
+        foreach (var b in businessBranches)
+        {
+            branchNames[b.BranchId] = b.BranchName;
+        }
+    }
+
+    private void UpdateActiveBranchLabel()
+    {
+        if (!canSelectBranch && assignedBranchId.HasValue)
+        {
+            ActiveBranch = branchNames.TryGetValue(assignedBranchId.Value, out var bName)
+                ? bName
+                : "Assigned Branch";
+            return;
+        }
+
+        if (effectiveBranchFilter.HasValue)
+        {
+            ActiveBranch = branchNames.TryGetValue(effectiveBranchFilter.Value, out var bName)
+                ? bName
+                : "Selected Branch";
+            return;
+        }
+
+        ActiveBranch = businessBranches.Count == 1
+            ? businessBranches[0].BranchName
+            : "All Branches (Overall)";
+    }
+
+    bool MatchesScope(long branchId)
+    {
+        if (!canSelectBranch && assignedBranchId.HasValue)
+            return branchId == assignedBranchId.Value;
+
+        if (effectiveBranchFilter.HasValue)
+            return branchId == effectiveBranchFilter.Value;
+
+        return true;
+    }
+
+    bool IsInSelectedPeriod(DateTime date)
+    {
+        if (selectedPeriod == "all") return true;
+
+        var d = date.Date;
+        var today = DateTime.Today;
+
+        return selectedPeriod switch
+        {
+            "today" => d == today,
+            "week" => GetWeekStart(d) == GetWeekStart(today),
+            "year" => d.Year == today.Year,
+            _ => d.Year == today.Year && d.Month == today.Month,
+        };
+    }
+
+    static DateTime GetWeekStart(DateTime date)
+    {
+        var diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
+        return date.AddDays(-diff).Date;
+    }
+
+    private async Task LoadReportDataAsync()
+    {
+        var branchIds = businessBranches.Select(b => b.BranchId).ToList();
+        var defaultBranchId = businessBranches.FirstOrDefault()?.BranchId ?? 0L;
+
+        var farms = await DbContext.Farms
+            .AsNoTracking()
+            .Where(f => branchIds.Contains(f.BranchId))
+            .ToListAsync();
+
+        var farmIds = farms.Select(f => f.FarmId).ToList();
+        var farmToBranch = farms.ToDictionary(f => f.FarmId, f => f.BranchId);
+
+        var plots = await DbContext.Plots
+            .AsNoTracking()
+            .Where(p => farmIds.Contains(p.FarmId))
+            .ToListAsync();
+
+        var plotById = plots.ToDictionary(p => p.PlotId, p => p);
+
+        var saleItemTotals = await DbContext.SalesItems
+            .AsNoTracking()
+            .GroupBy(si => si.SaleId)
+            .Select(g => new { SaleId = g.Key, Total = g.Sum(x => x.Subtotal) })
+            .ToDictionaryAsync(x => x.SaleId, x => x.Total);
+
+        var allOrders = await DbContext.SalesOrders
+            .AsNoTracking()
+            .Where(s => branchIds.Contains(s.BranchId) || s.BranchId == 0)
+            .ToListAsync();
+
+        var allExpenses = await DbContext.Expenses
+            .AsNoTracking()
+            .Where(e => e.BusinessId == currentBusinessId && !e.IsArchived)
+            .ToListAsync();
+
+        var allHarvests = await DbContext.HarvestRecords
+            .AsNoTracking()
+            .Where(h => h.BusinessId == currentBusinessId)
+            .ToListAsync();
+
+        var allCycles = await DbContext.CropCycles
+            .AsNoTracking()
+            .Where(c => !c.IsArchived)
+            .ToListAsync();
+
+        var workers = await DbContext.Workers
+            .AsNoTracking()
+            .Where(w => branchIds.Contains(w.BranchId))
+            .ToListAsync();
+
+        var workerRateById = workers.ToDictionary(
+            w => w.WorkerId,
+            w => GetDecimalProp(w.GetType(), w, "DailyRate", "Rate", "Wage", "Salary"));
+
+        // Optional Attendance / Labor logs
+        var laborByBranch = new Dictionary<long, decimal>();
+        var hoursByBranch = new Dictionary<long, decimal>();
+        var attProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.Name.Equals("AttendanceLogs", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("LaborLogs", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("WorkAssignments", StringComparison.OrdinalIgnoreCase));
+
+        if (attProp?.GetValue(DbContext) is IQueryable rawAttQuery)
+        {
+            var attList = await rawAttQuery.Cast<object>().ToListAsync();
+            foreach (var a in attList)
+            {
+                var at = a.GetType();
+                var aDate = GetDateProp(at, a, "LogDate", "WorkDate", "Date", "CreatedAt");
+                if (aDate.HasValue && !IsInSelectedPeriod(aDate.Value)) continue;
+
+                var aBranchId = GetLongProp(at, a, "BranchId") ?? defaultBranchId;
+                var wId = (int)(GetLongProp(at, a, "WorkerId") ?? 0);
+                var hrs = GetDecimalProp(at, a, "HoursWorked", "Hours");
+                var pay = GetDecimalProp(at, a, "PayAmount", "WageAmount", "TotalPay", "Amount", "Cost");
+
+                if (pay <= 0 && wId > 0 && workerRateById.TryGetValue(wId, out var rate) && rate > 0)
+                    pay = hrs > 0 ? Math.Round((hrs / 8m) * rate, 2) : rate;
+
+                if (hrs > 0)
+                    hoursByBranch[aBranchId] = hoursByBranch.GetValueOrDefault(aBranchId) + hrs;
+
+                if (pay > 0)
+                    laborByBranch[aBranchId] = laborByBranch.GetValueOrDefault(aBranchId) + pay;
+            }
+        }
+
+        // Scoped orders & expenses
+        var scopedOrders = allOrders
+            .Where(s => MatchesScope(s.BranchId == 0 ? defaultBranchId : s.BranchId))
+            .ToList();
+
+        var scopedExpenses = allExpenses
+            .Where(e => MatchesScope(e.BranchId == 0 ? defaultBranchId : e.BranchId))
+            .ToList();
+
+        var periodOrders = scopedOrders.Where(s => IsInSelectedPeriod(s.SaleDate)).ToList();
+        var periodExpenses = scopedExpenses.Where(e => IsInSelectedPeriod(e.ExpenseDate)).ToList();
+
+        salesTransactionsCount = periodOrders.Count;
+        expenseEntriesCount = periodExpenses.Count;
+        periodSalesTotal = periodOrders.Sum(s => OrderTotal(s, saleItemTotals));
+        periodExpensesTotal = periodExpenses.Sum(e => e.Amount);
+
+        var scopedHarvests = allHarvests.Where(h =>
+        {
+            var hType = h.GetType();
+            var hBranchId = GetLongProp(hType, h, "BranchId");
+            if (hBranchId.HasValue && hBranchId.Value > 0)
+                return MatchesScope(hBranchId.Value);
+
+            var hPlotId = (int)(GetLongProp(hType, h, "PlotId") ?? 0);
+            if (hPlotId > 0 && plotById.TryGetValue(hPlotId, out var p) && farmToBranch.TryGetValue(p.FarmId, out var fb))
+                return MatchesScope(fb);
+
+            return MatchesScope(defaultBranchId);
+        }).ToList();
+
+        var periodHarvestList = scopedHarvests.Where(h => IsInSelectedPeriod(h.HarvestDate)).ToList();
+        periodHarvestKg = (int)Math.Round(periodHarvestList.Sum(h => h.QuantityKg));
+
+        var scopedCycles = allCycles.Where(c =>
+        {
+            var cPlotId = (int)(GetLongProp(c.GetType(), c, "PlotId") ?? 0);
+            var bId = cPlotId > 0 && plotById.TryGetValue(cPlotId, out var p) && farmToBranch.TryGetValue(p.FarmId, out var fb)
+                ? fb
+                : defaultBranchId;
+            return MatchesScope(bId);
+        }).ToList();
+
+        cropCyclesCount = scopedCycles.Count;
+
+        var visibleBranches = businessBranches.Where(b => MatchesScope(b.BranchId)).ToList();
+        periodLaborTotal = visibleBranches.Sum(b =>
+        {
+            if (laborByBranch.TryGetValue(b.BranchId, out var l) && l > 0) return l;
+            return periodExpenses
+                .Where(e => (e.BranchId == 0 ? defaultBranchId : e.BranchId) == b.BranchId
+                         && string.Equals((e.Category ?? "").Trim(), "labor", StringComparison.OrdinalIgnoreCase))
+                .Sum(e => e.Amount);
+        });
+
+        laborHoursTotal = visibleBranches.Sum(b => hoursByBranch.GetValueOrDefault(b.BranchId));
+
+        // Trend chart points
+        BuildTrendPoints(scopedOrders, scopedExpenses, defaultBranchId, saleItemTotals);
+
+        // Harvest by crop donut
+        var groupedCrops = periodHarvestList
+            .GroupBy(h =>
+            {
+                var cName = GetStringProp(h.GetType(), h, "CropName", "CropType", "Crop", "ItemName", "Name");
+                return string.IsNullOrWhiteSpace(cName) ? "Other Crop" : cName;
+            })
+            .Select((g, idx) => new CropSlice(
+                g.Key,
+                (double)g.Sum(x => x.QuantityKg),
+                CropPalette[idx % CropPalette.Length]
+            ))
+            .Where(c => c.Kg > 0)
+            .ToList();
+
+        crops = groupedCrops;
+
+        // Branch comparison rows
+        branches = visibleBranches.Select(b =>
+        {
+            var bSales = allOrders
+                .Where(s => (s.BranchId == 0 ? defaultBranchId : s.BranchId) == b.BranchId && IsInSelectedPeriod(s.SaleDate))
+                .Sum(s => OrderTotal(s, saleItemTotals));
+
+            var bExp = allExpenses
+                .Where(e => (e.BranchId == 0 ? defaultBranchId : e.BranchId) == b.BranchId && IsInSelectedPeriod(e.ExpenseDate))
+                .Sum(e => e.Amount);
+
+            var bLabor = laborByBranch.TryGetValue(b.BranchId, out var l) && l > 0
+                ? l
+                : allExpenses
+                    .Where(e => (e.BranchId == 0 ? defaultBranchId : e.BranchId) == b.BranchId
+                             && IsInSelectedPeriod(e.ExpenseDate)
+                             && string.Equals((e.Category ?? "").Trim(), "labor", StringComparison.OrdinalIgnoreCase))
+                    .Sum(e => e.Amount);
+
+            var bKg = (int)Math.Round(allHarvests.Where(h =>
+            {
+                if (!IsInSelectedPeriod(h.HarvestDate)) return false;
+                var hBranchId = GetLongProp(h.GetType(), h, "BranchId");
+                if (hBranchId.HasValue && hBranchId.Value > 0) return hBranchId.Value == b.BranchId;
+                var hPlotId = (int)(GetLongProp(h.GetType(), h, "PlotId") ?? 0);
+                if (hPlotId > 0 && plotById.TryGetValue(hPlotId, out var p) && farmToBranch.TryGetValue(p.FarmId, out var fb))
+                    return fb == b.BranchId;
+                return b.BranchId == defaultBranchId;
+            }).Sum(h => h.QuantityKg));
+
+            return new BranchRow(b.BranchName, bSales, bExp, bLabor, bKg);
+        }).ToList();
+
+        // Cost allocation summary by category
+        var expByCat = periodExpenses
+            .GroupBy(e => (e.Category ?? "other").Trim().ToLowerInvariant())
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+
+        costs = CostCategories
+            .Select(cat => new CostRow(cat.Label, expByCat.GetValueOrDefault(cat.Key, 0m)))
+            .Where(c => c.Amount > 0 || selectedPeriod == "all")
+            .ToList();
+    }
+
+    void BuildTrendPoints(
+        List<SalesOrder> scopedOrders,
+        List<Expense> scopedExpenses,
+        long defaultBranchId,
+        Dictionary<int, decimal> saleItemTotals)
+    {
+        var today = DateTime.Today;
+
+        if (selectedPeriod == "today")
+        {
+            var blocks = new[]
+            {
+                ("12AM", 0, 3), ("3AM", 3, 6), ("6AM", 6, 9), ("9AM", 9, 12),
+                ("12PM", 12, 15), ("3PM", 15, 18), ("6PM", 18, 21), ("9PM", 21, 24)
+            };
+            trend = blocks.Select(b =>
+            {
+                var rev = scopedOrders
+                    .Where(s => s.SaleDate.Date == today && s.SaleDate.Hour >= b.Item2 && s.SaleDate.Hour < b.Item3)
+                    .Sum(s => OrderTotal(s, saleItemTotals));
+                var exp = scopedExpenses
+                    .Where(e => e.ExpenseDate.Date == today && e.ExpenseDate.Hour >= b.Item2 && e.ExpenseDate.Hour < b.Item3)
+                    .Sum(e => e.Amount);
+                return new TrendPoint(b.Item1, (double)rev, (double)exp);
+            }).ToList();
+            return;
+        }
+
+        if (selectedPeriod == "week")
+        {
+            var weekStart = GetWeekStart(today);
+            trend = Enumerable.Range(0, 7).Select(offset =>
+            {
+                var d = weekStart.AddDays(offset);
+                var rev = scopedOrders.Where(s => s.SaleDate.Date == d).Sum(s => OrderTotal(s, saleItemTotals));
+                var exp = scopedExpenses.Where(e => e.ExpenseDate.Date == d).Sum(e => e.Amount);
+                return new TrendPoint(d.ToString("ddd", Inv), (double)rev, (double)exp);
+            }).ToList();
+            return;
+        }
+
+        if (selectedPeriod == "year")
+        {
+            trend = Enumerable.Range(1, 12).Select(m =>
+            {
+                var rev = scopedOrders.Where(s => s.SaleDate.Year == today.Year && s.SaleDate.Month == m).Sum(s => OrderTotal(s, saleItemTotals));
+                var exp = scopedExpenses.Where(e => e.ExpenseDate.Year == today.Year && e.ExpenseDate.Month == m).Sum(e => e.Amount);
+                return new TrendPoint(new DateTime(today.Year, m, 1).ToString("MMM", Inv), (double)rev, (double)exp);
+            }).ToList();
+            return;
+        }
+
+        // Default / All Time: last 6 months
+        var months = Enumerable.Range(0, 6)
+            .Select(offset => today.AddMonths(-(5 - offset)))
+            .Select(d => new DateTime(d.Year, d.Month, 1))
+            .ToList();
+
+        trend = months.Select(m =>
+        {
+            var rev = scopedOrders.Where(s => s.SaleDate.Year == m.Year && s.SaleDate.Month == m.Month).Sum(s => OrderTotal(s, saleItemTotals));
+            var exp = scopedExpenses.Where(e => e.ExpenseDate.Year == m.Year && e.ExpenseDate.Month == m.Month).Sum(e => e.Amount);
+            return new TrendPoint(m.ToString("MMM", Inv), (double)rev, (double)exp);
+        }).ToList();
+    }
+
+    static decimal OrderTotal(SalesOrder s, Dictionary<int, decimal> saleItemTotals)
+    {
+        if (s.NetAmount > 0) return s.NetAmount;
+        var computed = s.GrossAmount - s.DiscountAmount + s.TaxAmount;
+        if (computed > 0) return computed;
+        if (saleItemTotals.TryGetValue(s.SaleId, out var itemsSum) && itemsSum > 0) return itemsSum;
+        return s.AmountPaid;
+    }
+
+    static string? GetStringProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null)
+            {
+                var v = p.GetValue(obj)?.ToString();
+                if (!string.IsNullOrWhiteSpace(v))
+                    return v.Trim();
+            }
+        }
+        return null;
+    }
+
+    static long? GetLongProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && long.TryParse(p.GetValue(obj)?.ToString(), out var v))
+                return v;
+        }
+        return null;
+    }
+
+    static decimal GetDecimalProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && decimal.TryParse(p.GetValue(obj)?.ToString(), NumberStyles.Any, Inv, out var v))
+                return v;
+        }
+        return 0m;
+    }
+
+    static DateTime? GetDateProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && p.GetValue(obj) is DateTime dt)
+                return dt;
+        }
+        return null;
+    }
 
     // ---------- COMPUTED ----------
-    decimal TotalSales => branches.Sum(b => b.Sales);
-    decimal TotalCost => costs.Sum(c => c.Amount);
-    decimal TotalLabor => branches.Sum(b => b.Labor);
-    int TotalHarvest => branches.Sum(b => b.HarvestKg);
+    decimal TotalSales => periodSalesTotal;
+    decimal TotalCost => periodExpensesTotal;
+    decimal TotalLabor => periodLaborTotal;
+    int TotalHarvest => periodHarvestKg;
     double CropTotal => crops.Sum(c => c.Kg);
 
-    IEnumerable<CropSlice> LegendCrops => new[] { "Ampalaya", "Cabbage", "Rice" }
-        .Select(n => crops.First(c => c.Name == n));
+    double AxisMax
+    {
+        get
+        {
+            var maxVal = trend.Count > 0
+                ? trend.Max(t => Math.Max(t.Revenue, t.Expenses))
+                : 0;
+            if (maxVal <= 0) return 80000;
+            var step = 20000.0;
+            return Math.Ceiling(maxVal / (step * 4)) * (step * 4);
+        }
+    }
+
+    IEnumerable<CropSlice> LegendCrops => crops;
 
     List<Stat> Stats => new()
     {
-        new("TOTAL SALES RECORDED", Peso(TotalSales), SalesTransactions + " transactions", "bi-graph-up-arrow", ""),
-        new("TOTAL OPERATING COST", Peso(TotalCost), ExpenseEntries + " expense entries", "bi-bar-chart", "stat-icon-plain"),
-        new("HARVEST OUTPUT", TotalHarvest.ToString("N0", Inv) + " kg", CropCycles + " crop cycles tracked", "bi-flower1", "stat-icon-plain"),
-        new("LABOR COST LOGGED", Peso(TotalLabor), LaborHours + " hours", "bi-people", "stat-icon-blue"),
+        new("TOTAL SALES RECORDED", Peso(TotalSales), salesTransactionsCount + (salesTransactionsCount == 1 ? " transaction" : " transactions"), "bi-graph-up-arrow", ""),
+        new("TOTAL OPERATING COST", Peso(TotalCost), expenseEntriesCount + (expenseEntriesCount == 1 ? " expense entry" : " expense entries"), "bi-bar-chart", "stat-icon-leaf"),
+        new("HARVEST OUTPUT", TotalHarvest.ToString("N0", Inv) + " kg", cropCyclesCount + (cropCyclesCount == 1 ? " crop cycle tracked" : " crop cycles tracked"), "bi-flower1", "stat-icon-earth"),
+        new("LABOR COST LOGGED", Peso(TotalLabor), laborHoursTotal.ToString("0.#", Inv) + " hours", "bi-people", ""),
     };
 
     // ---------- HELPERS ----------
     static string F(double d) => d.ToString("0.##", Inv);
-
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
-
-    static string PesoSigned(decimal v) => v < 0 ? "-₱" + (-v).ToString("N2", Inv) : Peso(v);
-
+    static string PesoSigned(decimal v) => v < 0 ? "−₱" + (-v).ToString("N2", Inv) : Peso(v);
     static string AxisLabel(double v) => v == 0 ? "₱0" : "₱" + (v / 1000).ToString("0", Inv) + "K";
-
     string Share(decimal amount) => TotalCost == 0 ? "0" : Math.Round(amount * 100 / TotalCost).ToString("0", Inv);
 
     // ---------- ACTIONS ----------
+    async Task OnBranchChanged(ChangeEventArgs e)
+    {
+        if (!canSelectBranch) return;
+        selectedBranchIdStr = e.Value?.ToString() ?? "all";
+        UpdateActiveBranchLabel();
+        await LoadReportDataAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task OnPeriodChanged(ChangeEventArgs e)
+    {
+        selectedPeriod = e.Value?.ToString() ?? "all";
+        await LoadReportDataAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
     void GoFinancials() => Nav.NavigateTo("financials");
     void GoFarms() => Nav.NavigateTo("farms");
 }

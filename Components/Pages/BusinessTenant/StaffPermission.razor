@@ -141,7 +141,7 @@
                                 </span>
                             </td>
                             <td class="fw-medium text-dark">
-                                @if (IsWideRole(s.Role))
+                                @if (IsWideScope(s.Role, s.BranchId))
                                 {
                                     <span class="text-muted"><i class="bi bi-globe2 text-success me-1"></i>Business-wide</span>
                                 }
@@ -287,8 +287,8 @@ else
                                             <div class="perm-staff-sub text-truncate">
                                                 <span class="fw-semibold text-success">@indexedLabel</span>
                                                 <span class="mx-1">·</span>
-                                                <i class="bi @(IsWideRole(member.Role) ? "bi-globe2" : "bi-shop") me-1"></i>
-                                                @(IsWideRole(member.Role) ? "Business-wide" : (string.IsNullOrWhiteSpace(member.BranchName) ? "Unassigned" : member.BranchName))
+                                                <i class="bi @(IsWideScope(member.Role, member.BranchId) ? "bi-globe2" : "bi-shop") me-1"></i>
+                                                @(IsWideScope(member.Role, member.BranchId) ? "Business-wide" : (string.IsNullOrWhiteSpace(member.BranchName) ? "Unassigned" : member.BranchName))
                                             </div>
                                         </div>
                                     </div>
@@ -487,7 +487,7 @@ else
                             <div class="col-md-6 mt-3">
                                 <label class="text-muted small fw-bold text-uppercase">Assigned Branch</label>
                                 <p class="mb-0 fw-semibold text-dark">
-                                    @(IsWideRole(selectedStaff.Role) ? "Business-wide" : (string.IsNullOrWhiteSpace(selectedStaff.BranchName) ? "Unassigned" : selectedStaff.BranchName))
+                                    @(IsWideScope(selectedStaff.Role, selectedStaff.BranchId) ? "Business-wide" : (string.IsNullOrWhiteSpace(selectedStaff.BranchName) ? "Unassigned" : selectedStaff.BranchName))
                                 </p>
                             </div>
                             <div class="col-md-6 mt-3">
@@ -685,9 +685,19 @@ else
 
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold small text-muted">Assigned Branch</label>
-                                    @if (IsWideRole(form.Role))
+                                    @if (string.Equals(form.Role, "TenantAdmin", StringComparison.OrdinalIgnoreCase))
                                     {
                                         <input class="form-control border-0 shadow-sm bg-white text-muted fw-semibold" value="Business-wide" disabled />
+                                    }
+                                    else if (string.Equals(form.Role, "Accountant", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <select class="form-select border-0 shadow-sm" @bind="form.BranchId">
+                                            <option value="">Business-wide (All Branches)</option>
+                                            @foreach (var b in businessBranches)
+                                            {
+                                                <option value="@b.BranchId">@b.BranchName</option>
+                                            }
+                                        </select>
                                     }
                                     else
                                     {
@@ -1100,7 +1110,7 @@ else
         {
             var activeCount = staffList.Count(s => s.Status == "Active");
             var inactiveCount = staffList.Count(s => s.Status != "Active");
-            var branchAssigned = staffList.Count(s => s.Status == "Active" && !IsWideRole(s.Role));
+            var branchAssigned = staffList.Count(s => s.Status == "Active" && !IsWideScope(s.Role, s.BranchId));
             var limitNote = maxStaffLimit == int.MaxValue
                 ? $"{currentPlanName} (Unlimited)"
                 : $"{CurrentStaffCount} / {maxStaffLimit} ({currentPlanName})";
@@ -1120,6 +1130,9 @@ else
                            string.Equals(s.Email, form.Email.Trim(), StringComparison.OrdinalIgnoreCase));
 
     static bool IsWideRole(string role) => WideRoles.Contains(role);
+    static bool IsWideScope(string role, long? branchId) =>
+    string.Equals(role, "TenantAdmin", StringComparison.OrdinalIgnoreCase)
+    || (string.Equals(role, "Accountant", StringComparison.OrdinalIgnoreCase) && !branchId.HasValue);
 
     static string RoleDisplayName(string role) => role switch
     {
@@ -1422,9 +1435,10 @@ else
     {
         var key = e.Value?.ToString() ?? form.Role;
         form.Role = key;
-        if (IsWideRole(key))
+        if (string.Equals(key, "TenantAdmin", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(key, "Accountant", StringComparison.OrdinalIgnoreCase))
         {
-            form.BranchId = null;
+            form.BranchId = null; // Default Business-wide; can still be changed to a branch in dropdown
         }
     }
 
@@ -1456,7 +1470,7 @@ else
 
         try
         {
-            if (IsWideRole(form.Role))
+            if (string.Equals(form.Role, "TenantAdmin", StringComparison.OrdinalIgnoreCase))
             {
                 form.BranchId = null;
             }

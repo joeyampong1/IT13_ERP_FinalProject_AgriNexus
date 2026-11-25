@@ -21,9 +21,9 @@ html, body {
     color: var(--text-main);
     margin: 0;
     padding: 0;
-    height: 100vh;
-    width: 100vw;
-    overflow: hidden;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 /* Global Custom Scrollbar */
@@ -265,7 +265,6 @@ html, body {
 4. LANDING PAGE & NAVBAR (Home.razor)
    ========================================= */
 .landing-page {
-    height: 100vh;
     width: 100vw;
     overflow-y: auto;
     overflow-x: hidden;
@@ -607,11 +606,24 @@ a.user-profile-box:visited {
     border-radius: 12px !important;
 }
 
-main,
-.content {
+main {
     background-color: #F4F7F5;
     background-image: linear-gradient(to right, rgba(27, 94, 52, 0.045) 1px, transparent 1px), linear-gradient(to bottom, rgba(27, 94, 52, 0.045) 1px, transparent 1px), radial-gradient(circle at 85% 20%, rgba(27, 94, 52, 0.09), transparent 55%);
     background-size: 32px 32px, 32px 32px, 100% 100%;
     background-attachment: fixed;
-    min-height: 100vh;
 }
+
+.content {
+    min-height: 100%;
+}
+.form-check-input:checked,
+.form-check-input[type="checkbox"]:checked {
+    background-color: #1B5E34 !important;
+    border-color: #1B5E34 !important;
+}
+#chkPwdSenior:checked,
+.form-check-input.agri-check:checked {
+    background-color: #1B5E34 !important;
+    border-color: #1B5E34 !important;
+}
+

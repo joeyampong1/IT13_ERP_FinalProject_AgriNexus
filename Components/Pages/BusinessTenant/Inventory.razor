@@ -768,15 +768,32 @@
                                     @if (string.Equals(form.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase))
                                     {
                                         <input class="form-control" value="produce" disabled />
+                                        <div class="mt-1">
+                                            <span class="badge bg-secondary-subtle text-secondary">VAT-Exempt (Produce)</span>
+                                        </div>
                                     }
                                     else
                                     {
-                                        <select class="form-select" @bind="form.Category">
+                                        <select class="form-select" @bind="form.Category" @bind:after="OnCategoryChanged">
                                             @foreach (var c in CategoryOptions)
                                             {
                                                 <option value="@c">@c</option>
                                             }
                                         </select>
+                                        <div class="mt-1">
+                                            @if (selectedItemIsTaxable)
+                                            {
+                                                <span class="badge bg-success-subtle text-success">
+                                                    <i class="bi bi-percent me-1"></i>12% VAT (Default for @form.Category)
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary-subtle text-secondary">
+                                                    <i class="bi bi-shield-check me-1"></i>VAT-Exempt (Default for @form.Category)
+                                                </span>
+                                            }
+                                        </div>
                                     }
                                 </div>
 
@@ -957,6 +974,7 @@
     bool isSaving;
     int? editingId;
     int? openMenuId;
+    bool selectedItemIsTaxable = true;
     InventoryItem form = new();
     decimal? qtyInput, reorderInput, costInput, sellingPriceInput;
 
@@ -1150,6 +1168,25 @@
         return "—";
     }
 
+    private void OnCategoryChanged()
+    {
+        selectedItemIsTaxable = IsCategoryTaxable(form.Category, form.ItemType);
+    }
+
+    private static bool IsCategoryTaxable(string? category, string? itemType)
+    {
+        if (string.Equals(itemType, "PRODUCE", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var cat = (category ?? "").Trim().ToLowerInvariant();
+        return cat switch
+        {
+            "seeds" => false,
+            "fertilizer" => false,
+            _ => true
+        };
+    }
+
     string SupplierContactOf(InventoryItem item)
     {
         if (item.Supplier != null && !string.IsNullOrWhiteSpace(item.Supplier.ContactNumber))
@@ -1341,6 +1378,7 @@
             Unit = "kg"
         };
         selectedSupplierIdStr = "";
+        selectedItemIsTaxable = IsCategoryTaxable(form.Category, form.ItemType);
         qtyInput = reorderInput = costInput = sellingPriceInput = null;
         selectedImageFile = null;
         imagePreviewUrl = null;
@@ -1378,6 +1416,7 @@
             ImageUrl = i.ImageUrl
         };
         selectedSupplierIdStr = i.SupplierId?.ToString() ?? "";
+        selectedItemIsTaxable = IsCategoryTaxable(i.Category, i.ItemType);
         qtyInput = i.QuantityOnHand;
         reorderInput = i.ReorderLevel;
         costInput = i.UnitCost;

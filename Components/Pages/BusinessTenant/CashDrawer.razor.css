@@ -1,6 +1,6 @@
 /* CSS for CashDrawer component */
 .page-title {
-    font-weight: 700;
+    font-weight: 800;
     font-size: 2rem;
     letter-spacing: -0.5px;
     color: #0A2B1D;
@@ -11,46 +11,109 @@
     font-size: .95rem;
 }
 
+/* ---------- PERIOD & BRANCH FILTERS ---------- */
+.dashboard-filter-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: #FFFFFF;
+    border: 1px solid #E2ECE6;
+    border-radius: 12px !important;
+    padding: 6px 14px;
+    box-shadow: 0 2px 6px rgba(10, 43, 29, 0.04);
+    transition: all 0.2s ease;
+}
+
+    .dashboard-filter-wrap:focus-within {
+        border-color: #1B5E34;
+        box-shadow: 0 0 0 0.2rem rgba(27, 94, 52, 0.15);
+    }
+
+.dashboard-filter-icon {
+    color: #1B5E34;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+.dashboard-filter-select {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: #0A2B1D;
+    font-weight: 600;
+    font-size: 0.88rem;
+    padding: 0 18px 0 0;
+    margin: 0;
+    line-height: 1.3;
+    outline: none !important;
+    cursor: pointer;
+}
+
+    .dashboard-filter-select:focus {
+        border: 0 !important;
+        box-shadow: none !important;
+        outline: none !important;
+    }
+
+.dashboard-filter-caret {
+    color: #64748B;
+    font-size: 0.75rem;
+    pointer-events: none;
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
 /* ---------- BUTTONS ---------- */
 .btn-solid,
 .btn-outline-lg {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    border-radius: 10px;
-    padding: .55rem 1.1rem;
+    border-radius: 12px;
+    padding: .58rem 1.25rem;
     font-size: .9rem;
     cursor: pointer;
+    transition: all 0.2s ease;
 }
 
 .btn-solid {
-    background: #1B5E34;
-    color: #fff;
+    background: linear-gradient(135deg, #0A2B1D 0%, #1B5E34 100%);
+    color: #FFFFFF;
     border: 0;
     font-weight: 600;
 }
 
     .btn-solid:hover {
-        background: #144A29;
+        background: linear-gradient(135deg, #0D3826 0%, #227340 100%);
+        transform: translateY(-1px);
     }
 
 .btn-outline-lg {
-    background: #fff;
-    border: 1px solid var(--border-color);
-    color: var(--text-main);
-    font-weight: 500;
-    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    background: #FFFFFF;
+    border: 1px solid #C6DFCE;
+    color: #1B5E34;
+    font-weight: 600;
 }
 
     .btn-outline-lg:hover {
-        background: #F1F5F9;
-        border-color: #CBD5E1;
+        background: #E8F3EC;
+        border-color: #1B5E34;
+        color: #0A2B1D;
     }
 
 /* ---------- STAT CARDS ---------- */
 .stat-card {
+    background-color: #FFFFFF;
+    border: 1px solid #E2ECE6;
     border-radius: 16px;
     padding: 20px 22px;
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
 }
 
     .stat-card .card-title {
@@ -60,34 +123,38 @@
     }
 
     .stat-card .card-value {
-        font-size: 1.7rem;
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: #0A2B1D;
         letter-spacing: -0.5px;
     }
 
 .stat-icon {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     flex-shrink: 0;
     border-radius: 10px;
-    background: #E8EEEA;
-    color: #1B4D2E;
+    background: #E8F3EC;
+    color: #1B5E34;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    font-size: 1.05rem;
 }
 
 .stat-icon-plain {
-    background: transparent;
+    background: #E8F3EC;
+    color: #1B5E34;
 }
 
 /* ---------- CARDS & PANELS ---------- */
 .card-box,
 .panel {
-    background: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    background: #FFFFFF;
+    border: 1px solid #E2ECE6;
+    border-radius: 16px !important;
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
+    overflow: hidden;
 }
 
 .card-box {
@@ -106,16 +173,16 @@
 
 .panel-sub {
     font-size: .8rem;
-    color: var(--text-muted);
+    color: #64748B;
     margin-bottom: 1rem;
 }
 
 /* ---------- MINI STATS ---------- */
 .mini-stat {
-    border: 1px solid var(--border-color);
+    border: 1px solid #E2ECE6;
     border-radius: 14px;
     padding: .9rem 1.1rem;
-    background: #FBFCFB;
+    background: #FAFDFB;
     height: 100%;
 }
 
@@ -123,16 +190,16 @@
     font-size: .72rem;
     letter-spacing: .06em;
     text-transform: uppercase;
-    color: var(--text-muted);
-    font-weight: 500;
+    color: #64748B;
+    font-weight: 600;
 }
 
 .mini-value {
     margin-top: .25rem;
     font-size: 1.45rem;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.3px;
-    color: var(--text-main);
+    color: #0A2B1D;
 }
 
 /* ---------- EMPTY STATE ---------- */
@@ -150,8 +217,8 @@
     width: 44px;
     height: 44px;
     border-radius: 12px;
-    background: #EEF2EF;
-    color: #475569;
+    background: #E8F3EC;
+    color: #1B5E34;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -161,6 +228,7 @@
 /* ---------- TABLES ---------- */
 .table-wrap {
     overflow-x: auto;
+    border-radius: 16px;
 }
 
 .data-table {
@@ -172,20 +240,25 @@
         font-size: .7rem;
         letter-spacing: .08em;
         text-transform: uppercase;
-        color: var(--text-muted);
-        font-weight: 600;
-        padding: .9rem 1rem;
-        border-bottom: 1px solid var(--border-color);
+        color: #64748B;
+        font-weight: 700;
+        padding: .85rem .75rem;
+        border-bottom: 1px solid #E2ECE6;
         white-space: nowrap;
+        background-color: #F7FAF8;
     }
 
     .data-table td {
-        padding: .8rem 1rem;
-        border-color: var(--border-color);
+        padding: .8rem .75rem;
+        border-color: #E2ECE6;
     }
 
     .data-table tbody tr:last-child td {
         border-bottom: 0;
+    }
+
+    .data-table tbody tr:hover {
+        background-color: #F4F8F5;
     }
 
     .data-table .col-reason {
@@ -197,40 +270,40 @@
 }
 
 .qty-out {
-    color: #92400E;
+    color: #7A5230;
 }
 
 .neg {
     color: #DC2626;
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .warn {
-    color: #B45309;
-    font-weight: 500;
+    color: #7A5230;
+    font-weight: 600;
 }
 
 /* ---------- PILLS ---------- */
 .pill {
     display: inline-block;
-    padding: 2px 12px;
+    padding: 2px 10px;
     border-radius: 999px;
-    font-size: .72rem;
+    font-size: .7rem;
     font-weight: 600;
     border: 1px solid transparent;
     white-space: nowrap;
 }
 
 .pill-green {
-    background: #E6F0E9;
+    background: #E8F3EC;
     color: #1B5E34;
-    border-color: #CFE0D4;
+    border-color: #C6DFCE;
 }
 
 .pill-yellow {
-    background: #FEF3C7;
-    color: #B45309;
-    border-color: #FDE68A;
+    background: #F5EFEA;
+    color: #7A5230;
+    border-color: #E2D3C5;
 }
 
 .pill-red {
@@ -244,20 +317,22 @@
     position: fixed;
     inset: 0;
     z-index: 2000;
-    background: rgba(10, 31, 20, .55);
+    background: rgba(10, 43, 29, .65);
+    backdrop-filter: blur(5px);
     display: flex;
     padding: 2rem 1rem;
     overflow-y: auto;
 }
 
 .modal-card {
-    background: #fff;
-    border-radius: 14px;
+    background: #FFFFFF;
+    border: 1px solid #E2ECE6;
+    border-radius: 16px;
     width: 100%;
     max-width: 670px;
     margin: auto;
     padding: 1.5rem 1.6rem;
-    box-shadow: 0 25px 60px rgba(0,0,0,.3);
+    box-shadow: 0 25px 60px rgba(10, 43, 29, .25);
 }
 
 .modal-heading {
@@ -268,16 +343,20 @@
 
 .modal-sub {
     font-size: .9rem;
-    color: var(--text-muted);
+    color: #64748B;
 }
 
 .btn-close-x {
     background: none;
     border: 0;
-    color: #475569;
+    color: #64748B;
     cursor: pointer;
     padding: 2px 6px;
 }
+
+    .btn-close-x:hover {
+        color: #0A2B1D;
+    }
 
 .modal-card .form-label {
     font-size: .9rem;
@@ -287,25 +366,25 @@
 
 .modal-card .form-control {
     border-radius: 10px;
-    border: 1px solid var(--border-color);
+    border: 1px solid #E2ECE6;
     padding: .55rem .8rem;
     font-size: .9rem;
 }
 
     .modal-card .form-control:focus {
-        border-color: var(--primary-green);
-        box-shadow: 0 0 0 .15rem rgba(56, 142, 60, .15);
+        border-color: #1B5E34;
+        box-shadow: 0 0 0 0.2rem rgba(27, 94, 52, 0.15);
     }
 
 .hint-text {
     margin-top: 6px;
     font-size: .78rem;
-    color: var(--text-muted);
+    color: #64748B;
 }
 
 .variance-box {
     margin-top: 1rem;
-    padding: .6rem .9rem;
+    padding: .65rem .95rem;
     border-radius: 10px;
     font-size: .85rem;
 }
@@ -321,9 +400,9 @@
     }
 
     .variance-box.over {
-        background: #FEF3C7;
-        border: 1px solid #FDE68A;
-        color: #92400E;
+        background: #F5EFEA;
+        border: 1px solid #E2D3C5;
+        color: #7A5230;
     }
 
 .req {
@@ -334,6 +413,7 @@
     color: #DC2626;
     font-size: .75rem;
     margin-top: 4px;
+    font-weight: 600;
 }
 
 .btn-cancel {
@@ -341,21 +421,26 @@
     border: 0;
     font-weight: 500;
     cursor: pointer;
-    color: var(--text-main);
+    color: #64748B;
 }
 
+    .btn-cancel:hover {
+        color: #0A2B1D;
+    }
+
 .btn-save {
-    background: #1B5E34;
-    color: #fff;
+    background: linear-gradient(135deg, #0A2B1D 0%, #1B5E34 100%);
+    color: #FFFFFF;
     border: 0;
     border-radius: 12px;
     padding: .6rem 1.4rem;
     font-weight: 600;
     cursor: pointer;
+    transition: all 0.2s ease;
 }
 
-    .btn-save:hover {
-        background: #144A29;
+    .btn-save:hover:not(:disabled) {
+        background: linear-gradient(135deg, #0D3826 0%, #227340 100%);
     }
 
 /* ---------- TOAST ---------- */
@@ -368,33 +453,12 @@
     align-items: center;
     gap: 10px;
     max-width: 420px;
-    background: #fff;
-    border: 1px solid #CFE0D4;
-    border-left: 4px solid #1B5E34;
-    color: #1B4D2E;
+    background: #0A2B1D;
+    border: 1px solid #1B5E34;
+    color: #FFFFFF;
     border-radius: 12px;
-    padding: .75rem 1.1rem;
+    padding: .8rem 1.2rem;
     font-size: .88rem;
     font-weight: 500;
-    box-shadow: 0 10px 25px rgba(0,0,0,.15);
-}
-/* ---------- TABLE FIXES FOR SESSION HISTORY ---------- */
-.table-wrap {
-    overflow-x: hidden; /* Tangtangon ang scrollbar */
-}
-
-.data-table thead th {
-    padding: 0.8rem 0.5rem; /* Gamayng padding sa kilid */
-    font-size: 0.65rem; /* Gamayng text para sa headers */
-    white-space: normal; /* Tugotan mo-wrap ang headers */
-}
-
-.data-table td {
-    padding: 0.8rem 0.5rem;
-    font-size: 0.8rem; /* Gamayng text para sa cells */
-}
-
-.pill {
-    font-size: 0.65rem; /* Gamayng pills */
-    padding: 2px 8px;
+    box-shadow: 0 12px 28px rgba(10, 43, 29, .22);
 }

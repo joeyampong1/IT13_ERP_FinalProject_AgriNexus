@@ -19,9 +19,8 @@
 }
 
 main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
     height: 100vh;
     overflow-y: auto;
     overflow-x: hidden;
@@ -45,7 +44,7 @@ main {
 
 .content {
     padding: 2rem;
-    flex-grow: 1;
+    flex: 1 0 auto;
 }
 
 /* ===== USER MENU DROPDOWN ===== */
@@ -203,13 +202,4 @@ main {
     .sidebar > * {
         position: relative;
         z-index: 1;
-    }
-
-    main,
-    .content {
-        background-color: #F4F7F5;
-        background-image: linear-gradient(to right, rgba(27, 94, 52, 0.045) 1px, transparent 1px), linear-gradient(to bottom, rgba(27, 94, 52, 0.045) 1px, transparent 1px), radial-gradient(circle at 85% 20%, rgba(27, 94, 52, 0.09), transparent 55%);
-        background-size: 32px 32px, 32px 32px, 100% 100%;
-        background-attachment: fixed;
-        min-height: 100vh;
     }

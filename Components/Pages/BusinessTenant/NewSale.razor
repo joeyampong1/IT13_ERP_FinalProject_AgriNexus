@@ -47,12 +47,33 @@
     <!-- ======================= PRODUCE CARDS & CART ======================= -->
     <div class="col-12 col-lg-8">
         <div class="card-box h-100">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <div>
-                    <div class="panel-title">
-                        <i class="bi bi-grid-3x3-gap text-success me-1"></i>Available produce &amp; sale items
-                    </div>
-                    <div class="panel-sub mb-0">Click an item card to add it to the sale. Stock is deducted automatically upon completion.</div>
+            <div class="mb-3">
+                <div class="panel-title">
+                    <i class="bi bi-grid-3x3-gap text-success me-1"></i>Available produce &amp; sale items
+                </div>
+                <div class="panel-sub mb-0">Raw agri food &amp; farm inputs are VAT-exempt; taxable items include 12% VAT unless PWD/Senior.</div>
+            </div>
+
+            <!-- MAIN WHITE TABS + CONNECTED SEARCH BAR -->
+            <div class="pos-filter-bar bg-white border rounded-3 p-1 d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2"
+                 style="border-color: #E2ECE6 !important;">
+                <div class="d-flex align-items-center gap-1 flex-wrap">
+                    <button type="button"
+                            class="btn btn-sm px-3 py-2 rounded-2 fw-semibold"
+                            style="@(mainTab == "inventory"
+                                        ? "background-color: #FFFFFF; color: #1B5E34; border: 1px solid #1B5E34; box-shadow: 0 0 0 0.25rem rgba(27, 94, 52, 0.15);"
+                                        : "background-color: transparent; color: #64748B; border: 1px solid transparent; box-shadow: none;")"
+                            @onclick='() => SelectMainTab("inventory")'>
+                        Inventory Products
+                    </button>
+                    <button type="button"
+                            class="btn btn-sm px-3 py-2 rounded-2 fw-semibold"
+                            style="@(mainTab == "produce"
+                                        ? "background-color: #FFFFFF; color: #1B5E34; border: 1px solid #1B5E34; box-shadow: 0 0 0 0.25rem rgba(27, 94, 52, 0.15);"
+                                        : "background-color: transparent; color: #64748B; border: 1px solid transparent; box-shadow: none;")"
+                            @onclick='() => SelectMainTab("produce")'>
+                        Produce Product
+                    </button>
                 </div>
 
                 <div class="search-box" style="width: 240px;">
@@ -63,13 +84,59 @@
                 </div>
             </div>
 
+            <!-- HORIZONTAL SCROLLABLE SUB-TABS -->
+            @if (mainTab == "inventory")
+            {
+                <div class="d-flex align-items-center gap-3 overflow-x-auto pb-2 mb-3 border-bottom"
+                     style="white-space: nowrap; border-color: #E2ECE6 !important;">
+                    <button type="button"
+                            class="btn btn-link p-0 text-decoration-none fw-semibold flex-shrink-0"
+                            style="color: @(string.IsNullOrEmpty(selectedInventoryCategory) ? "#1B5E34" : "#64748B"); font-size: .9rem;"
+                            @onclick='() => selectedInventoryCategory = ""'>
+                        All
+                    </button>
+                    @foreach (var cat in InventorySubCategories)
+                    {
+                        var isActiveCat = string.Equals(selectedInventoryCategory, cat, StringComparison.OrdinalIgnoreCase);
+                        <button type="button"
+                                class="btn btn-link p-0 text-decoration-none @(isActiveCat ? "fw-bold" : "fw-medium") flex-shrink-0"
+                                style="color: @(isActiveCat ? "#1B5E34" : "#64748B"); font-size: .9rem;"
+                                @onclick="() => selectedInventoryCategory = cat">
+                            @cat
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="d-flex align-items-center gap-3 overflow-x-auto pb-2 mb-3 border-bottom"
+                     style="white-space: nowrap; border-color: #E2ECE6 !important;">
+                    <button type="button"
+                            class="btn btn-link p-0 text-decoration-none fw-semibold flex-shrink-0"
+                            style="color: @(string.IsNullOrEmpty(selectedHarvestProduct) ? "#1B5E34" : "#64748B"); font-size: .9rem;"
+                            @onclick='() => selectedHarvestProduct = ""'>
+                        All
+                    </button>
+                    @foreach (var prodName in HarvestSubProducts)
+                    {
+                        var isActiveProd = string.Equals(selectedHarvestProduct, prodName, StringComparison.OrdinalIgnoreCase);
+                        <button type="button"
+                                class="btn btn-link p-0 text-decoration-none @(isActiveProd ? "fw-bold" : "fw-medium") flex-shrink-0"
+                                style="color: @(isActiveProd ? "#1B5E34" : "#64748B"); font-size: .9rem;"
+                                @onclick="() => selectedHarvestProduct = prodName">
+                            @prodName
+                        </button>
+                    }
+                </div>
+            }
+
             <!-- PRODUCE SELECTION CARDS -->
             @if (AvailableCatalog.Count == 0)
             {
                 <div class="empty-box mb-4 py-4">
                     <div class="empty-icon"><i class="bi bi-box-seam"></i></div>
-                    <div class="fw-semibold mt-2">No produce stock available</div>
-                    <div class="text-muted small">Approve harvests or receive produce stock in Inventory first.</div>
+                    <div class="fw-semibold mt-2">No items match the current filter</div>
+                    <div class="text-muted small">Try another tab, category/product filter, or search term.</div>
                 </div>
             }
             else
@@ -97,10 +164,16 @@
                                     </div>
                                     <div class="min-w-0 flex-grow-1">
                                         <div class="fw-bold text-truncate" style="color: #0A2B1D; font-size: .88rem;">@p.Name</div>
-                                        @if (!string.IsNullOrWhiteSpace(p.ItemCode))
-                                        {
-                                            <div class="text-muted" style="font-size: .7rem;">@p.ItemCode</div>
-                                        }
+                                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                                            @if (!string.IsNullOrWhiteSpace(p.ItemCode))
+                                            {
+                                                <span class="text-muted" style="font-size: .7rem;">@p.ItemCode</span>
+                                            }
+                                            <span class="badge @(p.IsTaxable ? "bg-light text-success border border-success-subtle" : "bg-light text-secondary border")"
+                                                  style="font-size: .62rem; padding: 1px 5px;">
+                                                @(p.IsTaxable ? "12% VAT" : "VAT-Exempt")
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -132,7 +205,7 @@
                 </span>
                 @if (lines.Count > 0)
                 {
-                    <span class="small fw-semibold" style="color: #1B5E34;">Items total: @Peso(Subtotal)</span>
+                    <span class="small fw-semibold" style="color: #1B5E34;">Items total: @Peso(GrossSubtotal)</span>
                 }
             </div>
 
@@ -151,6 +224,7 @@
                         <thead>
                             <tr>
                                 <th>Item</th>
+                                <th>Tax</th>
                                 <th>Qty</th>
                                 <th>Unit price (₱)</th>
                                 <th>Item total</th>
@@ -178,6 +252,12 @@
                                                 <div class="sub">@Qty(OnHand(l)) @l.Unit on hand</div>
                                             </div>
                                         </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge @(l.IsTaxable && !IsPwdOrSenior ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary")"
+                                              style="font-size: .7rem;">
+                                            @(l.IsTaxable ? (IsPwdOrSenior ? "Exempt (PWD/SC)" : "12% VAT") : "Exempt")
+                                        </span>
                                     </td>
                                     <td>
                                         <div class="input-group input-group-sm" style="width: 122px;">
@@ -221,7 +301,7 @@
                 <label class="form-label"><i class="bi bi-person text-success me-1"></i>Customer</label>
                 <div class="input-group">
                     <span class="input-group-text bg-white"><i class="bi bi-person text-success"></i></span>
-                    <select class="form-select" @bind="selectedCustomerId">
+                    <select class="form-select" value="@(selectedCustomerId?.ToString() ?? "")" @onchange="OnCustomerChanged">
                         <option value="">Walk-in customer</option>
                         @foreach (var c in customers)
                         {
@@ -232,12 +312,27 @@
             </div>
 
             <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input agri-check" type="checkbox" id="chkPwdSenior"
+                           checked="@IsPwdOrSenior" @onchange="OnPwdSeniorChanged" />
+                    <label class="form-check-label small fw-semibold" for="chkPwdSenior" style="color: #0A2B1D;">
+                        Senior Citizen / PWD (VAT-Exempt + 20% Discount)
+                    </label>
+                </div>
+            </div>
+
+            <div class="mb-3">
                 <label class="form-label"><i class="bi bi-percent text-success me-1"></i>Discount (₱)</label>
                 <div class="input-group">
                     <span class="input-group-text bg-white"><i class="bi bi-tag text-success"></i></span>
                     <input type="number" min="0" step="0.01" class="form-control" placeholder="0.00"
-                           @bind="discountInput" @bind:event="oninput" />
+                           value="@DiscountDisplay"
+                           @oninput="OnManualDiscountInput" />
                 </div>
+                @if (IsPwdOrSenior && !manualDiscountEdited && AutoSeniorPwdDiscount > 0)
+                {
+                    <div class="text-muted small mt-1">Auto 20% Senior/PWD discount: <strong>@Peso(AutoSeniorPwdDiscount)</strong></div>
+                }
             </div>
 
             <div class="mb-3">
@@ -268,7 +363,14 @@
             <hr class="my-3" />
 
             <div class="summary">
-                <div class="row-line"><span>Subtotal</span><span>@Peso(Subtotal)</span></div>
+                <div class="row-line"><span>Gross subtotal</span><span>@Peso(GrossSubtotal)</span></div>
+                <div class="row-line"><span>VAT-exempt sales</span><span>@Peso(VatExemptSales)</span></div>
+                <div class="row-line"><span>Vatable sales</span><span>@Peso(VatableSales)</span></div>
+                <div class="row-line"><span>Tax (12% VAT)</span><span>@Peso(ComputedTax)</span></div>
+                @if (IsPwdOrSenior && VatRemoved > 0)
+                {
+                    <div class="row-line"><span>Less: VAT exemption (SC/PWD)</span><span>– @Peso(VatRemoved)</span></div>
+                }
                 <div class="row-line"><span>Discount</span><span>– @Peso(Discount)</span></div>
                 <div class="row-line total"><span>Total</span><span>@Peso(Total)</span></div>
                 <div class="row-line"><span>Amount paid</span><span>@Peso(Paid)</span></div>
@@ -287,7 +389,7 @@
             }
 
             <div class="d-flex gap-2 mt-3">
-                <button type="button" class="btn-complete flex-grow-1" @onclick="CompleteAsync" disabled="@isSaving">
+                <button type="button" class="btn-complete w-100" @onclick="CompleteAsync" disabled="@isSaving">
                     @if (isSaving)
                     {
                         <span class="spinner-border spinner-border-sm me-1"></span>
@@ -299,9 +401,6 @@
                         <span>Complete sale</span>
                     }
                 </button>
-                <button type="button" class="btn-clear" @onclick="Clear" disabled="@isSaving">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>Clear
-                </button>
             </div>
         </div>
     </div>
@@ -310,8 +409,8 @@
 <!-- AUTO-DISMISS SUCCESSFUL PURCHASE MODAL (~1.5s, NO BUTTON) -->
 @if (showSuccessModal)
 {
-    <div class="modal fade show d-block" style="background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 2100;" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered" style="max-width: 380px;">
+    <div class="modal fade show d-block" style="position: fixed; inset: 0; background-color: rgba(10, 43, 29, 0.65); backdrop-filter: blur(5px); z-index: 2100; display: flex !important; align-items: center; justify-content: center;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered m-0" style="width: 100%; max-width: 380px;">
             <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
                 <div class="rounded-circle d-inline-flex align-items-center justify-content-center mx-auto mb-3"
                      style="width: 72px; height: 72px; background-color: #E8F3EC; color: #1B5E34;">
@@ -326,155 +425,149 @@
     </div>
 }
 
-<!-- RECEIPT MODAL (CONVENIENCE STORE RECEIPT + PRINTABLE) -->
+<!-- RECEIPT MODAL (4-INCH THERMAL ROLL) -->
 @if (receipt != null)
 {
     var totalLineQty = receipt.Lines.Sum(x => x.Qty);
-    var vatableSales = Math.Round(receipt.Total / 1.12m, 2, MidpointRounding.AwayFromZero);
-    var vatAmount = Math.Max(0m, receipt.Total - vatableSales);
 
     <div class="modal-overlay receipt-overlay" @onclick="CloseReceipt">
-        <div class="thermal-receipt-card" @onclick:stopPropagation="true">
-            <div class="receipt-printable">
-                <div class="receipt-header-center">
-                    <div class="receipt-biz-name">@BusinessName</div>
-                    <div class="receipt-branch-line">
-                        <i class="bi bi-building text-success me-1"></i>@receipt.Branch
-                    </div>
-                    @if (!string.IsNullOrWhiteSpace(receipt.BranchAddress))
-                    {
-                        <div class="receipt-address-line">
-                            <i class="bi bi-geo-alt text-success me-1"></i>@receipt.BranchAddress
-                        </div>
-                    }
-                    <div class="receipt-doc-tag">OFFICIAL SALES RECEIPT</div>
-                </div>
+        <div class="receipt-wrap" @onclick:stopPropagation="true">
 
-                <div class="receipt-dash"></div>
-
-                <div class="receipt-info-list">
-                    <div class="receipt-info-row">
-                        <span>Sale No.</span>
-                        <strong>@receipt.No</strong>
-                    </div>
-                    <div class="receipt-info-row">
-                        <span>Date &amp; Time</span>
-                        <strong>@receipt.Date.ToString("MMM d, yyyy · hh:mm tt", Inv)</strong>
-                    </div>
-                    <div class="receipt-info-row">
-                        <span>Staff</span>
-                        <strong>@(string.IsNullOrWhiteSpace(receipt.By) ? "—" : receipt.By)</strong>
-                    </div>
-                    <div class="receipt-info-row">
-                        <span>Customer</span>
-                        <strong>@receipt.Customer</strong>
-                    </div>
-                </div>
-
-                <div class="receipt-dash"></div>
-
-                <table class="thermal-items-table">
-                    <thead>
-                        <tr>
-                            <th>Item</th>
-                            <th class="text-end">Price</th>
-                            <th class="text-end">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var r in receipt.Lines)
+            @* Only this card is sent to the printer (see wwwroot/js/receipt-print.js) *@
+            <div class="thermal-receipt-card" id="receipt-print-area">
+                <div class="receipt-printable">
+                    <div class="receipt-header-center">
+                        <div class="receipt-biz-name">@BusinessName</div>
+                        <div class="receipt-branch-line">@receipt.Branch</div>
+                        @if (!string.IsNullOrWhiteSpace(receipt.BranchAddress))
                         {
-                            <tr>
-                                <td colspan="3" class="thermal-item-name">
-                                    @r.Name <span class="thermal-qty-inline">(@Qty(r.Qty) @r.Unit)</span>
-                                </td>
-                            </tr>
-                            <tr class="thermal-item-subrow">
-                                <td class="thermal-calc-cell">@Qty(r.Qty) @r.Unit × @Peso(r.Price)</td>
-                                <td class="thermal-num-cell">@Peso(r.Price)</td>
-                                <td class="thermal-num-cell fw-bold">@Peso(r.Qty * r.Price)</td>
-                            </tr>
+                            <div class="receipt-address-line">@receipt.BranchAddress</div>
                         }
-                    </tbody>
-                </table>
-
-                <div class="receipt-dash"></div>
-
-                <div class="receipt-totals">
-                    <div class="r-row">
-                        <span>Items / Qty</span>
-                        <strong>@receipt.Lines.Count @(receipt.Lines.Count == 1 ? "item" : "items") (@Qty(totalLineQty) total)</strong>
+                        <div class="receipt-doc-tag">OFFICIAL SALES RECEIPT</div>
                     </div>
-                </div>
 
-                <div class="receipt-dash"></div>
+                    <div class="receipt-dash"></div>
 
-                <div class="receipt-totals">
-                    <div class="r-row">
-                        <span>Subtotal</span>
-                        <span>@Peso(receipt.Subtotal)</span>
+                    <div class="receipt-info-list">
+                        <div class="receipt-info-row">
+                            <span>Sale No.</span>
+                            <strong>@receipt.No</strong>
+                        </div>
+                        <div class="receipt-info-row">
+                            <span>Date &amp; Time</span>
+                            <strong>@receipt.Date.ToString("MMM d, yyyy · hh:mm tt", Inv)</strong>
+                        </div>
+                        <div class="receipt-info-row">
+                            <span>Staff</span>
+                            <strong>@(string.IsNullOrWhiteSpace(receipt.By) ? "—" : receipt.By)</strong>
+                        </div>
+                        <div class="receipt-info-row">
+                            <span>Customer</span>
+                            <strong>@receipt.Customer@(receipt.IsPwdOrSenior ? " (PWD/SC)" : "")</strong>
+                        </div>
                     </div>
-                    <div class="r-row">
-                        <span>Discount</span>
-                        <span>– @Peso(receipt.Discount)</span>
-                    </div>
-                    <div class="r-row">
-                        <span>Vatable Sales</span>
-                        <span>@Peso(vatableSales)</span>
-                    </div>
-                    <div class="r-row">
-                        <span>VAT (12%)</span>
-                        <span>@Peso(vatAmount)</span>
-                    </div>
-                    <div class="receipt-dash my-1"></div>
-                    <div class="r-row grand">
-                        <span>TOTAL</span>
-                        <span>@Peso(receipt.Total)</span>
-                    </div>
-                </div>
 
-                <div class="receipt-dash"></div>
+                    <div class="receipt-dash"></div>
 
-                <div class="receipt-totals">
-                    <div class="r-row">
-                        <span>Paid (@Cap(receipt.Method))</span>
-                        <span>@Peso(receipt.Paid)</span>
+                    <table class="thermal-items-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in receipt.Lines)
+                            {
+                                <tr>
+                                    <td colspan="2" class="thermal-item-name">@r.Name</td>
+                                </tr>
+                                <tr class="thermal-item-subrow">
+                                    <td class="thermal-calc-cell">@Qty(r.Qty) @r.Unit × @Peso(r.Price)</td>
+                                    <td class="thermal-num-cell fw-bold">@Peso(LineAmt(r.Qty, r.Price))</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <div class="receipt-dash"></div>
+
+                    <div class="receipt-totals">
+                        <div class="r-row">
+                            <span>Items / Qty</span>
+                            <strong>@receipt.Lines.Count @(receipt.Lines.Count == 1 ? "item" : "items") (@Qty(totalLineQty) total)</strong>
+                        </div>
                     </div>
-                    <div class="r-row">
-                        <span>Balance</span>
-                        <span class="@(receipt.Balance > 0 ? "text-warn" : "")">@Peso(receipt.Balance)</span>
+
+                    <div class="receipt-dash"></div>
+
+                    <div class="receipt-totals">
+                        <div class="r-row">
+                            <span>Gross Subtotal</span>
+                            <span>@Peso(receipt.Subtotal)</span>
+                        </div>
+                        <div class="r-row">
+                            <span>VAT-Exempt Sales</span>
+                            <span>@Peso(receipt.VatExemptSales)</span>
+                        </div>
+                        <div class="r-row">
+                            <span>Vatable Sales</span>
+                            <span>@Peso(receipt.VatableSales)</span>
+                        </div>
+                        <div class="r-row">
+                            <span>VAT (12%)</span>
+                            <span>@Peso(receipt.TaxAmount)</span>
+                        </div>
+                        @if (receipt.IsPwdOrSenior && receipt.VatRemoved > 0)
+                        {
+                            <div class="r-row">
+                                <span>Less: VAT Exemption</span>
+                                <span>– @Peso(receipt.VatRemoved)</span>
+                            </div>
+                        }
+                        <div class="r-row">
+                            <span>@(receipt.IsPwdOrSenior ? "Less: SC/PWD Discount" : "Less: Discount")</span>
+                            <span>– @Peso(receipt.Discount)</span>
+                        </div>
+                        <div class="receipt-dash my-1"></div>
+                        <div class="r-row grand">
+                            <span>TOTAL</span>
+                            <span>@Peso(receipt.Total)</span>
+                        </div>
                     </div>
-                    <div class="r-row">
-                        <span>Change</span>
-                        <span>@Peso(receipt.Change)</span>
+
+                    <div class="receipt-dash"></div>
+
+                    <div class="receipt-totals">
+                        <div class="r-row">
+                            <span>Paid (@Cap(receipt.Method))</span>
+                            <span>@Peso(receipt.Paid)</span>
+                        </div>
+                        <div class="r-row">
+                            <span>Balance</span>
+                            <span class="@(receipt.Balance > 0 ? "text-warn" : "")">@Peso(receipt.Balance)</span>
+                        </div>
+                        <div class="r-row">
+                            <span>Change</span>
+                            <span>@Peso(receipt.Change)</span>
+                        </div>
                     </div>
-                </div>
 
-                <div class="receipt-dash"></div>
+                    <div class="receipt-dash"></div>
 
-                <div class="d-flex justify-content-between align-items-center mt-2">
-                    <span class="small text-muted fw-semibold">Status:</span>
-                    <span class="pill @(receipt.Balance <= 0 ? "pill-green" : receipt.Paid > 0 ? "pill-yellow" : "pill-red")">
-                        <i class="bi @(receipt.Balance <= 0 ? "bi-check-circle" : receipt.Paid > 0 ? "bi-clock-history" : "bi-exclamation-circle") me-1"></i>
-                        @(receipt.Balance <= 0 ? "Paid" : receipt.Paid > 0 ? "Partial" : "Unpaid")
-                    </span>
-                </div>
-
-                <div class="receipt-dash"></div>
-
-                <div class="receipt-footer-note">
-                    Thank you for your purchase!
+                    <div class="receipt-footer-note">
+                        Thank you for your purchase!
+                    </div>
+                    <div class="receipt-cut-space"></div>
                 </div>
             </div>
 
-            <div class="receipt-actions no-print d-flex justify-content-between align-items-center gap-2 mt-3">
+            <div class="receipt-actions">
                 <button type="button" class="btn-receipt-print" @onclick="PrintReceiptAsync">
-                    <i class="bi bi-printer"></i>
-                    <span>Print</span>
+                    <i class="bi bi-printer"></i>Print again
                 </button>
                 <button type="button" class="btn-receipt-done" @onclick="CloseReceipt">
-                    <i class="bi bi-check2-circle"></i>
-                    <span>Done</span>
+                    <i class="bi bi-check2"></i>Done
                 </button>
             </div>
         </div>
@@ -483,7 +576,7 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+    <div class="toast-note" style="position: fixed; bottom: 20px; right: 20px; z-index: 2300;"><i class="bi bi-check-circle-fill"></i> @toast</div>
 }
 
 @code {
@@ -492,10 +585,14 @@
         public int ItemId { get; set; }
         public string Name { get; set; } = "";
         public string? ItemCode { get; set; }
+        public string Category { get; set; } = "";
+        public string ItemType { get; set; } = "SUPPLY";
+        public bool IsFromHarvestRecord { get; set; }
         public string Unit { get; set; } = "kg";
         public decimal AvailableQty { get; set; }
         public decimal SellingPrice { get; set; }
         public string? ImageUrl { get; set; }
+        public bool IsTaxable { get; set; } = true;
     }
 
     class CustomerRec
@@ -504,6 +601,7 @@
         public object? Entity { get; set; }
         public string Name { get; set; } = "";
         public decimal Balance { get; set; }
+        public bool IsPwdOrSenior { get; set; }
     }
 
     class SaleLine
@@ -514,6 +612,7 @@
         public string? ImageUrl { get; set; }
         public decimal? Qty { get; set; }
         public decimal? Price { get; set; }
+        public bool IsTaxable { get; set; } = true;
     }
 
     class ReceiptLine
@@ -522,6 +621,7 @@
         public string Unit { get; set; } = "kg";
         public decimal Qty { get; set; }
         public decimal Price { get; set; }
+        public bool IsTaxable { get; set; } = true;
     }
 
     class SaleRec
@@ -533,8 +633,13 @@
         public string Customer { get; set; } = "";
         public string By { get; set; } = "";
         public string Method { get; set; } = "cash";
+        public bool IsPwdOrSenior { get; set; }
         public List<ReceiptLine> Lines { get; set; } = new();
         public decimal Subtotal { get; set; }
+        public decimal VatExemptSales { get; set; }
+        public decimal VatableSales { get; set; }
+        public decimal TaxAmount { get; set; }
+        public decimal VatRemoved { get; set; }
         public decimal Discount { get; set; }
         public decimal Total { get; set; }
         public decimal Paid { get; set; }
@@ -546,7 +651,15 @@
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     static readonly string[] MethodOptions = { "cash", "gcash", "bank", "check", "credit" };
+    static readonly string[] InventorySubCategories = { "seeds", "fertilizer", "produce", "pesticide", "tools", "fuel", "packaging", "supplies" };
     const string WalkIn = "Walk-in customers";
+
+    // Tax / discount settings
+    const decimal VatRate = 0.12m;
+    const decimal SeniorPwdRate = 0.20m;
+
+    // Receipt paper width in millimetres (4 inch roll ≈ 100 mm). Use 80 for a 3-inch roll.
+    const int ReceiptWidthMm = 100;
 
     long currentBusinessId;
     long? currentBranchId;
@@ -554,8 +667,16 @@
     string ActiveBranch = "All Branches";
     string BranchAddress = "";
 
-    int? selectedProduceId;
+    string mainTab = "inventory";
+    string selectedInventoryCategory = "";
+    string selectedHarvestProduct = "";
+    HashSet<string> activeHarvestNames = new(StringComparer.OrdinalIgnoreCase);
+    HashSet<int> activeHarvestItemIds = new();
+
     int? selectedCustomerId;
+    bool isPwdOrSenior;
+    bool manualDiscountEdited;
+    string discountText = "";
     string produceSearch = "";
     decimal? discountInput;
     decimal? paidInput;
@@ -639,6 +760,8 @@
                          ?? "";
         }
 
+        await LoadActiveHarvestsAsync();
+
         var items = await DbContext.InventoryItems
             .Where(i => i.BusinessId == currentBusinessId && !i.IsArchived && i.QuantityOnHand > 0)
             .OrderBy(i => i.ItemName)
@@ -648,20 +771,110 @@
         foreach (var i in items)
         {
             var sellPrice = i.SellingPrice > 0 ? i.SellingPrice : i.UnitCost;
+            var isHarvestProduce = string.Equals(i.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase)
+                                   || activeHarvestItemIds.Contains(i.ItemId)
+                                   || (i.HarvestId.HasValue && i.HarvestId.Value > 0);
+
             catalog.Add(new ProduceCardItem
             {
                 ItemId = i.ItemId,
                 Name = i.ItemName,
                 ItemCode = i.ItemCode,
+                Category = (i.Category ?? "").Trim(),
+                ItemType = (i.ItemType ?? "SUPPLY").Trim(),
+                IsFromHarvestRecord = isHarvestProduce,
                 Unit = string.IsNullOrWhiteSpace(i.Unit) ? "kg" : i.Unit.Trim(),
                 AvailableQty = i.QuantityOnHand,
                 SellingPrice = sellPrice,
-                ImageUrl = i.ImageUrl
+                ImageUrl = i.ImageUrl,
+                IsTaxable = DetermineItemTaxable(i)
             });
         }
 
+        if (!string.IsNullOrEmpty(selectedHarvestProduct) && !HarvestSubProducts.Contains(selectedHarvestProduct))
+            selectedHarvestProduct = "";
+
         await LoadCustomersAsync();
         saleSeq = await GetNextSaleSequenceAsync();
+    }
+
+    private async Task LoadActiveHarvestsAsync()
+    {
+        activeHarvestNames.Clear();
+        activeHarvestItemIds.Clear();
+
+        var harvestProp = DbContext.GetType().GetProperties()
+            .FirstOrDefault(p => p.Name.Equals("HarvestRecords", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("RecordHarvests", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("Harvests", StringComparison.OrdinalIgnoreCase));
+
+        if (harvestProp?.GetValue(DbContext) is not IQueryable rawQuery)
+            return;
+
+        var list = await rawQuery.Cast<object>().ToListAsync();
+        foreach (var h in list)
+        {
+            var t = h.GetType();
+
+            var isArchProp = t.GetProperty("IsArchived");
+            if (isArchProp != null && isArchProp.GetValue(h) is bool arch && arch)
+                continue;
+
+            var statusStr = t.GetProperty("Status")?.GetValue(h)?.ToString();
+            if (string.Equals(statusStr, "archived", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(statusStr, "deleted", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(statusStr, "cancelled", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var nameVal = t.GetProperty("ProduceName")?.GetValue(h)?.ToString()
+                       ?? t.GetProperty("ProductName")?.GetValue(h)?.ToString()
+                       ?? t.GetProperty("CropName")?.GetValue(h)?.ToString()
+                       ?? t.GetProperty("ItemName")?.GetValue(h)?.ToString()
+                       ?? t.GetProperty("Name")?.GetValue(h)?.ToString();
+
+            if (!string.IsNullOrWhiteSpace(nameVal))
+                activeHarvestNames.Add(nameVal.Trim());
+
+            var itemIdObj = t.GetProperty("InventoryItemId")?.GetValue(h) ?? t.GetProperty("ItemId")?.GetValue(h);
+            if (itemIdObj != null && int.TryParse(itemIdObj.ToString(), out var itemId) && itemId > 0)
+                activeHarvestItemIds.Add(itemId);
+        }
+    }
+
+    void SelectMainTab(string tab)
+    {
+        mainTab = tab;
+        if (tab == "inventory")
+            selectedHarvestProduct = "";
+        else
+            selectedInventoryCategory = "";
+    }
+
+    IEnumerable<string> HarvestSubProducts => catalog
+        .Where(p => p.IsFromHarvestRecord)
+        .Select(p => p.Name.Trim())
+        .Where(n => !string.IsNullOrWhiteSpace(n) && (activeHarvestNames.Count == 0 || activeHarvestNames.Contains(n)))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
+
+    private static bool DetermineItemTaxable(InventoryItem item)
+    {
+        // All harvested produce items are VAT-exempt
+        if (string.Equals(item.ItemType, "PRODUCE", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var cat = (item.Category ?? "").Trim().ToLowerInvariant();
+
+        // VAT-exempt categories
+        if (cat is "seeds" or "fertilizer" or "produce")
+            return false;
+
+        // 12% VAT categories (pesticide, tools, fuel, packaging, supplies, etc.)
+        if (cat is "pesticide" or "tools" or "fuel" or "packaging" or "supplies")
+            return true;
+
+        // Fallback for any unrecognized category
+        return true;
     }
 
     private async Task LoadCustomersAsync()
@@ -713,12 +926,26 @@
                     name = $"Customer #{id}";
 
                 decimal.TryParse(balProp?.GetValue(c)?.ToString(), NumberStyles.Any, Inv, out var bal);
+
+                var typeOrDiscountText = string.Join(" ",
+                    t.GetProperty("CustomerType")?.GetValue(c)?.ToString() ?? "",
+                    t.GetProperty("Type")?.GetValue(c)?.ToString() ?? "",
+                    t.GetProperty("Category")?.GetValue(c)?.ToString() ?? "",
+                    t.GetProperty("Notes")?.GetValue(c)?.ToString() ?? "",
+                    name
+                ).ToLowerInvariant();
+
+                var pwdOrSeniorFlag = typeOrDiscountText.Contains("senior")
+                                   || typeOrDiscountText.Contains("pwd")
+                                   || typeOrDiscountText.Contains("person with disability");
+
                 customers.Add(new CustomerRec
                 {
                     Id = id,
                     Entity = c,
                     Name = name.Trim(),
-                    Balance = bal
+                    Balance = bal,
+                    IsPwdOrSenior = pwdOrSeniorFlag
                 });
             }
         }
@@ -728,50 +955,122 @@
 
     private async Task<int> GetNextSaleSequenceAsync()
     {
-        var prop = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .FirstOrDefault(p => p.Name.Equals("SalesOrders", StringComparison.OrdinalIgnoreCase)
-                              || p.Name.Equals("Sales", StringComparison.OrdinalIgnoreCase));
-
-        if (prop?.GetValue(DbContext) is IQueryable queryable)
+        var orders = await DbContext.SalesOrders.AsNoTracking().ToListAsync();
+        var max = 0;
+        foreach (var s in orders)
         {
-            var list = await queryable.Cast<object>().ToListAsync();
-            var max = 0;
-            foreach (var s in list)
+            if (!string.IsNullOrWhiteSpace(s.ReferenceNumber) && s.ReferenceNumber.StartsWith("SO-", StringComparison.OrdinalIgnoreCase))
             {
-                var no = s.GetType().GetProperty("SaleNumber")?.GetValue(s)?.ToString()
-                      ?? s.GetType().GetProperty("OrderNumber")?.GetValue(s)?.ToString()
-                      ?? s.GetType().GetProperty("SaleNo")?.GetValue(s)?.ToString();
-                if (!string.IsNullOrWhiteSpace(no) && no.StartsWith("SO-", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (int.TryParse(no.Substring(3), out var n))
-                        max = Math.Max(max, n);
-                }
+                if (int.TryParse(s.ReferenceNumber.Substring(3), out var n))
+                    max = Math.Max(max, n);
             }
-            return max + 1;
+            max = Math.Max(max, s.SaleId);
         }
-        return 1;
+        return max + 1;
     }
 
     List<ProduceCardItem> AvailableCatalog
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(produceSearch))
-                return catalog;
+            var hasSearch = !string.IsNullOrWhiteSpace(produceSearch);
+            IEnumerable<ProduceCardItem> query = catalog;
 
-            return catalog.Where(p =>
-                p.Name.Contains(produceSearch, StringComparison.OrdinalIgnoreCase) ||
-                (p.ItemCode ?? "").Contains(produceSearch, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (!hasSearch)
+            {
+                if (mainTab == "inventory")
+                {
+                    query = query.Where(p => !p.IsFromHarvestRecord);
+                    if (!string.IsNullOrEmpty(selectedInventoryCategory))
+                        query = query.Where(p => string.Equals(p.Category, selectedInventoryCategory, StringComparison.OrdinalIgnoreCase));
+                }
+                else
+                {
+                    query = query.Where(p => p.IsFromHarvestRecord);
+                    if (!string.IsNullOrEmpty(selectedHarvestProduct))
+                        query = query.Where(p => string.Equals(p.Name.Trim(), selectedHarvestProduct.Trim(), StringComparison.OrdinalIgnoreCase));
+                }
+            }
+            else
+            {
+                query = query.Where(p =>
+                    p.Name.Contains(produceSearch, StringComparison.OrdinalIgnoreCase) ||
+                    (p.ItemCode ?? "").Contains(produceSearch, StringComparison.OrdinalIgnoreCase) ||
+                    p.Category.Contains(produceSearch, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return query.ToList();
         }
     }
 
-    // ---------- COMPUTED ----------
-    decimal Subtotal => lines.Sum(LineTotal);
-    decimal Discount => Math.Max(0, discountInput ?? 0);
-    decimal Total => Math.Max(0, Subtotal - Discount);
-    decimal Paid => Math.Max(0, paidInput ?? 0);
-    decimal Balance => Math.Max(0, Total - Paid);
-    decimal Change => Math.Max(0, Paid - Total);
+    // =====================================================================
+    //  COMPUTATION
+    //  Item prices are VAT-INCLUSIVE for taxable items.
+    //
+    //  Regular customer:
+    //      vatable sales = price / 1.12, VAT = price - vatable sales
+    //      exempt items are added as-is
+    //      Total = vatable + VAT + exempt - discount
+    //
+    //  Senior / PWD:
+    //      VAT is removed from taxable items (price / 1.12 becomes VAT-exempt sales)
+    //      20% discount is computed on the VAT-exempt sales
+    //      Total = exempt sales - discount
+    // =====================================================================
+
+    static decimal R2(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
+    static decimal NetOfVat(decimal gross) => R2(gross / (1m + VatRate));
+    static decimal LineAmt(decimal qty, decimal price) => R2(qty * price);
+    static decimal LineTotal(SaleLine l) => LineAmt(l.Qty ?? 0, l.Price ?? 0);
+
+    bool IsPwdOrSenior => isPwdOrSenior || (SelectedCustomer?.IsPwdOrSenior ?? false);
+
+    // Price x qty of everything (VAT-inclusive for taxable items)
+    decimal GrossSubtotal => lines.Sum(l => LineTotal(l));
+
+    // Amounts BEFORE any discount
+    decimal RawVatable => IsPwdOrSenior
+        ? 0m
+        : lines.Where(l => l.IsTaxable).Sum(l => NetOfVat(LineTotal(l)));
+
+    decimal RawVat => IsPwdOrSenior
+        ? 0m
+        : lines.Where(l => l.IsTaxable).Sum(l => LineTotal(l) - NetOfVat(LineTotal(l)));
+
+    decimal RawExempt => lines.Sum(l =>
+        !l.IsTaxable ? LineTotal(l) : (IsPwdOrSenior ? NetOfVat(LineTotal(l)) : 0m));
+
+    // VAT taken out for Senior/PWD
+    decimal VatRemoved => IsPwdOrSenior
+        ? lines.Where(l => l.IsTaxable).Sum(l => LineTotal(l) - NetOfVat(LineTotal(l)))
+        : 0m;
+
+    // What the customer would pay before any discount
+    decimal BaseAmount => RawVatable + RawVat + RawExempt;
+
+    decimal AutoSeniorPwdDiscount => IsPwdOrSenior ? R2(RawExempt * SeniorPwdRate) : 0m;
+
+    // Auto discount (Senior/PWD) unless the cashier typed a manual amount
+    decimal Discount => Math.Max(0m, manualDiscountEdited ? (discountInput ?? 0m) : AutoSeniorPwdDiscount);
+
+    decimal Total => Math.Max(0m, R2(BaseAmount - Discount));
+
+    // For a regular (non Senior/PWD) discount, the VAT base shrinks proportionally
+    decimal DiscountFactor => (!IsPwdOrSenior && BaseAmount > 0m)
+        ? Math.Max(0m, 1m - (Discount / BaseAmount))
+        : 1m;
+
+    decimal VatableSales => R2(RawVatable * DiscountFactor);
+    decimal VatExemptSales => R2(RawExempt * DiscountFactor);
+    decimal ComputedTax => IsPwdOrSenior ? 0m : Math.Max(0m, Total - VatableSales - VatExemptSales);
+
+    decimal Paid => Math.Max(0m, paidInput ?? 0m);
+    decimal Balance => Math.Max(0m, R2(Total - Paid));
+    decimal Change => Math.Max(0m, R2(Paid - Total));
+
+    string DiscountDisplay => manualDiscountEdited
+        ? discountText
+        : (AutoSeniorPwdDiscount > 0 ? AutoSeniorPwdDiscount.ToString("0.00", Inv) : "");
 
     string NextNo => "SO-" + saleSeq.ToString("0000");
 
@@ -798,19 +1097,16 @@
                 else if (LineQtyBad(l)) list.Add(l.Name + ": only " + Qty(OnHand(l)) + " " + l.Unit + " available.");
                 if ((l.Price ?? 0) < 0) list.Add(l.Name + ": price can’t be negative.");
             }
-            if (Discount > Subtotal) list.Add("Discount can’t be more than the subtotal.");
+            if (Discount > BaseAmount) list.Add("Discount can’t be more than the amount due.");
             if (Balance > 0 && SelectedCustomer == null)
                 list.Add("Select a customer to leave a balance, or pay in full.");
             return list;
         }
     }
 
-    // ---------- HELPERS ----------
     static string Cap(string? s) => string.IsNullOrWhiteSpace(s) ? "" : char.ToUpper(s[0]) + s.Substring(1);
     static string Qty(decimal v) => v.ToString("#,##0.##", Inv);
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
-
-    static decimal LineTotal(SaleLine l) => (l.Qty ?? 0) * (l.Price ?? 0);
 
     ProduceCardItem? Find(int itemId) => catalog.FirstOrDefault(p => p.ItemId == itemId);
 
@@ -818,10 +1114,47 @@
 
     bool LineQtyBad(SaleLine l) => (l.Qty ?? 0) > OnHand(l);
 
-    static string CustomerLabel(CustomerRec c) =>
-        c.Balance > 0 ? c.Name + " · " + Peso(c.Balance) + " balance" : c.Name;
+    static string CustomerLabel(CustomerRec c)
+    {
+        var tag = c.IsPwdOrSenior ? " · PWD/Senior" : "";
+        return c.Balance > 0 ? c.Name + tag + " · " + Peso(c.Balance) + " balance" : c.Name + tag;
+    }
 
-    // ---------- ACTIONS ----------
+    void OnCustomerChanged(ChangeEventArgs e)
+    {
+        selectedCustomerId = int.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        if (SelectedCustomer?.IsPwdOrSenior == true)
+            isPwdOrSenior = true;
+    }
+
+    void OnPwdSeniorChanged(ChangeEventArgs e)
+    {
+        isPwdOrSenior = e.Value is bool b && b;
+
+        // go back to the automatic discount
+        manualDiscountEdited = false;
+        discountText = "";
+        discountInput = null;
+    }
+
+    void OnManualDiscountInput(ChangeEventArgs e)
+    {
+        discountText = e.Value?.ToString() ?? "";
+
+        // empty box = back to the automatic discount
+        if (string.IsNullOrWhiteSpace(discountText))
+        {
+            manualDiscountEdited = false;
+            discountInput = null;
+            return;
+        }
+
+        manualDiscountEdited = true;
+        discountInput = decimal.TryParse(discountText, NumberStyles.Any, Inv, out var val)
+            ? Math.Max(0m, val)
+            : 0m;
+    }
+
     void AddProduceCard(ProduceCardItem p)
     {
         var existing = lines.FirstOrDefault(l => l.ItemId == p.ItemId);
@@ -839,7 +1172,8 @@
                 Unit = p.Unit,
                 ImageUrl = p.ImageUrl,
                 Qty = 1,
-                Price = p.SellingPrice
+                Price = p.SellingPrice,
+                IsTaxable = p.IsTaxable
             });
         }
     }
@@ -851,8 +1185,10 @@
     void Clear()
     {
         lines.Clear();
-        selectedProduceId = null;
         selectedCustomerId = null;
+        isPwdOrSenior = false;
+        manualDiscountEdited = false;
+        discountText = "";
         discountInput = null;
         paidInput = null;
         method = "cash";
@@ -865,14 +1201,16 @@
         if (Errors.Count > 0 || isSaving) return;
 
         isSaving = true;
+        SaleRec? saleRecord = null;
         try
         {
             var saleNo = NextNo;
             var saleDate = DateTime.Now;
             var servedBy = Auth.CurrentUserName ?? "";
             var custName = SelectedCustomer?.Name ?? WalkIn;
+            var snapshotLines = lines.ToList();
 
-            var saleRecord = new SaleRec
+            saleRecord = new SaleRec
             {
                 No = saleNo,
                 Date = saleDate,
@@ -881,14 +1219,20 @@
                 Customer = custName,
                 By = servedBy,
                 Method = method,
-                Lines = lines.Select(l => new ReceiptLine
+                IsPwdOrSenior = IsPwdOrSenior,
+                Lines = snapshotLines.Select(l => new ReceiptLine
                 {
                     Name = l.Name,
                     Unit = l.Unit,
                     Qty = l.Qty ?? 0,
-                    Price = l.Price ?? 0
+                    Price = l.Price ?? 0,
+                    IsTaxable = l.IsTaxable
                 }).ToList(),
-                Subtotal = Subtotal,
+                Subtotal = GrossSubtotal,
+                VatExemptSales = VatExemptSales,
+                VatableSales = VatableSales,
+                TaxAmount = ComputedTax,
+                VatRemoved = VatRemoved,
                 Discount = Discount,
                 Total = Total,
                 Paid = Paid,
@@ -896,19 +1240,16 @@
                 Change = Change
             };
 
-            // 1. Auto-deduct from InventoryItems in database
-            foreach (var l in lines)
+            foreach (var l in snapshotLines)
             {
                 var qtyToDeduct = l.Qty ?? 0;
                 var dbItem = await DbContext.InventoryItems.FindAsync(l.ItemId);
                 if (dbItem != null)
                 {
                     dbItem.QuantityOnHand = Math.Max(0, dbItem.QuantityOnHand - qtyToDeduct);
-                    DbContext.InventoryItems.Update(dbItem);
                 }
             }
 
-            // 2. Update customer balance if unpaid balance remains
             if (Balance > 0 && SelectedCustomer?.Entity != null)
             {
                 var cType = SelectedCustomer.Entity.GetType();
@@ -924,149 +1265,126 @@
                         balProp.SetValue(SelectedCustomer.Entity, newBal);
                     else if (underlying == typeof(double))
                         balProp.SetValue(SelectedCustomer.Entity, Convert.ToDouble(newBal, Inv));
-
-                    DbContext.Update(SelectedCustomer.Entity);
                 }
             }
 
-            // 3. Save SalesOrder & SalesItem rows if present in DbContext
-            await TrySaveSalesOrderAsync(saleRecord);
+            await TrySaveSalesOrderAsync(saleRecord, snapshotLines);
 
             await DbContext.SaveChangesAsync();
 
             Clear();
             await LoadDataAsync();
 
-            // Show auto-dismissing Successful Purchase modal (~1.5s), then open Receipt
             lastSaleNo = saleNo;
             showSuccessModal = true;
             await InvokeAsync(StateHasChanged);
 
             await Task.Delay(1500);
+
             showSuccessModal = false;
             receipt = saleRecord;
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
-            await ShowToast("Error completing sale: " + ex.Message);
+            saleRecord = null;
+            var errMsg = ex.InnerException?.Message ?? ex.Message;
+            await ShowToast("Error completing sale: " + errMsg);
         }
         finally
         {
             isSaving = false;
         }
+
+        // Print AFTER the sale is saved, so a printer problem never looks like a failed sale
+        if (saleRecord != null)
+        {
+            await Task.Delay(150);
+            await PrintReceiptAsync();
+        }
     }
 
     async Task PrintReceiptAsync()
     {
-        await JS.InvokeVoidAsync("window.print");
-    }
-
-    private static void TrySetProp(object target, string propName, object? value, params string[] aliases)
-    {
-        var allNames = new[] { propName }.Concat(aliases);
-        var prop = target.GetType()
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .FirstOrDefault(p => p.CanWrite && allNames.Any(a => p.Name.Equals(a, StringComparison.OrdinalIgnoreCase)));
-
-        if (prop == null) return;
-
-        if (value == null)
-        {
-            var targetType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
-            if (!prop.PropertyType.IsValueType || Nullable.GetUnderlyingType(prop.PropertyType) != null)
-            {
-                prop.SetValue(target, null);
-            }
-            else if (targetType == typeof(int)) prop.SetValue(target, 0);
-            else if (targetType == typeof(long)) prop.SetValue(target, 0L);
-            else if (targetType == typeof(decimal)) prop.SetValue(target, 0m);
-            return;
-        }
-
-        var underlying = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
         try
         {
-            if (underlying.IsInstanceOfType(value))
-            {
-                prop.SetValue(target, value);
-            }
-            else if (underlying == typeof(long))
-            {
-                prop.SetValue(target, Convert.ToInt64(value, Inv));
-            }
-            else if (underlying == typeof(int))
-            {
-                prop.SetValue(target, Convert.ToInt32(value, Inv));
-            }
-            else if (underlying == typeof(decimal))
-            {
-                prop.SetValue(target, Convert.ToDecimal(value, Inv));
-            }
-            else if (underlying == typeof(DateTime))
-            {
-                prop.SetValue(target, Convert.ToDateTime(value, Inv));
-            }
-            else if (underlying == typeof(string))
-            {
-                prop.SetValue(target, value.ToString());
-            }
+            await JS.InvokeVoidAsync("agriPrintReceipt", "receipt-print-area", ReceiptWidthMm);
         }
-        catch
+        catch (Exception ex)
         {
-            // Skip incompatible property type
+            await ShowToast("Print failed: " + ex.Message);
         }
     }
 
-    private async Task TrySaveSalesOrderAsync(SaleRec saleRecord)
+    private async Task TrySaveSalesOrderAsync(SaleRec saleRecord, List<SaleLine> snapshotLines)
     {
-        var ordersProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .FirstOrDefault(p => p.Name.Equals("SalesOrders", StringComparison.OrdinalIgnoreCase)
-                              || p.Name.Equals("Sales", StringComparison.OrdinalIgnoreCase));
+        var branchIdToSave = currentBranchId ?? 0L;
+        if (branchIdToSave == 0L)
+        {
+            var firstBranch = await DbContext.Branches.FirstOrDefaultAsync(b => b.BusinessId == currentBusinessId);
+            branchIdToSave = firstBranch?.BranchId ?? 0L;
+        }
 
-        if (ordersProp?.GetValue(DbContext) == null) return;
+        var statusStr = saleRecord.Balance <= 0 ? "Paid" : (saleRecord.Paid > 0 ? "Partial" : "Unpaid");
 
-        var orderEntity = new SalesOrder();
-        TrySetProp(orderEntity, "BusinessId", currentBusinessId);
-        TrySetProp(orderEntity, "BranchId", currentBranchId);
-        TrySetProp(orderEntity, "CustomerId", SelectedCustomer?.Id);
-        TrySetProp(orderEntity, "SaleNumber", saleRecord.No, "OrderNumber", "SaleNo", "InvoiceNo", "ReferenceNo");
-        TrySetProp(orderEntity, "SaleDate", saleRecord.Date, "OrderDate", "Date", "CreatedAt");
-        TrySetProp(orderEntity, "Subtotal", saleRecord.Subtotal, "SubTotal");
-        TrySetProp(orderEntity, "Discount", saleRecord.Discount);
-        TrySetProp(orderEntity, "TotalAmount", saleRecord.Total, "Total", "GrandTotal");
-        TrySetProp(orderEntity, "AmountPaid", saleRecord.Paid, "Paid");
-        TrySetProp(orderEntity, "BalanceDue", saleRecord.Balance, "Balance");
-        TrySetProp(orderEntity, "ChangeAmount", saleRecord.Change, "Change");
-        TrySetProp(orderEntity, "PaymentMethod", saleRecord.Method, "Method");
-        TrySetProp(orderEntity, "Status", saleRecord.Balance <= 0 ? "Paid" : (saleRecord.Paid > 0 ? "Partial" : "Unpaid"));
-        TrySetProp(orderEntity, "RecordedBy", saleRecord.By, "ServedBy", "CreatedBy");
+        var orderEntity = new SalesOrder
+        {
+            BranchId = branchIdToSave,
+            CustomerId = SelectedCustomer?.Id ?? 0,
+            ReferenceNumber = saleRecord.No,
+            SaleDate = saleRecord.Date,
+            GrossAmount = saleRecord.Subtotal,
+            DiscountAmount = saleRecord.Discount,
+            TaxAmount = saleRecord.TaxAmount,
+            NetAmount = saleRecord.Total,
+            // the change given back is not part of the amount paid for the sale
+            AmountPaid = Math.Min(saleRecord.Paid, saleRecord.Total),
+            Status = statusStr
+        };
 
-        DbContext.Add(orderEntity);
+        var orderType = orderEntity.GetType();
+        var bizProp = orderType.GetProperty("BusinessId");
+        if (bizProp != null && bizProp.CanWrite)
+        {
+            var uType = Nullable.GetUnderlyingType(bizProp.PropertyType) ?? bizProp.PropertyType;
+            if (uType == typeof(long)) bizProp.SetValue(orderEntity, currentBusinessId);
+            else if (uType == typeof(int)) bizProp.SetValue(orderEntity, (int)currentBusinessId);
+        }
+
+        DbContext.SalesOrders.Add(orderEntity);
         await DbContext.SaveChangesAsync();
 
-        var orderIdProp = orderEntity.GetType().GetProperty("SaleId")
-            ?? orderEntity.GetType().GetProperty("SalesOrderId")
-            ?? orderEntity.GetType().GetProperty("Id");
-
-        var saleId = orderIdProp != null && int.TryParse(orderIdProp.GetValue(orderEntity)?.ToString(), out var id) ? id : 0;
-
-        if (saleId > 0)
+        if (orderEntity.SaleId > 0)
         {
-            foreach (var l in lines)
+            foreach (var l in snapshotLines)
             {
                 var qty = l.Qty ?? 0;
                 var price = l.Price ?? 0;
+                var lineTotal = LineAmt(qty, price);
+                var lineTax = (!l.IsTaxable || saleRecord.IsPwdOrSenior)
+                    ? 0m
+                    : Math.Max(0m, lineTotal - NetOfVat(lineTotal));
+
                 var salesItem = new SalesItem
                 {
-                    SaleId = saleId,
+                    SaleId = orderEntity.SaleId,
                     ItemId = l.ItemId,
                     Unit = l.Unit,
                     Quantity = qty,
                     UnitPrice = price,
-                    Subtotal = qty * price
+                    Subtotal = lineTotal
                 };
-                DbContext.Add(salesItem);
+
+                var itemType = salesItem.GetType();
+                var taxFlagProp = itemType.GetProperty("IsTaxable");
+                if (taxFlagProp != null && taxFlagProp.CanWrite)
+                    taxFlagProp.SetValue(salesItem, l.IsTaxable);
+
+                var taxAmtProp = itemType.GetProperty("TaxAmount");
+                if (taxAmtProp != null && taxAmtProp.CanWrite)
+                    taxAmtProp.SetValue(salesItem, lineTax);
+
+                DbContext.SalesItems.Add(salesItem);
             }
         }
     }

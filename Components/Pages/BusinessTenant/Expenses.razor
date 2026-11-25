@@ -1,7 +1,6 @@
 ﻿@page "/expenses"
 @layout MainLayout
 @using System.Globalization
-@using System.Reflection
 @using Microsoft.EntityFrameworkCore
 @using AgriNexus.DataLayer
 @using AgriNexus.DataLayer.Models
@@ -139,7 +138,7 @@
                                             <i class="bi bi-pencil-square text-success"></i> Edit
                                         </button>
 
-                                        @if (IsBusinessTenant)
+                                        @if (IsBusinessTenant && x.Status == "pending")
                                         {
                                             <button type="button" class="row-menu-item text-success" @onclick="() => AcceptExpenseAsync(x)">
                                                 <i class="bi bi-check-circle"></i> Accept
@@ -149,9 +148,12 @@
                                             </button>
                                         }
 
-                                        <button type="button" class="row-menu-item" @onclick="() => MarkPaidAsync(x)">
-                                            <i class="bi bi-cash-coin text-success"></i> Mark as paid
-                                        </button>
+                                        @if (x.Status != "paid" && x.Status != "rejected")
+                                        {
+                                            <button type="button" class="row-menu-item" @onclick="() => MarkPaidAsync(x)">
+                                                <i class="bi bi-cash-coin text-success"></i> Mark as paid
+                                            </button>
+                                        }
 
                                         <div class="menu-sep"></div>
                                         <button type="button" class="row-menu-item text-danger" @onclick="() => PromptArchive(x)">
@@ -221,7 +223,6 @@
                 <div class="col-md-6">
                     <label class="form-label">Category</label>
                     <select class="form-select" @bind="form.Category">
-                        <option value="">Select...</option>
                         @foreach (var c in CategoryOptions)
                         {
                             <option value="@c">@Cap(c)</option>
@@ -399,10 +400,9 @@
 }
 
 @code {
-    class ExpenseRec
+    class ExpenseRowVm
     {
         public int Id { get; set; }
-        public object? DbEntity { get; set; }
         public DateTime Date { get; set; } = DateTime.Today;
         public string Description { get; set; } = "";
         public string Vendor { get; set; } = "";
@@ -415,7 +415,7 @@
         public string Branch { get; set; } = "";
         public bool IsArchived { get; set; }
 
-        public ExpenseRec Clone() => (ExpenseRec)MemberwiseClone();
+        public ExpenseRowVm Clone() => (ExpenseRowVm)MemberwiseClone();
     }
 
     record Stat(string Title, string Value, string Note, string Icon, string IconClass);
@@ -432,7 +432,9 @@
     bool IsBusinessTenant;
 
     string ActiveBranch = "North Field Branch";
-    readonly List<string> branchNames = new() { "North Field Branch", "South Valley Branch", "Central Packing Branch" };
+    readonly List<string> branchNames = new();
+    Dictionary<string, long> branchNameToId = new(StringComparer.OrdinalIgnoreCase);
+    Dictionary<long, string> branchIdToName = new();
     readonly List<string> plotOptions = new() { "North Plot A", "North Plot B", "South Plot D", "South Plot E" };
 
     bool showArchived;
@@ -448,11 +450,11 @@
     string successModalMessage = "Expense record has been saved.";
     int? editingId;
     int? openMenuId;
-    ExpenseRec? expenseToArchive;
-    ExpenseRec form = new();
+    ExpenseRowVm? expenseToArchive;
+    ExpenseRowVm form = new();
     decimal? amountInput;
 
-    readonly List<ExpenseRec> expenses = new();
+    readonly List<ExpenseRowVm> expenses = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -474,14 +476,14 @@
         if (Auth.CurrentUserId > 0)
         {
             currentUser = await DbContext.Users
-                .Include(u => u.Business)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
         }
         else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
         {
             var email = Auth.CurrentUserEmail.Trim().ToLower();
             currentUser = await DbContext.Users
-                .Include(u => u.Business)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == email);
         }
 
@@ -492,11 +494,7 @@
                 currentBusinessId = currentUser.BusinessId.Value;
             currentBranchId = currentUser.BranchId;
 
-            var roleProp = currentUser.GetType().GetProperty("Role")
-                        ?? currentUser.GetType().GetProperty("UserRole")
-                        ?? currentUser.GetType().GetProperty("RoleName");
-            var roleVal = roleProp?.GetValue(currentUser)?.ToString() ?? "";
-
+            var roleVal = currentUser.Role ?? "";
             var authRole = Auth.GetType().GetProperty("CurrentUserRole")?.GetValue(Auth)?.ToString()
                         ?? Auth.GetType().GetProperty("Role")?.GetValue(Auth)?.ToString()
                         ?? "";
@@ -512,97 +510,74 @@
         }
         else
         {
-            var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+            var firstBiz = await DbContext.Businesses.AsNoTracking().FirstOrDefaultAsync();
             if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
             IsBusinessTenant = true;
             CurrentRoleLabel = "Business Tenant";
         }
 
         var dbBranches = await DbContext.Branches
+            .AsNoTracking()
             .Where(b => b.BusinessId == currentBusinessId)
+            .OrderBy(b => b.BranchName)
             .ToListAsync();
 
-        if (dbBranches.Count > 0)
+        branchNames.Clear();
+        branchNameToId.Clear();
+        branchIdToName.Clear();
+
+        foreach (var b in dbBranches)
         {
-            branchNames.Clear();
-            foreach (var b in dbBranches)
-                branchNames.Add(b.BranchName);
-
-            var active = currentBranchId.HasValue
-                ? dbBranches.FirstOrDefault(b => b.BranchId == currentBranchId.Value)
-                : dbBranches.FirstOrDefault();
-
-            if (active != null)
-                ActiveBranch = active.BranchName;
+            branchNames.Add(b.BranchName);
+            branchNameToId[b.BranchName] = b.BranchId;
+            branchIdToName[b.BranchId] = b.BranchName;
         }
+
+        var active = currentBranchId.HasValue
+            ? dbBranches.FirstOrDefault(b => b.BranchId == currentBranchId.Value)
+            : dbBranches.FirstOrDefault();
+
+        ActiveBranch = active?.BranchName ?? "Branch";
     }
 
     private async Task LoadExpensesAsync()
     {
         expenses.Clear();
 
-        var expProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .FirstOrDefault(p => p.Name.Equals("Expenses", StringComparison.OrdinalIgnoreCase));
+        var dbList = await DbContext.Expenses
+            .AsNoTracking()
+            .Where(e => e.BusinessId == currentBusinessId)
+            .OrderByDescending(e => e.ExpenseId)
+            .ToListAsync();
 
-        if (expProp?.GetValue(DbContext) is IQueryable queryable)
+        foreach (var e in dbList)
         {
-            var list = await queryable.Cast<object>().ToListAsync();
-            foreach (var e in list)
+            var status = (e.Status ?? "pending").Trim().ToLowerInvariant();
+            var isArch = e.IsArchived || status == "archived";
+            var branchName = branchIdToName.GetValueOrDefault(e.BranchId, ActiveBranch);
+
+            expenses.Add(new ExpenseRowVm
             {
-                var t = e.GetType();
-                var bizVal = t.GetProperty("BusinessId")?.GetValue(e);
-                if (bizVal != null && long.TryParse(bizVal.ToString(), out var bId) && currentBusinessId > 0 && bId != currentBusinessId)
-                    continue;
-
-                var idVal = t.GetProperty("ExpenseId")?.GetValue(e) ?? t.GetProperty("Id")?.GetValue(e);
-                if (idVal == null || !int.TryParse(idVal.ToString(), out var id)) continue;
-
-                var isArch = t.GetProperty("IsArchived")?.GetValue(e) is bool arch && arch;
-                var status = t.GetProperty("Status")?.GetValue(e)?.ToString() ?? "pending";
-                if (string.Equals(status, "archived", StringComparison.OrdinalIgnoreCase))
-                    isArch = true;
-
-                var dateObj = t.GetProperty("ExpenseDate")?.GetValue(e) ?? t.GetProperty("Date")?.GetValue(e);
-                var dt = dateObj is DateTime d ? d : DateTime.Today;
-
-                decimal.TryParse(t.GetProperty("Amount")?.GetValue(e)?.ToString(), NumberStyles.Any, Inv, out var amt);
-
-                var branchIdObj = t.GetProperty("BranchId")?.GetValue(e);
-                var branchName = ActiveBranch;
-                if (branchIdObj != null && long.TryParse(branchIdObj.ToString(), out var brId))
-                {
-                    var br = await DbContext.Branches.FirstOrDefaultAsync(b => b.BranchId == brId);
-                    if (br != null) branchName = br.BranchName;
-                }
-
-                expenses.Add(new ExpenseRec
-                {
-                    Id = id,
-                    DbEntity = e,
-                    Date = dt,
-                    Description = t.GetProperty("Description")?.GetValue(e)?.ToString() ?? "",
-                    Vendor = t.GetProperty("Vendor")?.GetValue(e)?.ToString() ?? "",
-                    Plot = t.GetProperty("Plot")?.GetValue(e)?.ToString() ?? "",
-                    Category = t.GetProperty("Category")?.GetValue(e)?.ToString() ?? "other",
-                    Amount = amt,
-                    Method = t.GetProperty("PaymentMethod")?.GetValue(e)?.ToString()
-                          ?? t.GetProperty("Method")?.GetValue(e)?.ToString()
-                          ?? "cash",
-                    RecordedBy = t.GetProperty("RecordedBy")?.GetValue(e)?.ToString() ?? "",
-                    Status = status.ToLowerInvariant(),
-                    Branch = branchName,
-                    IsArchived = isArch
-                });
-            }
+                Id = e.ExpenseId,
+                Date = e.ExpenseDate,
+                Description = e.Description ?? "",
+                Vendor = e.Vendor ?? "",
+                Plot = e.Plot ?? "",
+                Category = string.IsNullOrWhiteSpace(e.Category) ? "other" : e.Category.Trim().ToLowerInvariant(),
+                Amount = e.Amount,
+                Method = string.IsNullOrWhiteSpace(e.PaymentMethod) ? "cash" : e.PaymentMethod.Trim().ToLowerInvariant(),
+                RecordedBy = e.RecordedBy ?? "",
+                Status = status,
+                Branch = branchName,
+                IsArchived = isArch
+            });
         }
-
-        expenses.Sort((a, b) => b.Id.CompareTo(a.Id));
     }
 
-    IEnumerable<ExpenseRec> ActiveNonArchived => expenses.Where(x => !x.IsArchived);
-    IEnumerable<ExpenseRec> Counted => ActiveNonArchived.Where(x => !string.Equals(x.Status, "rejected", StringComparison.OrdinalIgnoreCase));
+    IEnumerable<ExpenseRowVm> ActiveNonArchived => expenses.Where(x => !x.IsArchived);
+    IEnumerable<ExpenseRowVm> Counted => ActiveNonArchived.Where(x => x.Status == "approved" || x.Status == "paid");
 
-    List<ExpenseRec> Filtered
+    List<ExpenseRowVm> Filtered
     {
         get
         {
@@ -625,12 +600,12 @@
         {
             var t = DateTime.Today;
             var month = Counted.Where(x => x.Date.Year == t.Year && x.Date.Month == t.Month).ToList();
-            var pending = ActiveNonArchived.Where(x => string.Equals(x.Status, "pending", StringComparison.OrdinalIgnoreCase)).ToList();
-            var paid = ActiveNonArchived.Count(x => string.Equals(x.Status, "paid", StringComparison.OrdinalIgnoreCase));
+            var pending = ActiveNonArchived.Where(x => x.Status == "pending").ToList();
+            var paid = ActiveNonArchived.Count(x => x.Status == "paid");
 
             return new()
             {
-                new("TOTAL RECORDED", Peso(Counted.Sum(x => x.Amount)), Counted.Count() + " active entries", "bi-coin", ""),
+                new("APPROVED / PAID", Peso(Counted.Sum(x => x.Amount)), Counted.Count() + " confirmed entries", "bi-coin", ""),
                 new("THIS MONTH", Peso(month.Sum(x => x.Amount)), month.Count + (month.Count == 1 ? " entry" : " entries"), "bi-graph-down-arrow", "stat-icon-leaf"),
                 new("AWAITING APPROVAL", pending.Count.ToString(), Peso(pending.Sum(x => x.Amount)), "bi-hourglass-split", "stat-icon-earth"),
                 new("PAID ENTRIES", paid.ToString(), "Settled expenses", "bi-check-circle", ""),
@@ -670,14 +645,15 @@
     void OpenNew()
     {
         openMenuId = null;
-        form = new ExpenseRec
+        form = new ExpenseRowVm
         {
             Date = DateTime.Today,
             Method = "cash",
             Category = "other",
             Status = IsBusinessTenant ? "approved" : "pending",
             Branch = ActiveBranch,
-            RecordedBy = Auth.CurrentUserName ?? ""
+            RecordedBy = Auth.CurrentUserName ?? "",
+            IsArchived = false
         };
         amountInput = null;
         editingId = null;
@@ -685,7 +661,7 @@
         showModal = true;
     }
 
-    void OpenEdit(ExpenseRec x)
+    void OpenEdit(ExpenseRowVm x)
     {
         openMenuId = null;
         form = x.Clone();
@@ -702,7 +678,6 @@
         showErrors = true;
         if (string.IsNullOrWhiteSpace(form.Description) || AmountInvalid) return;
 
-        // If Business Tenant creating a new expense: NO confirmation modal, straight to Save + Save Successful modal
         if (editingId == null && IsBusinessTenant)
         {
             await CommitSaveAsync();
@@ -710,6 +685,15 @@
         }
 
         showConfirmSaveModal = true;
+    }
+
+    long ResolveTargetBranchId(string branchName)
+    {
+        if (!string.IsNullOrWhiteSpace(branchName) && branchNameToId.TryGetValue(branchName, out var id))
+            return id;
+        if (currentBranchId.HasValue && currentBranchId.Value > 0)
+            return currentBranchId.Value;
+        return branchNameToId.Values.FirstOrDefault();
     }
 
     async Task CommitSaveAsync()
@@ -725,28 +709,65 @@
             var cleanStatus = IsBusinessTenant
                 ? (string.IsNullOrWhiteSpace(form.Status) ? "approved" : form.Status.Trim().ToLowerInvariant())
                 : "pending";
+            var targetBranchId = ResolveTargetBranchId(form.Branch);
 
-            var expProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .FirstOrDefault(p => p.Name.Equals("Expenses", StringComparison.OrdinalIgnoreCase));
-
-            if (expProp?.GetValue(DbContext) != null)
+            if (editingId == null)
             {
-                if (editingId == null)
+                var entity = new Expense
                 {
-                    var entity = new Expense();
-                    SetExpenseEntityProps(entity, cleanDesc, cleanCat, cleanAmt, form.Date, cleanStatus, cleanBy, form.Vendor, form.Plot, form.Method, form.Branch);
-                    DbContext.Add(entity);
-                    await DbContext.SaveChangesAsync();
+                    BusinessId = currentBusinessId,
+                    BranchId = targetBranchId,
+                    Description = cleanDesc,
+                    Category = cleanCat,
+                    Amount = cleanAmt,
+                    TaxAmount = Math.Round(cleanAmt - (cleanAmt / 1.12m), 2, MidpointRounding.AwayFromZero),
+                    ExpenseDate = form.Date,
+                    Status = cleanStatus,
+                    RecordedBy = cleanBy,
+                    RecordedByUserId = currentUserId,
+                    Vendor = (form.Vendor ?? "").Trim(),
+                    Plot = (form.Plot ?? "").Trim(),
+                    PaymentMethod = form.Method,
+                    IsArchived = false,
+                    ArchivedDate = null
+                };
+
+                if (cleanStatus == "approved" || cleanStatus == "paid")
+                {
+                    entity.ApprovedBy = currentUserId;
+                    entity.ApprovedDate = DateTime.Now;
                 }
-                else
+
+                DbContext.Expenses.Add(entity);
+                await DbContext.SaveChangesAsync();
+            }
+            else
+            {
+                var entity = await DbContext.Expenses.FirstOrDefaultAsync(e => e.ExpenseId == editingId.Value);
+                if (entity != null)
                 {
-                    var target = expenses.FirstOrDefault(e => e.Id == editingId.Value)?.DbEntity;
-                    if (target != null)
+                    entity.BusinessId = currentBusinessId;
+                    entity.BranchId = targetBranchId;
+                    entity.Description = cleanDesc;
+                    entity.Category = cleanCat;
+                    entity.Amount = cleanAmt;
+                    entity.TaxAmount = Math.Round(cleanAmt - (cleanAmt / 1.12m), 2, MidpointRounding.AwayFromZero);
+                    entity.ExpenseDate = form.Date;
+                    entity.Status = cleanStatus;
+                    entity.RecordedBy = cleanBy;
+                    entity.Vendor = (form.Vendor ?? "").Trim();
+                    entity.Plot = (form.Plot ?? "").Trim();
+                    entity.PaymentMethod = form.Method;
+                    entity.IsArchived = false;
+                    entity.ArchivedDate = null;
+
+                    if (cleanStatus == "approved" || cleanStatus == "paid")
                     {
-                        SetExpenseEntityProps(target, cleanDesc, cleanCat, cleanAmt, form.Date, cleanStatus, cleanBy, form.Vendor, form.Plot, form.Method, form.Branch);
-                        DbContext.Update(target);
-                        await DbContext.SaveChangesAsync();
+                        entity.ApprovedBy = currentUserId;
+                        entity.ApprovedDate = DateTime.Now;
                     }
+
+                    await DbContext.SaveChangesAsync();
                 }
             }
 
@@ -769,109 +790,61 @@
         }
     }
 
-    private void SetExpenseEntityProps(object entity, string desc, string cat, decimal amt, DateTime dt, string status, string by, string vendor, string plot, string payMethod, string branchName)
-    {
-        var t = entity.GetType();
-        var br = DbContext.Branches.FirstOrDefault(b => b.BranchName == branchName && b.BusinessId == currentBusinessId)
-              ?? DbContext.Branches.FirstOrDefault(b => b.BusinessId == currentBusinessId);
-
-        TrySet(t, entity, "BusinessId", currentBusinessId);
-        if (br != null) TrySet(t, entity, "BranchId", br.BranchId);
-        TrySet(t, entity, "Description", desc);
-        TrySet(t, entity, "Category", cat);
-        TrySet(t, entity, "Amount", amt);
-        TrySet(t, entity, "TaxAmount", Math.Round(amt - (amt / 1.12m), 2, MidpointRounding.AwayFromZero));
-        TrySet(t, entity, "ExpenseDate", dt);
-        TrySet(t, entity, "Status", status);
-        TrySet(t, entity, "RecordedBy", by);
-        TrySet(t, entity, "RecordedByUserId", currentUserId);
-        TrySet(t, entity, "Vendor", (vendor ?? "").Trim());
-        TrySet(t, entity, "Plot", (plot ?? "").Trim());
-        TrySet(t, entity, "PaymentMethod", payMethod);
-
-        if (status == "approved" || status == "paid")
-        {
-            TrySet(t, entity, "ApprovedBy", currentUserId);
-            TrySet(t, entity, "ApprovedDate", DateTime.Now);
-        }
-    }
-
-    private static void TrySet(Type t, object target, string propName, object? val)
-    {
-        var p = t.GetProperty(propName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-        if (p == null || !p.CanWrite) return;
-
-        if (val == null)
-        {
-            if (!p.PropertyType.IsValueType || Nullable.GetUnderlyingType(p.PropertyType) != null)
-                p.SetValue(target, null);
-            return;
-        }
-
-        var u = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
-        try
-        {
-            if (u.IsInstanceOfType(val)) p.SetValue(target, val);
-            else if (u == typeof(long)) p.SetValue(target, Convert.ToInt64(val, Inv));
-            else if (u == typeof(int)) p.SetValue(target, Convert.ToInt32(val, Inv));
-            else if (u == typeof(decimal)) p.SetValue(target, Convert.ToDecimal(val, Inv));
-            else if (u == typeof(DateTime)) p.SetValue(target, Convert.ToDateTime(val, Inv));
-            else if (u == typeof(string)) p.SetValue(target, val.ToString());
-        }
-        catch { }
-    }
-
-    async Task AcceptExpenseAsync(ExpenseRec x)
+    async Task AcceptExpenseAsync(ExpenseRowVm x)
     {
         openMenuId = null;
         if (!IsBusinessTenant) return;
-        if (x.Status == "paid") { await ShowToast("This expense is already paid.", true); return; }
 
-        x.Status = "approved";
-        if (x.DbEntity != null)
-        {
-            TrySet(x.DbEntity.GetType(), x.DbEntity, "Status", "approved");
-            TrySet(x.DbEntity.GetType(), x.DbEntity, "ApprovedBy", currentUserId);
-            TrySet(x.DbEntity.GetType(), x.DbEntity, "ApprovedDate", DateTime.Now);
-            DbContext.Update(x.DbEntity);
-            await DbContext.SaveChangesAsync();
-        }
+        var entity = await DbContext.Expenses.FirstOrDefaultAsync(e => e.ExpenseId == x.Id);
+        if (entity == null) return;
+
+        entity.Status = "approved";
+        entity.ApprovedBy = currentUserId;
+        entity.ApprovedDate = DateTime.Now;
+        entity.IsArchived = false;
+        await DbContext.SaveChangesAsync();
+
+        await LoadExpensesAsync();
         await ShowToast("Expense accepted & approved.");
     }
 
-    async Task RejectExpenseAsync(ExpenseRec x)
+    async Task RejectExpenseAsync(ExpenseRowVm x)
     {
         openMenuId = null;
         if (!IsBusinessTenant) return;
         if (x.Status == "paid") { await ShowToast("Paid expenses can’t be rejected.", true); return; }
 
-        x.Status = "rejected";
-        if (x.DbEntity != null)
-        {
-            TrySet(x.DbEntity.GetType(), x.DbEntity, "Status", "rejected");
-            DbContext.Update(x.DbEntity);
-            await DbContext.SaveChangesAsync();
-        }
+        var entity = await DbContext.Expenses.FirstOrDefaultAsync(e => e.ExpenseId == x.Id);
+        if (entity == null) return;
+
+        entity.Status = "rejected";
+        entity.IsArchived = false;
+        await DbContext.SaveChangesAsync();
+
+        await LoadExpensesAsync();
         await ShowToast("Expense rejected.");
     }
 
-    async Task MarkPaidAsync(ExpenseRec x)
+    async Task MarkPaidAsync(ExpenseRowVm x)
     {
         openMenuId = null;
         if (x.Status == "paid") { await ShowToast("This expense is already paid.", true); return; }
         if (x.Status == "rejected") { await ShowToast("Rejected expenses can’t be marked paid.", true); return; }
 
-        x.Status = "paid";
-        if (x.DbEntity != null)
-        {
-            TrySet(x.DbEntity.GetType(), x.DbEntity, "Status", "paid");
-            DbContext.Update(x.DbEntity);
-            await DbContext.SaveChangesAsync();
-        }
+        var entity = await DbContext.Expenses.FirstOrDefaultAsync(e => e.ExpenseId == x.Id);
+        if (entity == null) return;
+
+        entity.Status = "paid";
+        entity.ApprovedBy ??= currentUserId;
+        entity.ApprovedDate ??= DateTime.Now;
+        entity.IsArchived = false;
+        await DbContext.SaveChangesAsync();
+
+        await LoadExpensesAsync();
         await ShowToast("Marked as paid: " + Peso(x.Amount) + ".");
     }
 
-    void PromptArchive(ExpenseRec x)
+    void PromptArchive(ExpenseRowVm x)
     {
         openMenuId = null;
         expenseToArchive = x;
@@ -890,12 +863,11 @@
         isSaving = true;
         try
         {
-            expenseToArchive.IsArchived = true;
-            if (expenseToArchive.DbEntity != null)
+            var entity = await DbContext.Expenses.FirstOrDefaultAsync(e => e.ExpenseId == expenseToArchive.Id);
+            if (entity != null)
             {
-                TrySet(expenseToArchive.DbEntity.GetType(), expenseToArchive.DbEntity, "IsArchived", true);
-                TrySet(expenseToArchive.DbEntity.GetType(), expenseToArchive.DbEntity, "ArchivedDate", DateTime.Now);
-                DbContext.Update(expenseToArchive.DbEntity);
+                entity.IsArchived = true;
+                entity.ArchivedDate = DateTime.Now;
                 await DbContext.SaveChangesAsync();
             }
 
@@ -911,17 +883,17 @@
         }
     }
 
-    async Task RestoreExpenseAsync(ExpenseRec x)
+    async Task RestoreExpenseAsync(ExpenseRowVm x)
     {
         openMenuId = null;
-        x.IsArchived = false;
-        if (x.DbEntity != null)
+        var entity = await DbContext.Expenses.FirstOrDefaultAsync(e => e.ExpenseId == x.Id);
+        if (entity != null)
         {
-            TrySet(x.DbEntity.GetType(), x.DbEntity, "IsArchived", false);
-            TrySet(x.DbEntity.GetType(), x.DbEntity, "ArchivedDate", null);
-            DbContext.Update(x.DbEntity);
+            entity.IsArchived = false;
+            entity.ArchivedDate = null;
             await DbContext.SaveChangesAsync();
         }
+
         await LoadExpensesAsync();
         await ShowToast("Expense restored to Active.");
     }

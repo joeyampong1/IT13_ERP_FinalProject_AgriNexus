@@ -1,15 +1,49 @@
 ﻿@page "/sales"
+@using System.Collections
 @using System.Globalization
+@using System.Reflection
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
+@inject AgriNexus.Services.AuthService Auth
 @inject NavigationManager Nav
 
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <h2 class="page-title">Sales Transactions</h2>
-        <p class="text-muted mb-0 page-sub">@ActiveBranch · sales orders, sale items and pricing, payment status and order history.</p>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@ActiveBranch</strong> · sales orders, sale items and pricing, payment status and order history.
+        </p>
     </div>
-    <div class="d-flex gap-2">
-        <button type="button" class="btn-outline-lg" @onclick="GoCollections">Collections</button>
-        <button type="button" class="btn-solid" @onclick="GoNewSale"><i class="bi bi-cart"></i> New sale</button>
+
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        @if (canSelectBranch)
+        {
+            <div class="dashboard-filter-wrap">
+                <i class="bi bi-shop dashboard-filter-icon"></i>
+                <select class="dashboard-filter-select" value="@selectedBranchIdStr" @onchange="OnBranchChanged" aria-label="Filter branch">
+                    <option value="all">All Branches</option>
+                    @foreach (var b in businessBranches)
+                    {
+                        <option value="@b.BranchId">@b.BranchName</option>
+                    }
+                </select>
+                <i class="bi bi-chevron-down dashboard-filter-caret"></i>
+            </div>
+        }
+
+        <div class="dashboard-filter-wrap">
+            <i class="bi bi-funnel dashboard-filter-icon"></i>
+            <select class="dashboard-filter-select" value="@selectedPeriod" @onchange="OnPeriodChanged" aria-label="Filter period">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+            </select>
+            <i class="bi bi-chevron-down dashboard-filter-caret"></i>
+        </div>
     </div>
 </div>
 
@@ -38,58 +72,125 @@
 <!-- TOOLBAR -->
 <div class="toolbar mb-3">
     <div class="search-box">
-        <input type="text" placeholder="Search sale no., customer or cashier..." @bind="searchText" @bind:event="oninput" />
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search sale no., customer or cashier..."
+               @bind="searchText"
+               @bind:event="oninput"
+               @bind:after="ResetPagination" />
     </div>
-    <select class="filter-select" @bind="statusFilter">
-        <option value="">All payment statuses</option>
-        <option value="unpaid">Unpaid</option>
-        <option value="partial">Partial</option>
-        <option value="paid">Fully paid</option>
-    </select>
+
+    <div class="dashboard-filter-wrap">
+        <i class="bi bi-wallet2 dashboard-filter-icon"></i>
+        <select class="dashboard-filter-select" value="@statusFilter" @onchange="OnStatusChanged" aria-label="Filter payment status">
+            <option value="">All payment statuses</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="partial">Partial</option>
+            <option value="paid">Fully paid</option>
+        </select>
+        <i class="bi bi-chevron-down dashboard-filter-caret"></i>
+    </div>
+
     <span class="text-muted small">@Filtered.Count @(Filtered.Count == 1 ? "sale" : "sales") · @Peso(MonthValue) this month</span>
+
+    <div class="d-flex gap-2 ms-auto flex-wrap">
+        <button type="button" class="btn-outline-lg" @onclick="GoCollections">Collections</button>
+        <button type="button" class="btn-solid shadow-sm" @onclick="GoNewSale"><i class="bi bi-cart"></i> New sale</button>
+    </div>
 </div>
 
-<!-- TABLE -->
-<div class="panel">
-    <div class="table-wrap">
-        <table class="table data-table align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Sale no.</th>
-                    <th>Date</th>
-                    <th>Customer</th>
-                    <th>Items</th>
-                    <th>Total</th>
-                    <th>Paid</th>
-                    <th>Balance</th>
-                    <th>Status</th>
-                    <th>Order</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var s in Filtered)
-                {
-                    var st = PayStatus(s);
-                    <tr class="row-click" @onclick="() => Open(s)">
-                        <td class="fw-bold text-nowrap">@s.No</td>
-                        <td class="text-nowrap">@s.Date.ToString("MMM d, yyyy", Inv)</td>
-                        <td class="col-customer">@s.Customer</td>
-                        <td class="text-muted text-nowrap">@s.Items.Count @(s.Items.Count == 1 ? "line" : "lines")</td>
-                        <td class="fw-medium text-nowrap">@Peso(Total(s))</td>
-                        <td class="text-nowrap">@Peso(Paid(s))</td>
-                        <td class="text-nowrap @(Balance(s) > 0 ? "neg" : "")">@Peso(Balance(s))</td>
-                        <td><span class="pill @PayClass(st)">@PayLabel(st)</span></td>
-                        <td><span class="pill @(s.Voided ? "pill-red" : "pill-green")">@(s.Voided ? "Voided" : "Completed")</span></td>
-                    </tr>
-                }
-                @if (Filtered.Count == 0)
-                {
-                    <tr><td colspan="9" class="text-center text-muted py-5">No sales found.</td></tr>
-                }
-            </tbody>
-        </table>
+@if (isLoading)
+{
+    <div class="panel">
+        <div class="text-muted py-5 text-center">
+            <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+            Loading sales transactions...
+        </div>
     </div>
-</div>
+}
+else
+{
+    <!-- TABLE -->
+    <div class="panel">
+        <div class="table-wrap">
+            <table class="table data-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Sale no.</th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        @if (canSelectBranch && !effectiveBranchFilter.HasValue)
+                        {
+                            <th>Branch</th>
+                        }
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Paid</th>
+                        <th>Balance</th>
+                        <th>Status</th>
+                        <th>Order</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in PaginatedSales)
+                    {
+                        var st = PayStatus(s);
+                        <tr class="row-click" @onclick="() => Open(s)">
+                            <td class="fw-bold text-nowrap" style="color: #1B5E34;">@s.No</td>
+                            <td class="text-nowrap">@s.Date.ToString("MMM d, yyyy", Inv)</td>
+                            <td class="col-customer fw-medium" style="color: #0A2B1D;">@s.Customer</td>
+                            @if (canSelectBranch && !effectiveBranchFilter.HasValue)
+                            {
+                                <td class="text-nowrap">@s.BranchName</td>
+                            }
+                            <td class="text-muted text-nowrap">@s.Items.Count @(s.Items.Count == 1 ? "line" : "lines")</td>
+                            <td class="fw-semibold text-nowrap">@Peso(Total(s))</td>
+                            <td class="text-nowrap">@Peso(Paid(s))</td>
+                            <td class="text-nowrap fw-semibold @(Balance(s) > 0 ? "neg" : "")">@Peso(Balance(s))</td>
+                            <td><span class="pill @PayClass(st)">@PayLabel(st)</span></td>
+                            <td><span class="pill @(s.Voided ? "pill-red" : "pill-green")">@(s.Voided ? "Voided" : "Completed")</span></td>
+                        </tr>
+                    }
+                    @if (Filtered.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="@((canSelectBranch && !effectiveBranchFilter.HasValue) ? 10 : 9)" class="text-center text-muted py-5">
+                                No sales found.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Filtered.Count > 0)
+        {
+            <div class="d-flex flex-wrap justify-content-between align-items-center p-3 border-top bg-white" style="flex-shrink: 0; border-color: #E2ECE6 !important; border-radius: 0 0 16px 16px;">
+                <div class="text-muted small mb-2 mb-md-0">
+                    Showing <span class="fw-bold" style="color: #0A2B1D;">@StartSale</span> - <span class="fw-bold" style="color: #0A2B1D;">@EndSale</span> of <span class="fw-bold" style="color: #0A2B1D;">@Filtered.Count</span> @(Filtered.Count == 1 ? "sale" : "sales")
+                </div>
+
+                <div class="d-flex gap-1 flex-wrap">
+                    <button type="button" class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                        <i class="bi bi-chevron-left me-1"></i>Previous
+                    </button>
+
+                    @for (int p = 1; p <= TotalPages; p++)
+                    {
+                        var pageNumber = p;
+                        <button type="button" class="btn btn-sm px-3 rounded-2 fw-bold @(currentPage == pageNumber ? "btn-new text-white shadow-sm" : "btn-light border text-dark")"
+                                @onclick="() => GoToPage(pageNumber)">
+                            @pageNumber
+                        </button>
+                    }
+
+                    <button type="button" class="btn btn-sm btn-light border px-3 rounded-2 fw-medium" @onclick="NextPage" disabled="@(currentPage == TotalPages)">
+                        Next<i class="bi bi-chevron-right ms-1"></i>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+}
 
 <!-- ======================= DETAIL DRAWER (slide from right) ======================= -->
 @if (selected != null)
@@ -101,7 +202,7 @@
 
         <div class="drawer-body">
             <h4 class="drawer-title">@sale.No</h4>
-            <div class="drawer-sub">@sale.Customer · @sale.Date.ToString("MMM d, yyyy", Inv) · cashier @sale.Cashier</div>
+            <div class="drawer-sub">@sale.Customer · @sale.BranchName · @sale.Date.ToString("MMM d, yyyy", Inv) · cashier @sale.Cashier</div>
 
             <div class="d-flex align-items-center gap-3 mt-3 mb-4 flex-wrap">
                 <button type="button" class="btn-receipt" @onclick="() => showReceipt = true">
@@ -115,7 +216,7 @@
                 else if (confirmVoid)
                 {
                     <span class="confirm-text">Void this sale?</span>
-                    <button type="button" class="btn-danger-sm" @onclick="VoidSale">Yes, void</button>
+                    <button type="button" class="btn-danger-sm" @onclick="VoidSale" disabled="@isSaving">Yes, void</button>
                     <button type="button" class="btn-plain-sm" @onclick="() => confirmVoid = false">Cancel</button>
                 }
                 else
@@ -133,10 +234,14 @@
                         {
                             <tr>
                                 <td class="text-nowrap">@i.Name</td>
-                                <td class="text-nowrap">@Qty(i.Qty) kg</td>
+                                <td class="text-nowrap">@Qty(i.Qty) @i.Unit</td>
                                 <td class="text-nowrap">@Peso(i.Price)</td>
                                 <td class="text-nowrap">@Peso(i.Qty * i.Price)</td>
                             </tr>
+                        }
+                        @if (sale.Items.Count == 0)
+                        {
+                            <tr><td colspan="4" class="text-center text-muted py-3">No line items recorded.</td></tr>
                         }
                     </tbody>
                 </table>
@@ -145,6 +250,10 @@
             <div class="totals-box">
                 <div class="row-line"><span>Subtotal</span><span>@Peso(Subtotal(sale))</span></div>
                 <div class="row-line"><span>Discount</span><span>– @Peso(sale.Discount)</span></div>
+                @if (sale.Tax > 0)
+                {
+                    <div class="row-line"><span>Tax</span><span>+ @Peso(sale.Tax)</span></div>
+                }
                 <hr />
                 <div class="row-line bold"><span>Total</span><span>@Peso(Total(sale))</span></div>
                 <div class="row-line"><span>Amount paid</span><span>@Peso(Paid(sale))</span></div>
@@ -185,7 +294,7 @@
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <h5 class="modal-heading mb-1">Receipt</h5>
-                    <div class="modal-sub">@BusinessName</div>
+                    <div class="modal-sub">@BusinessName · @sale.BranchName</div>
                 </div>
                 <button type="button" class="btn-close-x" @onclick="() => showReceipt = false" aria-label="Close"><i class="bi bi-x-lg"></i></button>
             </div>
@@ -204,7 +313,7 @@
                     {
                         <tr>
                             <td>@i.Name</td>
-                            <td class="text-end text-nowrap">@Qty(i.Qty) kg</td>
+                            <td class="text-end text-nowrap">@Qty(i.Qty) @i.Unit</td>
                             <td class="text-end text-nowrap">@Peso(i.Price)</td>
                             <td class="text-end text-nowrap">@Peso(i.Qty * i.Price)</td>
                         </tr>
@@ -215,6 +324,10 @@
             <div class="totals-box mt-3">
                 <div class="row-line"><span>Subtotal</span><span>@Peso(Subtotal(sale))</span></div>
                 <div class="row-line"><span>Discount</span><span>– @Peso(sale.Discount)</span></div>
+                @if (sale.Tax > 0)
+                {
+                    <div class="row-line"><span>Tax</span><span>+ @Peso(sale.Tax)</span></div>
+                }
                 <hr />
                 <div class="row-line bold"><span>Total</span><span>@Peso(Total(sale))</span></div>
                 <div class="row-line"><span>Amount paid</span><span>@Peso(Paid(sale))</span></div>
@@ -230,21 +343,28 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+    <div class="toast-note"><i class="bi bi-check-circle"></i> @toast</div>
 }
 
 @code {
     // ---------- MODELS ----------
-    record ItemRec(string Name, decimal Qty, decimal Price);
+    record ItemRec(string Name, string Unit, decimal Qty, decimal Price);
     record PayRec(DateTime Date, string Method, decimal Amount, string ReceivedBy);
 
     class SaleRec
     {
+        public int SaleId { get; set; }
+        public SalesOrder? OrderEntity { get; set; }
+        public long BranchId { get; set; }
+        public string BranchName { get; set; } = "";
         public string No { get; set; } = "";
         public DateTime Date { get; set; }
         public string Customer { get; set; } = "";
         public string Cashier { get; set; } = "";
+        public decimal? ExplicitTotal { get; set; }
+        public decimal? ExplicitPaid { get; set; }
         public decimal Discount { get; set; }
+        public decimal Tax { get; set; }
         public bool Voided { get; set; }
         public List<ItemRec> Items { get; set; } = new();
         public List<PayRec> Payments { get; set; } = new();
@@ -254,11 +374,20 @@
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    // TODO: kuhaa gikan sa naka-login nga tenant / branch
-    const string BusinessName = "Verdant Agri Ventures";
-    const string ActiveBranch = "North Field Branch";
+    long currentBusinessId;
+    long? assignedBranchId;
+    bool canSelectBranch;
+    string selectedBranchIdStr = "all";
+    long? effectiveBranchFilter => canSelectBranch
+        ? (long.TryParse(selectedBranchIdStr, out var bid) && bid > 0 ? bid : null)
+        : assignedBranchId;
 
-    // ---------- STATE ----------
+    string BusinessName = "AgriNexus";
+    string ActiveBranch = "All Branches";
+
+    bool isLoading = true;
+    bool isSaving;
+    string selectedPeriod = "all";
     string searchText = "";
     string statusFilter = "";
     string toast = "";
@@ -267,85 +396,431 @@
     bool confirmVoid;
     bool showReceipt;
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // Ang total, paid ug balance kay computed gikan sa items ug payments
-    readonly List<SaleRec> sales = new()
+    private int currentPage = 1;
+    private int pageSize = 20;
+
+    List<Branch> businessBranches = new();
+    readonly Dictionary<long, string> branchNames = new();
+    readonly Dictionary<int, string> customerNames = new();
+    readonly List<SaleRec> allBusinessSales = new();
+
+    string PeriodLabel => selectedPeriod switch
     {
-        new() { No = "SO-0014", Date = new(2026, 10, 24), Customer = "Municipal Market Vendors", Cashier = "Noel Bautista",
-                Items = new() { new("Rice — Grade A", 200, 22) },
-                Payments = new() { new(new(2026, 10, 24), "cash", 4400, "Noel Bautista") } },
-
-        new() { No = "SO-0013", Date = new(2026, 10, 23), Customer = "Walk-in customers", Cashier = "Paolo Gutierrez",
-                Items = new() { new("Corn — Grade B", 130, 20) },
-                Payments = new() { new(new(2026, 10, 23), "cash", 2600, "Paolo Gutierrez") } },
-
-        new() { No = "SO-0012", Date = new(2026, 10, 21), Customer = "Barangay Nutrition Program", Cashier = "Noel Bautista",
-                Items = new() { new("Ampalaya — Grade A", 120, 45), new("Rice — Grade A", 185, 28) },
-                Payments = new() { new(new(2026, 10, 21), "bank", 10580, "Noel Bautista") } },
-
-        new() { No = "SO-0011", Date = new(2026, 10, 18), Customer = "Bayanihan Trading", Cashier = "Jenny Ramos",
-                Items = new() { new("Cabbage — Grade A", 300, 37) },
-                Payments = new() { new(new(2026, 10, 18), "cash", 11100, "Jenny Ramos") } },
-
-        new() { No = "SO-0010", Date = new(2026, 10, 12), Customer = "Rural Bank Cooperative Store", Cashier = "Paolo Gutierrez",
-                Items = new() { new("Rice — Grade A", 330, 22), new("Cabbage — Grade B", 220, 30) },
-                Payments = new() { new(new(2026, 10, 12), "cash", 4000, "Paolo Gutierrez"), new(new(2026, 10, 19), "gcash", 2860, "Noel Bautista") } },
-
-        new() { No = "SO-0009", Date = new(2026, 10, 6), Customer = "Verdant Fresh Retail", Cashier = "Noel Bautista",
-                Items = new() { new("Cabbage — Grade A", 260, 38) },
-                Payments = new() { new(new(2026, 10, 6), "bank", 9880, "Noel Bautista") } },
-
-        new() { No = "SO-0008", Date = new(2026, 9, 27), Customer = "Municipal Market Vendors", Cashier = "Jenny Ramos",
-                Items = new() { new("Ampalaya — Grade A", 168, 45) },
-                Payments = new() },
-
-        new() { No = "SO-0007", Date = new(2026, 9, 14), Customer = "Walk-in customers", Cashier = "Jenny Ramos",
-                Items = new() { new("Rice — Grade A", 120, 22), new("Corn — Grade B", 120, 17) },
-                Payments = new() { new(new(2026, 9, 14), "cash", 4680, "Jenny Ramos") } },
-
-        new() { No = "SO-0006", Date = new(2026, 9, 8), Customer = "Bayanihan Trading", Cashier = "Paolo Gutierrez",
-                Items = new() { new("Ampalaya — Grade A", 160, 45), new("Cabbage — Grade A", 150, 38) },
-                Payments = new() { new(new(2026, 9, 8), "cash", 5000, "Paolo Gutierrez") } },
-
-        new() { No = "SO-0005", Date = new(2026, 8, 30), Customer = "Rural Bank Cooperative Store", Cashier = "Noel Bautista",
-                Items = new() { new("Rice — Grade A", 500, 23) },
-                Payments = new() { new(new(2026, 8, 30), "bank", 11500, "Noel Bautista") } },
-
-        new() { No = "SO-0004", Date = new(2026, 8, 15), Customer = "Verdant Fresh Retail", Cashier = "Jenny Ramos",
-                Items = new() { new("Cabbage — Grade B", 200, 30), new("Corn — Grade B", 200, 20) },
-                Payments = new() { new(new(2026, 8, 15), "cash", 5000, "Jenny Ramos") } },
-
-        new() { No = "SO-0003", Date = new(2026, 8, 8), Customer = "Municipal Market Vendors", Cashier = "Paolo Gutierrez",
-                Items = new() { new("Corn — Grade B", 466, 20) },
-                Payments = new() { new(new(2026, 8, 8), "cash", 9320, "Paolo Gutierrez") } },
-
-        new() { No = "SO-0002", Date = new(2026, 7, 20), Customer = "Barangay Nutrition Program", Cashier = "Jenny Ramos",
-                Items = new() { new("Ampalaya — Grade A", 100, 45), new("Rice — Grade A", 100, 22) },
-                Payments = new() { new(new(2026, 7, 20), "gcash", 3000, "Jenny Ramos") } },
-
-        new() { No = "SO-0001", Date = new(2026, 7, 5), Customer = "Walk-in customers", Cashier = "Noel Bautista",
-                Items = new() { new("Rice — Grade A", 200, 22), new("Cabbage — Grade A", 100, 38) },
-                Payments = new() { new(new(2026, 7, 5), "cash", 8200, "Noel Bautista") } },
+        "today" => "Today",
+        "week" => "This Week",
+        "month" => "This Month",
+        "year" => "This Year",
+        _ => "All Time"
     };
 
-    // ---------- COMPUTED ----------
-    IEnumerable<SaleRec> Active => sales.Where(s => !s.Voided);
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await ResolveTenantAndRoleScopeAsync();
+            UpdateActiveBranchLabel();
+            await LoadSalesDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading sales: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
 
-    List<SaleRec> Filtered => sales
+    private async Task ResolveTenantAndRoleScopeAsync()
+    {
+        User? currentUser = null;
+
+        if (Auth.CurrentUserId > 0)
+        {
+            currentUser = await DbContext.Users
+                .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+        }
+        else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+        {
+            var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+            currentUser = await DbContext.Users
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+        }
+        else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+        {
+            currentUser = await DbContext.Users
+                .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                       || u.FName == Auth.CurrentUserName);
+        }
+
+        if (currentUser?.BusinessId != null)
+        {
+            currentBusinessId = currentUser.BusinessId.Value;
+            assignedBranchId = currentUser.BranchId;
+        }
+        else
+        {
+            var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+            if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+        }
+
+        var biz = await DbContext.Businesses.FirstOrDefaultAsync(b => b.BusinessId == currentBusinessId);
+        if (biz != null)
+        {
+            var bType = biz.GetType();
+            var bName = bType.GetProperty("BusinessName")?.GetValue(biz)?.ToString()
+                     ?? bType.GetProperty("Name")?.GetValue(biz)?.ToString();
+            if (!string.IsNullOrWhiteSpace(bName)) BusinessName = bName.Trim();
+        }
+
+        var roleText = (currentUser?.Role ?? "").Trim().ToLowerInvariant();
+        var isTenantOwnerOrAdmin = string.IsNullOrEmpty(roleText)
+            || roleText.Contains("tenant")
+            || roleText.Contains("owner")
+            || roleText.Contains("admin")
+            || roleText.Contains("superadmin")
+            || roleText.Contains("director");
+
+        canSelectBranch = isTenantOwnerOrAdmin || !assignedBranchId.HasValue;
+        if (!canSelectBranch && assignedBranchId.HasValue)
+        {
+            selectedBranchIdStr = assignedBranchId.Value.ToString();
+        }
+
+        businessBranches = await DbContext.Branches
+            .Where(b => b.BusinessId == currentBusinessId)
+            .OrderBy(b => b.BranchName)
+            .ToListAsync();
+
+        branchNames.Clear();
+        foreach (var b in businessBranches)
+        {
+            branchNames[b.BranchId] = b.BranchName;
+        }
+    }
+
+    private void UpdateActiveBranchLabel()
+    {
+        if (!canSelectBranch && assignedBranchId.HasValue)
+        {
+            ActiveBranch = branchNames.TryGetValue(assignedBranchId.Value, out var bName)
+                ? bName
+                : "Assigned Branch";
+            return;
+        }
+
+        if (effectiveBranchFilter.HasValue)
+        {
+            ActiveBranch = branchNames.TryGetValue(effectiveBranchFilter.Value, out var bName)
+                ? bName
+                : "Selected Branch";
+            return;
+        }
+
+        ActiveBranch = businessBranches.Count == 1
+            ? businessBranches[0].BranchName
+            : "All Branches (Overall)";
+    }
+
+    private async Task LoadSalesDataAsync()
+    {
+        customerNames.Clear();
+        allBusinessSales.Clear();
+
+        var dbCustomers = await DbContext.Customers.ToListAsync();
+        foreach (var c in dbCustomers)
+        {
+            var t = c.GetType();
+            var bizVal = GetLongProp(t, c, "BusinessId");
+            if (currentBusinessId > 0 && bizVal.HasValue && bizVal.Value > 0 && bizVal.Value != currentBusinessId)
+                continue;
+
+            var idObj = t.GetProperty("CustomerId")?.GetValue(c) ?? t.GetProperty("Id")?.GetValue(c);
+            if (idObj != null && int.TryParse(idObj.ToString(), out var cid))
+            {
+                var name = t.GetProperty("CustomerName")?.GetValue(c)?.ToString()
+                        ?? t.GetProperty("FullName")?.GetValue(c)?.ToString()
+                        ?? t.GetProperty("Name")?.GetValue(c)?.ToString();
+
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    var f = t.GetProperty("FName")?.GetValue(c)?.ToString() ?? "";
+                    var l = t.GetProperty("LName")?.GetValue(c)?.ToString() ?? "";
+                    name = $"{f} {l}".Trim();
+                }
+
+                customerNames[cid] = string.IsNullOrWhiteSpace(name) ? $"Customer #{cid}" : name.Trim();
+            }
+        }
+
+        var branchIds = businessBranches.Select(b => b.BranchId).ToList();
+        var fallbackBranchId = businessBranches.FirstOrDefault()?.BranchId ?? 0L;
+
+        var orders = await DbContext.SalesOrders
+            .Where(s => branchIds.Contains(s.BranchId) || s.BranchId == 0)
+            .OrderByDescending(s => s.SaleDate)
+            .ToListAsync();
+
+        var itemsBySaleId = new Dictionary<int, List<ItemRec>>();
+        var itemSetProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.Name.Equals("SalesOrderItems", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("SaleItems", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("OrderItems", StringComparison.OrdinalIgnoreCase));
+
+        if (itemSetProp?.GetValue(DbContext) is IQueryable rawItemQuery)
+        {
+            var dbItems = await rawItemQuery.Cast<object>().ToListAsync();
+            foreach (var it in dbItems)
+            {
+                var itType = it.GetType();
+                var sId = (int)(GetLongProp(itType, it, "SaleId", "SalesOrderId", "OrderId") ?? 0);
+                if (sId <= 0) continue;
+
+                var itemName = itType.GetProperty("ProductName")?.GetValue(it)?.ToString()
+                            ?? itType.GetProperty("ItemName")?.GetValue(it)?.ToString()
+                            ?? itType.GetProperty("Name")?.GetValue(it)?.ToString()
+                            ?? $"Item #{sId}";
+                var unit = itType.GetProperty("Unit")?.GetValue(it)?.ToString()
+                      ?? itType.GetProperty("Uom")?.GetValue(it)?.ToString()
+                      ?? "kg";
+                var qty = GetDecimalProp(itType, it, "Quantity", "Qty");
+                var price = GetDecimalProp(itType, it, "UnitPrice", "Price");
+
+                if (!itemsBySaleId.TryGetValue(sId, out var list))
+                {
+                    list = new List<ItemRec>();
+                    itemsBySaleId[sId] = list;
+                }
+                list.Add(new ItemRec(itemName.Trim(), string.IsNullOrWhiteSpace(unit) ? "kg" : unit.Trim(), qty, price));
+            }
+        }
+
+        var paymentsBySaleId = new Dictionary<int, List<PayRec>>();
+        var paySetProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.Name.Equals("PaymentRecords", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("Payments", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("SalePayments", StringComparison.OrdinalIgnoreCase));
+
+        if (paySetProp?.GetValue(DbContext) is IQueryable rawPayQuery)
+        {
+            var dbPays = await rawPayQuery.Cast<object>().ToListAsync();
+            foreach (var p in dbPays)
+            {
+                var pt = p.GetType();
+                if (GetBoolProp(pt, p, "IsVoided", "Voided")) continue;
+
+                var pSaleId = (int)(GetLongProp(pt, p, "SaleId", "SalesOrderId", "OrderId") ?? 0);
+                if (pSaleId <= 0) continue;
+
+                var pDate = GetDateProp(pt, p, "PaymentDate", "Date", "CreatedAt") ?? DateTime.Today;
+                var pMethod = (pt.GetProperty("PaymentMethod")?.GetValue(p)?.ToString()
+                            ?? pt.GetProperty("Method")?.GetValue(p)?.ToString()
+                            ?? "cash").Trim().ToLowerInvariant();
+                var pAmt = GetDecimalProp(pt, p, "Amount", "AmountPaid", "PaidAmount");
+                var pBy = pt.GetProperty("ReceivedBy")?.GetValue(p)?.ToString()
+                       ?? pt.GetProperty("CreatedBy")?.GetValue(p)?.ToString()
+                       ?? Auth.CurrentUserName ?? "";
+
+                if (!paymentsBySaleId.TryGetValue(pSaleId, out var list))
+                {
+                    list = new List<PayRec>();
+                    paymentsBySaleId[pSaleId] = list;
+                }
+                list.Add(new PayRec(pDate, string.IsNullOrWhiteSpace(pMethod) ? "cash" : pMethod, pAmt, pBy));
+            }
+        }
+
+        foreach (var o in orders)
+        {
+            var oType = o.GetType();
+            var oBiz = GetLongProp(oType, o, "BusinessId");
+            if (currentBusinessId > 0 && oBiz.HasValue && oBiz.Value > 0 && oBiz.Value != currentBusinessId)
+                continue;
+
+            var resolvedBranchId = o.BranchId > 0 ? o.BranchId : fallbackBranchId;
+            var resolvedBranchName = branchNames.TryGetValue(resolvedBranchId, out var bn)
+                ? bn
+                : (businessBranches.FirstOrDefault()?.BranchName ?? "Main Branch");
+
+            var custLabel = o.CustomerId > 0 && customerNames.TryGetValue(o.CustomerId, out var cName)
+                ? cName
+                : "Walk-in customers";
+
+            var cashierName = oType.GetProperty("CashierName")?.GetValue(o)?.ToString()
+                           ?? oType.GetProperty("CreatedBy")?.GetValue(o)?.ToString()
+                           ?? Auth.CurrentUserName ?? "POS";
+
+            var isVoided = GetBoolProp(oType, o, "IsVoided", "Voided")
+                        || string.Equals(o.Status, "Voided", StringComparison.OrdinalIgnoreCase);
+
+            var rec = new SaleRec
+            {
+                SaleId = o.SaleId,
+                OrderEntity = o,
+                BranchId = resolvedBranchId,
+                BranchName = resolvedBranchName,
+                No = string.IsNullOrWhiteSpace(o.ReferenceNumber) ? $"SO-{o.SaleId:D4}" : o.ReferenceNumber.Trim(),
+                Date = o.SaleDate,
+                Customer = custLabel,
+                Cashier = cashierName,
+                Discount = Math.Max(0m, o.DiscountAmount),
+                Tax = Math.Max(0m, o.TaxAmount),
+                Voided = isVoided,
+                ExplicitTotal = o.NetAmount > 0 ? o.NetAmount : null,
+                ExplicitPaid = o.AmountPaid > 0 ? o.AmountPaid : null
+            };
+
+            if (itemsBySaleId.TryGetValue(o.SaleId, out var loadedItems))
+            {
+                rec.Items = loadedItems;
+            }
+            else if (oType.GetProperty("Items")?.GetValue(o) is IEnumerable navItems)
+            {
+                foreach (var it in navItems)
+                {
+                    if (it == null) continue;
+                    var itType = it.GetType();
+                    var itemName = itType.GetProperty("ProductName")?.GetValue(it)?.ToString()
+                                ?? itType.GetProperty("ItemName")?.GetValue(it)?.ToString()
+                                ?? itType.GetProperty("Name")?.GetValue(it)?.ToString()
+                                ?? "Item";
+                    var unit = itType.GetProperty("Unit")?.GetValue(it)?.ToString() ?? "kg";
+                    var qty = GetDecimalProp(itType, it, "Quantity", "Qty");
+                    var price = GetDecimalProp(itType, it, "UnitPrice", "Price");
+                    rec.Items.Add(new ItemRec(itemName, unit, qty, price));
+                }
+            }
+
+            if (paymentsBySaleId.TryGetValue(o.SaleId, out var loadedPays))
+            {
+                rec.Payments = loadedPays;
+            }
+            else if (o.AmountPaid > 0)
+            {
+                var mStr = oType.GetProperty("PaymentMethod")?.GetValue(o)?.ToString() ?? "cash";
+                rec.Payments.Add(new PayRec(o.SaleDate, mStr.Trim().ToLowerInvariant(), o.AmountPaid, cashierName));
+            }
+
+            allBusinessSales.Add(rec);
+        }
+    }
+
+    static long? GetLongProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && long.TryParse(p.GetValue(obj)?.ToString(), out var v))
+                return v;
+        }
+        return null;
+    }
+
+    static decimal GetDecimalProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && decimal.TryParse(p.GetValue(obj)?.ToString(), NumberStyles.Any, Inv, out var v))
+                return v;
+        }
+        return 0m;
+    }
+
+    static DateTime? GetDateProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && p.GetValue(obj) is DateTime dt)
+                return dt;
+        }
+        return null;
+    }
+
+    static bool GetBoolProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && p.GetValue(obj) is bool b)
+                return b;
+        }
+        return false;
+    }
+
+    bool MatchesScope(long branchId)
+    {
+        if (!canSelectBranch && assignedBranchId.HasValue)
+            return branchId == assignedBranchId.Value;
+
+        if (effectiveBranchFilter.HasValue)
+            return branchId == effectiveBranchFilter.Value;
+
+        return true;
+    }
+
+    bool IsInSelectedPeriod(DateTime date)
+    {
+        if (selectedPeriod == "all") return true;
+
+        var d = date.Date;
+        var today = DateTime.Today;
+
+        return selectedPeriod switch
+        {
+            "today" => d == today,
+            "week" => GetWeekStart(d) == GetWeekStart(today),
+            "year" => d.Year == today.Year,
+            _ => d.Year == today.Year && d.Month == today.Month,
+        };
+    }
+
+    static DateTime GetWeekStart(DateTime date)
+    {
+        var diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
+        return date.AddDays(-diff).Date;
+    }
+
+    // ---------- COMPUTED ----------
+    List<SaleRec> ScopedSales => allBusinessSales.Where(s => MatchesScope(s.BranchId)).ToList();
+    List<SaleRec> PeriodSales => ScopedSales.Where(s => IsInSelectedPeriod(s.Date)).ToList();
+    IEnumerable<SaleRec> Active => PeriodSales.Where(s => !s.Voided);
+
+    List<SaleRec> Filtered => PeriodSales
         .Where(s => string.IsNullOrEmpty(statusFilter) || PayStatus(s) == statusFilter)
         .Where(s => string.IsNullOrWhiteSpace(searchText)
             || s.No.Contains(searchText, StringComparison.OrdinalIgnoreCase)
             || s.Customer.Contains(searchText, StringComparison.OrdinalIgnoreCase)
-            || s.Cashier.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+            || s.Cashier.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || s.BranchName.Contains(searchText, StringComparison.OrdinalIgnoreCase))
         .OrderByDescending(s => s.Date).ThenByDescending(s => s.No)
         .ToList();
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Filtered.Count / pageSize));
+    private int StartSale => Filtered.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    private int EndSale => Math.Min(currentPage * pageSize, Filtered.Count);
+    private IEnumerable<SaleRec> PaginatedSales
+    {
+        get
+        {
+            if (currentPage > TotalPages) currentPage = TotalPages;
+            if (currentPage < 1) currentPage = 1;
+            return Filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
+        }
+    }
+
+    private void GoToPage(int page) => currentPage = page;
+    private void PreviousPage() { if (currentPage > 1) currentPage--; }
+    private void NextPage() { if (currentPage < TotalPages) currentPage++; }
+    private void ResetPagination() => currentPage = 1;
 
     decimal MonthValue
     {
         get
         {
             var t = DateTime.Today;
-            return Active.Where(s => s.Date.Year == t.Year && s.Date.Month == t.Month).Sum(Total);
+            return ScopedSales.Where(s => !s.Voided && s.Date.Year == t.Year && s.Date.Month == t.Month).Sum(Total);
         }
     }
 
@@ -353,23 +828,41 @@
     {
         get
         {
-            var withBalance = Active.Count(s => Balance(s) > 0);
-            var payCount = Active.Sum(s => s.Payments.Count);
+            var periodList = PeriodSales;
+            var activeList = Active.ToList();
+            var withBalance = activeList.Count(s => Balance(s) > 0);
+            var payCount = activeList.Sum(s => s.Payments.Count);
             return new()
             {
-                new("TRANSACTIONS", sales.Count.ToString(), sales.Count(s => s.Voided) + " voided", "bi-receipt", ""),
-                new("SALES VALUE", Peso(Active.Sum(Total)), "", "bi-graph-up-arrow", ""),
-                new("COLLECTED", Peso(Active.Sum(Paid)), payCount + " payment records", "bi-cash", ""),
-                new("OUTSTANDING", Peso(Active.Sum(Balance)), withBalance + " with balance", "bi-x-circle", "stat-icon-warn"),
+                new("TRANSACTIONS", periodList.Count.ToString(), periodList.Count(s => s.Voided) + " voided (" + PeriodLabel + ")", "bi-receipt", ""),
+                new("SALES VALUE", Peso(activeList.Sum(Total)), PeriodLabel, "bi-graph-up", ""),
+                new("COLLECTED", Peso(activeList.Sum(Paid)), payCount + (payCount == 1 ? " payment record" : " payment records"), "bi-cash-stack", ""),
+                new("OUTSTANDING", Peso(activeList.Sum(Balance)), withBalance + (withBalance == 1 ? " with balance" : " with balance"), "bi-exclamation-circle", "stat-icon-warn"),
             };
         }
     }
 
     // ---------- HELPERS ----------
-    static decimal Subtotal(SaleRec s) => s.Items.Sum(i => i.Qty * i.Price);
-    static decimal Total(SaleRec s) => Math.Max(0, Subtotal(s) - s.Discount);
-    static decimal Paid(SaleRec s) => s.Payments.Sum(p => p.Amount);
-    static decimal Balance(SaleRec s) => Math.Max(0, Total(s) - Paid(s));
+    static decimal Subtotal(SaleRec s)
+    {
+        if (s.Items.Count > 0) return s.Items.Sum(i => i.Qty * i.Price);
+        if (s.ExplicitTotal.HasValue) return Math.Max(0m, s.ExplicitTotal.Value + s.Discount - s.Tax);
+        return 0m;
+    }
+
+    static decimal Total(SaleRec s)
+    {
+        if (s.ExplicitTotal.HasValue && s.Items.Count == 0) return Math.Max(0m, s.ExplicitTotal.Value);
+        return Math.Max(0m, Subtotal(s) - s.Discount + s.Tax);
+    }
+
+    static decimal Paid(SaleRec s)
+    {
+        if (s.Payments.Count > 0) return s.Payments.Sum(p => p.Amount);
+        return Math.Max(0m, s.ExplicitPaid ?? 0m);
+    }
+
+    static decimal Balance(SaleRec s) => s.Voided ? 0m : Math.Max(0m, Total(s) - Paid(s));
 
     static string PayStatus(SaleRec s) => Balance(s) <= 0 ? "paid" : Paid(s) > 0 ? "partial" : "unpaid";
 
@@ -382,6 +875,29 @@
     static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
 
     // ---------- ACTIONS ----------
+    async Task OnBranchChanged(ChangeEventArgs e)
+    {
+        if (!canSelectBranch) return;
+        selectedBranchIdStr = e.Value?.ToString() ?? "all";
+        ResetPagination();
+        UpdateActiveBranchLabel();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task OnPeriodChanged(ChangeEventArgs e)
+    {
+        selectedPeriod = e.Value?.ToString() ?? "all";
+        ResetPagination();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task OnStatusChanged(ChangeEventArgs e)
+    {
+        statusFilter = e.Value?.ToString() ?? "";
+        ResetPagination();
+        await InvokeAsync(StateHasChanged);
+    }
+
     void GoNewSale() => Nav.NavigateTo("new-sale");
     void GoCollections() => Nav.NavigateTo("payments");
 
@@ -399,7 +915,7 @@
         closing = true;
         showReceipt = false;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(240);   // hulat sa slide-out animation
+        await Task.Delay(240);
         selected = null;
         closing = false;
         confirmVoid = false;
@@ -408,12 +924,31 @@
 
     async Task VoidSale()
     {
-        if (selected == null) return;
-        selected.Voided = true;
-        confirmVoid = false;
-        // TODO: ibalik ang quantity sa produce stock, i-reverse ang bayad sa Cash Drawer / Payments,
-        // ug i-log sa Audit Logs (Void · Sales Transactions)
-        await ShowToast(selected.No + " was voided.");
+        if (selected == null || isSaving) return;
+        isSaving = true;
+        try
+        {
+            selected.Voided = true;
+            confirmVoid = false;
+
+            if (selected.OrderEntity != null)
+            {
+                selected.OrderEntity.Status = "Voided";
+                var oType = selected.OrderEntity.GetType();
+                var isVoidedProp = oType.GetProperty("IsVoided", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (isVoidedProp != null && isVoidedProp.CanWrite && isVoidedProp.PropertyType == typeof(bool))
+                {
+                    isVoidedProp.SetValue(selected.OrderEntity, true);
+                }
+                await DbContext.SaveChangesAsync();
+            }
+
+            await ShowToast(selected.No + " was voided.");
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
     async Task ShowToast(string message)

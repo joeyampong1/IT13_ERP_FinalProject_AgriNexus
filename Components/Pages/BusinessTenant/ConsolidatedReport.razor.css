@@ -1,6 +1,6 @@
 /* CSS for ConsolidatedReport component */
 .page-title {
-    font-weight: 700;
+    font-weight: 800;
     font-size: 2rem;
     letter-spacing: -0.5px;
     color: #0A2B1D;
@@ -11,73 +11,146 @@
     font-size: .95rem;
 }
 
-/* ---------- BUTTONS ---------- */
-.btn-outline-lg {
-    background: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: .55rem 1.1rem;
-    font-weight: 500;
-    font-size: .9rem;
-    color: var(--text-main);
+/* ---------- FILTERS & BUTTONS ---------- */
+.dashboard-filter-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    background-color: #FFFFFF;
+    border: 1px solid #DCE7E0;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(10, 43, 29, 0.04);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+    .dashboard-filter-wrap:hover {
+        border-color: #78BE3F;
+        background-color: #F9FCF9;
+    }
+
+    .dashboard-filter-wrap:focus-within {
+        border-color: #1B5E34;
+        box-shadow: 0 0 0 3px rgba(120, 190, 63, 0.22);
+    }
+
+.dashboard-filter-icon {
+    position: absolute;
+    left: 0.85rem;
+    color: #1B5E34;
+    font-size: 0.85rem;
+    pointer-events: none;
+}
+
+.dashboard-filter-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #0A2B1D;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.55rem 2.25rem 0.55rem 2.2rem;
     cursor: pointer;
+    line-height: 1.25;
+}
+
+.dashboard-filter-caret {
+    position: absolute;
+    right: 0.8rem;
+    color: #475569;
+    font-size: 0.75rem;
+    pointer-events: none;
+}
+
+.btn-outline-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #FFFFFF;
+    border: 1px solid #D5E6DC;
+    border-radius: 12px;
+    padding: .55rem 1.15rem;
+    font-weight: 600;
+    font-size: .9rem;
+    color: #0A2B1D;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
     .btn-outline-lg:hover {
-        background: #F1F5F9;
-        border-color: #CBD5E1;
+        background: #E8F3EC;
+        border-color: #1B5E34;
+        color: #1B5E34;
     }
 
 .btn-icon {
-    background: none;
-    border: 0;
-    border-radius: 8px;
-    padding: 4px 8px;
-    color: #1E293B;
+    background: #F4F9F6;
+    border: 1px solid #DCE7E0;
+    border-radius: 10px;
+    padding: 6px 10px;
+    color: #1B5E34;
     cursor: pointer;
+    transition: all 0.18s ease;
 }
 
     .btn-icon:hover {
-        background: #F1F5F9;
+        background: #E8F3EC;
+        border-color: #1B5E34;
     }
 
 /* ---------- STAT CARDS ---------- */
 .stat-card {
+    background-color: #FFFFFF;
+    border: 1px solid #E2ECE6;
     border-radius: 16px;
     padding: 20px 22px;
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(10, 43, 29, 0.07);
+    }
 
     .stat-card .card-title {
         font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #64748B;
         margin-bottom: 0;
         line-height: 1.3;
     }
 
     .stat-card .card-value {
-        font-size: 1.7rem;
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: #0A2B1D;
         letter-spacing: -0.5px;
     }
 
 .stat-icon {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     flex-shrink: 0;
     border-radius: 10px;
-    background: #E8EEEA;
-    color: #1B4D2E;
+    background: #E8F3EC;
+    color: #1B5E34;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    font-size: 1.05rem;
 }
 
-.stat-icon-plain {
-    background: transparent;
+.stat-icon-leaf {
+    background: #EEF6E8;
+    color: #4E8D2A;
 }
 
-.stat-icon-blue {
-    background: #E0F2FE;
-    color: #0369A1;
+.stat-icon-earth {
+    background: #F5EFEA;
+    color: #7A5230;
 }
 
 /* ---------- CHART PANELS ---------- */
@@ -89,24 +162,25 @@
 
 .panel-sub {
     font-size: .8rem;
-    color: var(--text-muted);
+    color: #64748B;
     margin-bottom: .75rem;
 }
 
 .legend-dot {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     margin-right: 6px;
 }
 
 /* ---------- TABLE PANELS ---------- */
 .panel {
-    background: #fff;
-    border: 1px solid var(--border-color);
+    background: #FFFFFF;
+    border: 1px solid #E2ECE6;
     border-radius: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    box-shadow: 0 2px 8px rgba(10, 43, 29, 0.04);
+    overflow: hidden;
 }
 
 .panel-head {
@@ -126,10 +200,11 @@
         font-size: .7rem;
         letter-spacing: .08em;
         text-transform: uppercase;
-        color: var(--text-muted);
-        font-weight: 600;
+        color: #64748B;
+        font-weight: 700;
         padding: .9rem 1rem;
-        border-bottom: 1px solid var(--border-color);
+        background-color: #F7FAF8;
+        border-bottom: 1px solid #E2ECE6;
         white-space: nowrap;
     }
 
@@ -139,12 +214,16 @@
         }
 
     .data-table td {
-        padding: .8rem 1rem;
-        border-color: var(--border-color);
+        padding: .85rem 1rem;
+        border-color: #E2ECE6;
     }
 
     .data-table tbody tr:last-child td {
         border-bottom: 0;
+    }
+
+    .data-table tbody tr:hover {
+        background-color: #F4F8F5;
     }
 
     .data-table .w-category {

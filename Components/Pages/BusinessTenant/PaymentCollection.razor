@@ -1,15 +1,48 @@
 ﻿@page "/payments"
 @using System.Globalization
+@using System.Reflection
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
 @inject AgriNexus.Services.AuthService Auth
 
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <h2 class="page-title">Payments &amp; Collections</h2>
-        <p class="text-muted mb-0 page-sub">@ActiveBranch · collect full or partial payments, issue receipts, and monitor daily collections.</p>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@ActiveBranch</strong> · collect full or partial payments, issue receipts, and monitor daily collections.
+        </p>
     </div>
-    <button type="button" class="btn-solid" @onclick="OpenNewCollection">
-        <i class="bi bi-cash"></i> New collection
-    </button>
+
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        @if (canSelectBranch)
+        {
+            <div class="dashboard-filter-wrap">
+                <i class="bi bi-shop dashboard-filter-icon"></i>
+                <select class="dashboard-filter-select" value="@selectedBranchIdStr" @onchange="OnBranchChanged" aria-label="Filter branch">
+                    <option value="all">All Branches</option>
+                    @foreach (var b in businessBranches)
+                    {
+                        <option value="@b.BranchId">@b.BranchName</option>
+                    }
+                </select>
+                <i class="bi bi-chevron-down dashboard-filter-caret"></i>
+            </div>
+        }
+
+        <div class="dashboard-filter-wrap">
+            <i class="bi bi-funnel dashboard-filter-icon"></i>
+            <select class="dashboard-filter-select" value="@selectedPeriod" @onchange="OnPeriodChanged" aria-label="Filter period">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+            </select>
+            <i class="bi bi-chevron-down dashboard-filter-caret"></i>
+        </div>
+    </div>
 </div>
 
 <!-- STAT CARDS -->
@@ -38,191 +71,222 @@
     <button type="button" class="tab-btn @(activeTab == "daily" ? "active" : "")" @onclick='() => SetTab("daily")'>Daily collection report</button>
 </div>
 
-<!-- ======================= PAYMENT HISTORY ======================= -->
-@if (activeTab == "history")
+@if (isLoading)
 {
-    <div class="toolbar mb-3">
-        <div class="search-box">
-            <input type="text" placeholder="Search payments..." @bind="searchText" @bind:event="oninput" />
-        </div>
-        <span class="text-muted small">@FilteredPayments.Count @(FilteredPayments.Count == 1 ? "payment" : "payments")</span>
-    </div>
-
-    <div class="panel">
-        <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Sale no.</th>
-                        <th>Customer</th>
-                        <th>Method</th>
-                        <th>Reference</th>
-                        <th>Amount</th>
-                        <th>Received by</th>
-                        <th>Status</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var p in FilteredPayments)
-                    {
-                        <tr>
-                            <td class="text-nowrap">@p.Date.ToString("MMM d, yyyy", Inv)</td>
-                            <td class="text-nowrap">@p.SaleNo</td>
-                            <td class="col-customer">@CustomerOf(p.SaleNo)</td>
-                            <td>@Cap(p.Method)</td>
-                            <td class="text-nowrap">@p.Reference</td>
-                            <td class="fw-medium text-nowrap @(p.Voided ? "struck" : "")">@Peso(p.Amount)</td>
-                            <td class="text-nowrap">@p.ReceivedBy</td>
-                            <td>
-                                <span class="pill @(p.Voided ? "pill-red" : "pill-green")" title="@p.VoidReason">@(p.Voided ? "Voided" : "Posted")</span>
-                            </td>
-                            <td class="text-end">
-                                @if (!p.Voided)
-                                {
-                                    <button type="button" class="btn-void" @onclick="() => OpenVoid(p)">Void</button>
-                                }
-                            </td>
-                        </tr>
-                    }
-                    @if (FilteredPayments.Count == 0)
-                    {
-                        <tr><td colspan="9" class="text-center text-muted py-5">No payments found.</td></tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+    <div class="text-muted py-5 text-center">
+        <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+        Loading collections data...
     </div>
 }
-
-<!-- ======================= PARTIAL & UNPAID ======================= -->
-@if (activeTab == "unpaid")
+else
 {
-    <div class="panel">
-        <div class="panel-head">
-            <div class="panel-title">Sales with an outstanding balance</div>
-            <div class="panel-sub mb-0">Partial payments keep the remaining balance open until fully paid.</div>
+    <!-- ======================= PAYMENT HISTORY ======================= -->
+    @if (activeTab == "history")
+    {
+        <div class="toolbar mb-3">
+            <div class="search-box">
+                <i class="bi bi-search"></i>
+                <input type="text" placeholder="Search payments..." @bind="searchText" @bind:event="oninput" />
+            </div>
+            <span class="text-muted small">@FilteredPayments.Count @(FilteredPayments.Count == 1 ? "payment" : "payments")</span>
+
+            <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNewCollection">
+                <i class="bi bi-plus-lg"></i> New collection
+            </button>
         </div>
-        <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th>Sale no.</th>
-                        <th>Date</th>
-                        <th>Customer</th>
-                        <th>Total</th>
-                        <th>Paid</th>
-                        <th>Balance</th>
-                        <th>Status</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var s in OpenSales)
-                    {
-                        var st = SaleStatus(s);
+
+        <div class="panel">
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
                         <tr>
-                            <td class="text-nowrap">@s.No</td>
-                            <td class="text-nowrap">@s.Date.ToString("MMM d, yyyy", Inv)</td>
-                            <td class="col-customer">@s.Customer</td>
-                            <td class="text-nowrap">@Peso(s.Total)</td>
-                            <td class="text-nowrap">@Peso(Paid(s))</td>
-                            <td class="text-nowrap neg fw-medium">@Peso(Balance(s))</td>
-                            <td><span class="pill @(st == "partial" ? "pill-yellow" : "pill-red")">@(st == "partial" ? "Partial" : "Unpaid")</span></td>
-                            <td class="text-end">
-                                <button type="button" class="btn-collect" @onclick="() => OpenCollect(s)">Collect</button>
-                            </td>
+                            <th>Date</th>
+                            <th>Sale no.</th>
+                            <th>Customer</th>
+                            <th>Method</th>
+                            <th>Reference</th>
+                            <th>Amount</th>
+                            <th>Received by</th>
+                            <th>Status</th>
+                            <th></th>
                         </tr>
-                    }
-                    @if (OpenSales.Count == 0)
-                    {
-                        <tr><td colspan="8" class="text-center text-muted py-5">All sales are fully paid.</td></tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
-}
-
-<!-- ======================= DAILY COLLECTION REPORT ======================= -->
-@if (activeTab == "daily")
-{
-    <div class="row g-3">
-        <div class="col-12 col-lg-8">
-            <div class="panel h-100">
-                <div class="panel-head">
-                    <div class="panel-title">Daily collection report</div>
-                    <div class="panel-sub mb-0">Cash versus digital collections per day</div>
-                </div>
-                <div class="table-wrap">
-                    <table class="table data-table align-middle mb-0">
-                        <thead>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in FilteredPayments)
+                        {
                             <tr>
-                                <th>Date</th>
-                                <th>Payments</th>
-                                <th>Cash</th>
-                                <th>Gcash / Bank / Check</th>
-                                <th>Total collected</th>
+                                <td class="text-nowrap">@p.Date.ToString("MMM d, yyyy", Inv)</td>
+                                <td class="text-nowrap fw-semibold" style="color: #1B5E34;">@p.SaleNo</td>
+                                <td class="col-customer fw-medium" style="color: #0A2B1D;">@CustomerOf(p.SaleNo)</td>
+                                <td>@Cap(p.Method)</td>
+                                <td class="text-nowrap">@(string.IsNullOrWhiteSpace(p.Reference) ? "—" : p.Reference)</td>
+                                <td class="fw-semibold text-nowrap @(p.Voided ? "struck" : "")">@Peso(p.Amount)</td>
+                                <td class="text-nowrap">@(string.IsNullOrWhiteSpace(p.ReceivedBy) ? "—" : p.ReceivedBy)</td>
+                                <td>
+                                    <span class="pill @(p.Voided ? "pill-red" : "pill-green")" title="@p.VoidReason">@(p.Voided ? "Voided" : "Posted")</span>
+                                </td>
+                                <td class="text-end">
+                                    @if (!p.Voided)
+                                    {
+                                        <button type="button" class="btn-void" @onclick="() => OpenVoid(p)">Void</button>
+                                    }
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var d in Daily)
-                            {
+                        }
+                        @if (FilteredPayments.Count == 0)
+                        {
+                            <tr><td colspan="9" class="text-center text-muted py-5">No payments found.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <!-- ======================= PARTIAL & UNPAID ======================= -->
+    @if (activeTab == "unpaid")
+    {
+        <div class="toolbar mb-3">
+            <span class="text-muted small">@OpenSales.Count @(OpenSales.Count == 1 ? "sale" : "sales") with balance</span>
+            <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNewCollection">
+                <i class="bi bi-plus-lg"></i> New collection
+            </button>
+        </div>
+
+        <div class="panel">
+            <div class="panel-head">
+                <div class="panel-title">Sales with an outstanding balance</div>
+                <div class="panel-sub mb-0">Partial payments keep the remaining balance open until fully paid.</div>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Sale no.</th>
+                            <th>Date</th>
+                            <th>Customer</th>
+                            <th>Branch</th>
+                            <th>Total</th>
+                            <th>Paid</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in OpenSales)
+                        {
+                            var st = SaleStatus(s);
+                            <tr>
+                                <td class="text-nowrap fw-semibold" style="color: #1B5E34;">@s.No</td>
+                                <td class="text-nowrap">@s.Date.ToString("MMM d, yyyy", Inv)</td>
+                                <td class="col-customer fw-medium" style="color: #0A2B1D;">@s.Customer</td>
+                                <td class="text-nowrap fw-medium">@s.BranchName</td>
+                                <td class="text-nowrap fw-semibold">@Peso(s.Total)</td>
+                                <td class="text-nowrap">@Peso(Paid(s))</td>
+                                <td class="text-nowrap neg fw-semibold">@Peso(Balance(s))</td>
+                                <td><span class="pill @(st == "partial" ? "pill-yellow" : "pill-red")">@(st == "partial" ? "Partial" : "Unpaid")</span></td>
+                                <td class="text-end">
+                                    <button type="button" class="btn-collect" @onclick="() => OpenCollect(s)">Collect</button>
+                                </td>
+                            </tr>
+                        }
+                        @if (OpenSales.Count == 0)
+                        {
+                            <tr><td colspan="9" class="text-center text-muted py-5">All sales are fully paid.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <!-- ======================= DAILY COLLECTION REPORT ======================= -->
+    @if (activeTab == "daily")
+    {
+        <div class="toolbar mb-3">
+            <span class="text-muted small">@Daily.Count @(Daily.Count == 1 ? "day" : "days") · @PeriodLabel</span>
+            <button type="button" class="btn-new ms-auto shadow-sm" @onclick="OpenNewCollection">
+                <i class="bi bi-plus-lg"></i> New collection
+            </button>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-12 col-lg-8">
+                <div class="panel h-100">
+                    <div class="panel-head">
+                        <div class="panel-title">Daily collection report</div>
+                        <div class="panel-sub mb-0">Cash versus digital collections per day</div>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="table data-table align-middle mb-0">
+                            <thead>
                                 <tr>
-                                    <td class="text-nowrap">@d.Date.ToString("MMM d, yyyy", Inv)</td>
-                                    <td>@d.Count</td>
-                                    <td class="text-nowrap">@Peso(d.Cash)</td>
-                                    <td class="text-nowrap">@Peso(d.Digital)</td>
-                                    <td class="fw-medium text-nowrap">@Peso(d.Total)</td>
+                                    <th>Date</th>
+                                    <th>Payments</th>
+                                    <th>Cash</th>
+                                    <th>Gcash / Bank / Check</th>
+                                    <th>Total collected</th>
                                 </tr>
-                            }
-                            @if (Daily.Count == 0)
+                            </thead>
+                            <tbody>
+                                @foreach (var d in Daily)
+                                {
+                                    <tr>
+                                        <td class="text-nowrap">@d.Date.ToString("MMM d, yyyy", Inv)</td>
+                                        <td>@d.Count</td>
+                                        <td class="text-nowrap">@Peso(d.Cash)</td>
+                                        <td class="text-nowrap">@Peso(d.Digital)</td>
+                                        <td class="fw-semibold text-nowrap" style="color: #1B5E34;">@Peso(d.Total)</td>
+                                    </tr>
+                                }
+                                @if (Daily.Count == 0)
+                                {
+                                    <tr><td colspan="5" class="text-center text-muted py-5">No collections recorded.</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-4">
+                <div class="card-box h-100">
+                    <div class="panel-title">Collections by method</div>
+                    <div class="panel-sub">Total amount received per channel</div>
+
+                    <div class="d-flex justify-content-center my-3">
+                        <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Collections by method">
+                            @if (Slices.Count == 0)
                             {
-                                <tr><td colspan="5" class="text-center text-muted py-5">No collections recorded.</td></tr>
+                                <circle cx="100" cy="100" r="@Radius" fill="none" stroke="#E2ECE6" stroke-width="30" />
                             }
-                        </tbody>
-                    </table>
+                            @{
+                                double offset = 0;
+                            }
+                            @foreach (var m in Slices)
+                            {
+                                var len = (double)(m.Amount / SliceTotal) * Circ;
+                                var dash = Slices.Count == 1 ? len : Math.Max(len - 2, 0.5);
+                                <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@MethodColor(m.Method)" stroke-width="30"
+                                        stroke-dasharray="@F(dash) @F(Circ - dash)"
+                                        stroke-dashoffset="@F(-offset)"
+                                        transform="rotate(-90 100 100)" />
+                                offset += len;
+                            }
+                        </svg>
+                    </div>
+
+                    <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
+                        @foreach (var m in LegendSlices)
+                        {
+                            <span><span class="legend-dot" style="background:@MethodColor(m.Method)"></span>@Cap(m.Method) · @Short(m.Amount)</span>
+                        }
+                    </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-12 col-lg-4">
-            <div class="card-box h-100">
-                <div class="panel-title">Collections by method</div>
-                <div class="panel-sub">Total amount received per channel</div>
-
-                <div class="d-flex justify-content-center my-3">
-                    <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Collections by method">
-                        @if (Slices.Count == 0)
-                        {
-                            <circle cx="100" cy="100" r="@Radius" fill="none" stroke="#E2E8F0" stroke-width="30" />
-                        }
-                        @{
-                            double offset = 0;
-                        }
-                        @foreach (var m in Slices)
-                        {
-                            var len = (double)(m.Amount / SliceTotal) * Circ;
-                            var dash = Slices.Count == 1 ? len : Math.Max(len - 2, 0.5);
-                            <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@MethodColor(m.Method)" stroke-width="30"
-                                    stroke-dasharray="@F(dash) @F(Circ - dash)"
-                                    stroke-dashoffset="@F(-offset)"
-                                    transform="rotate(-90 100 100)" />
-                            offset += len;
-                        }
-                    </svg>
-                </div>
-
-                <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
-                    @foreach (var m in LegendSlices)
-                    {
-                        <span><span class="legend-dot" style="background:@MethodColor(m.Method)"></span>@Cap(m.Method) · @Short(m.Amount)</span>
-                    }
-                </div>
-            </div>
-        </div>
-    </div>
+    }
 }
 
 <!-- ======================= MODAL: NEW COLLECTION ======================= -->
@@ -244,7 +308,7 @@
                     <option value="">Select...</option>
                     @foreach (var s in OpenSales)
                     {
-                        <option value="@s.No">@s.No · @s.Customer · @Peso(Balance(s)) balance</option>
+                        <option value="@s.No">@s.No · @s.Customer (@s.BranchName) · @Peso(Balance(s)) balance</option>
                     }
                 </select>
                 @if (showErrors && string.IsNullOrEmpty(newSaleNo))
@@ -273,7 +337,7 @@
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <h5 class="modal-heading mb-1">Collect payment · @collectSale.No</h5>
-                    <div class="modal-sub">Outstanding balance @Peso(Balance(collectSale)) for @collectSale.Customer. Partial payments keep the remaining balance outstanding.</div>
+                    <div class="modal-sub">Outstanding balance @Peso(Balance(collectSale)) for @collectSale.Customer (@collectSale.BranchName). Partial payments keep the remaining balance outstanding.</div>
                 </div>
                 <button type="button" class="btn-close-x" @onclick="CloseModal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
             </div>
@@ -292,7 +356,7 @@
                     <select class="form-select" @bind="method">
                         @foreach (var m in MethodOptions)
                         {
-                            <option value="@m">@m</option>
+                            <option value="@m">@Cap(m)</option>
                         }
                     </select>
                 </div>
@@ -319,7 +383,7 @@
 
             <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
                 <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="PostPayment">Post payment</button>
+                <button type="button" class="btn-save" @onclick="PostPayment" disabled="@isSaving">Post payment</button>
             </div>
         </div>
     </div>
@@ -345,7 +409,7 @@
 
             <div class="d-flex justify-content-end align-items-center gap-3 mt-4">
                 <button type="button" class="btn-cancel" @onclick="CloseModal">Cancel</button>
-                <button type="button" class="btn-save" @onclick="ConfirmVoid">Void payment</button>
+                <button type="button" class="btn-save" @onclick="ConfirmVoid" disabled="@isSaving">Void payment</button>
             </div>
         </div>
     </div>
@@ -353,25 +417,33 @@
 
 @if (!string.IsNullOrEmpty(toast))
 {
-    <div class="toast-note"><i class="bi bi-check-circle-fill"></i> @toast</div>
+    <div class="toast-note shadow-lg"><i class="bi bi-check2"></i> <span>@toast</span></div>
 }
 
 @code {
-    // ---------- MODELS ----------
     class SaleRec
     {
+        public int SaleId { get; set; }
+        public object? Entity { get; set; }
         public string No { get; set; } = "";
         public DateTime Date { get; set; }
         public string Customer { get; set; } = "";
+        public int? CustomerId { get; set; }
+        public long BranchId { get; set; }
+        public string BranchName { get; set; } = "";
         public decimal Total { get; set; }
+        public decimal InitialPaid { get; set; }
     }
 
     class PayRec
     {
         public int Id { get; set; }
+        public object? Entity { get; set; }
+        public int SaleId { get; set; }
         public string SaleNo { get; set; } = "";
+        public long BranchId { get; set; }
         public DateTime Date { get; set; }
-        public string Method { get; set; } = "cash";   // cash | gcash | bank | check
+        public string Method { get; set; } = "cash";
         public string Reference { get; set; } = "";
         public decimal Amount { get; set; }
         public string ReceivedBy { get; set; } = "";
@@ -385,19 +457,28 @@
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     static readonly string[] MethodOptions = { "cash", "gcash", "bank", "check" };
-    static readonly string[] SliceOrder = { "cash", "gcash", "bank", "check" };    // clockwise sa donut
-    static readonly string[] LegendOrder = { "cash", "bank", "gcash", "check" };   // order sa legend
+    static readonly string[] SliceOrder = { "cash", "gcash", "bank", "check" };
+    static readonly string[] LegendOrder = { "cash", "bank", "gcash", "check" };
     const double Radius = 70;
     static readonly double Circ = 2 * Math.PI * Radius;
 
-    // TODO: kuhaa gikan sa naka-login nga tenant / branch
-    const string ActiveBranch = "North Field Branch";
+    long currentBusinessId;
+    long? assignedBranchId;
+    bool canSelectBranch;
+    long? effectiveBranchFilter => canSelectBranch
+        ? (long.TryParse(selectedBranchIdStr, out var bid) && bid > 0 ? bid : null)
+        : assignedBranchId;
 
-    // ---------- STATE ----------
+    string selectedBranchIdStr = "all";
+    string ActiveBranch = "All Branches";
+
+    bool isLoading = true;
+    bool isSaving;
+    string selectedPeriod = "all";
     string activeTab = "history";
     string searchText = "";
     string toast = "";
-    string? modal;                 // new | collect | void
+    string? modal;
     bool showErrors;
 
     string newSaleNo = "";
@@ -411,55 +492,381 @@
     PayRec? voidPay;
     string voidReason = "";
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // 14 ka sales: total 123,280 · collected 92,120 · outstanding 31,160
-    readonly List<SaleRec> sales = new()
+    List<Branch> businessBranches = new();
+    readonly Dictionary<long, string> branchNames = new();
+    readonly Dictionary<int, object> customerEntities = new();
+    readonly Dictionary<int, string> customerNames = new();
+    readonly List<SaleRec> allBusinessSales = new();
+    readonly List<PayRec> allBusinessPayments = new();
+
+    string PeriodLabel => selectedPeriod switch
     {
-        new() { No = "SO-0014", Date = new(2026, 10, 24), Customer = "Municipal Market Vendors",    Total = 4400 },
-        new() { No = "SO-0013", Date = new(2026, 10, 23), Customer = "Walk-in customers",           Total = 2600 },
-        new() { No = "SO-0012", Date = new(2026, 10, 21), Customer = "Barangay Nutrition Program",  Total = 10580 },
-        new() { No = "SO-0011", Date = new(2026, 10, 18), Customer = "Bayanihan Trading",           Total = 11100 },
-        new() { No = "SO-0010", Date = new(2026, 10, 12), Customer = "Rural Bank Cooperative Store", Total = 13860 },
-        new() { No = "SO-0009", Date = new(2026, 10, 6),  Customer = "Verdant Fresh Retail",        Total = 9880 },
-        new() { No = "SO-0008", Date = new(2026, 9, 27),  Customer = "Municipal Market Vendors",    Total = 7560 },
-        new() { No = "SO-0007", Date = new(2026, 9, 14),  Customer = "Walk-in customers",           Total = 4680 },
-        new() { No = "SO-0006", Date = new(2026, 9, 2),   Customer = "Bayanihan Trading",           Total = 12900 },
-        new() { No = "SO-0005", Date = new(2026, 8, 21),  Customer = "Barangay Nutrition Program",  Total = 7920 },
-        new() { No = "SO-0004", Date = new(2026, 8, 5),   Customer = "Rural Bank Cooperative Store", Total = 15000 },
-        new() { No = "SO-0003", Date = new(2026, 7, 19),  Customer = "Verdant Fresh Retail",        Total = 5700 },
-        new() { No = "SO-0002", Date = new(2026, 7, 8),   Customer = "Walk-in customers",           Total = 8840 },
-        new() { No = "SO-0001", Date = new(2026, 6, 24),  Customer = "Bayanihan Trading",           Total = 8260 },
+        "today" => "Today",
+        "week" => "This Week",
+        "month" => "This Month",
+        "year" => "This Year",
+        _ => "All Time"
     };
 
-    // 14 ka payment records: cash 38,100 · bank 24,020 · gcash 30,000
-    readonly List<PayRec> payments = new()
+    protected override async Task OnInitializedAsync()
     {
-        new() { Id = 1,  SaleNo = "SO-0014", Date = new(2026, 10, 24), Method = "cash",  Reference = "",         Amount = 4400,  ReceivedBy = "Noel Bautista" },
-        new() { Id = 2,  SaleNo = "SO-0013", Date = new(2026, 10, 23), Method = "cash",  Reference = "",         Amount = 2600,  ReceivedBy = "Paolo Gutierrez" },
-        new() { Id = 3,  SaleNo = "SO-0012", Date = new(2026, 10, 21), Method = "cash",  Reference = "",         Amount = 10580, ReceivedBy = "Jhoanna Reyes" },
-        new() { Id = 4,  SaleNo = "SO-0011", Date = new(2026, 10, 18), Method = "bank",  Reference = "BP-9910",  Amount = 11100, ReceivedBy = "Paolo Gutierrez" },
-        new() { Id = 5,  SaleNo = "SO-0010", Date = new(2026, 10, 16), Method = "gcash", Reference = "GC-99120", Amount = 2860,  ReceivedBy = "Jhoanna Reyes" },
-        new() { Id = 6,  SaleNo = "SO-0010", Date = new(2026, 10, 12), Method = "cash",  Reference = "",         Amount = 4000,  ReceivedBy = "Noel Bautista" },
-        new() { Id = 7,  SaleNo = "SO-0009", Date = new(2026, 10, 6),  Method = "gcash", Reference = "GC-98410", Amount = 9880,  ReceivedBy = "Paolo Gutierrez" },
-        new() { Id = 8,  SaleNo = "SO-0007", Date = new(2026, 9, 14),  Method = "cash",  Reference = "",         Amount = 4680,  ReceivedBy = "Jhoanna Reyes" },
-        new() { Id = 9,  SaleNo = "SO-0006", Date = new(2026, 9, 2),   Method = "bank",  Reference = "BP-9741",  Amount = 5000,  ReceivedBy = "Noel Bautista" },
-        new() { Id = 10, SaleNo = "SO-0005", Date = new(2026, 8, 21),  Method = "bank",  Reference = "BP-9602",  Amount = 7920,  ReceivedBy = "Paolo Gutierrez" },
-        new() { Id = 11, SaleNo = "SO-0004", Date = new(2026, 8, 5),   Method = "gcash", Reference = "GC-97530", Amount = 9000,  ReceivedBy = "Jhoanna Reyes" },
-        new() { Id = 12, SaleNo = "SO-0003", Date = new(2026, 7, 19),  Method = "cash",  Reference = "",         Amount = 3000,  ReceivedBy = "Noel Bautista" },
-        new() { Id = 13, SaleNo = "SO-0002", Date = new(2026, 7, 8),   Method = "cash",  Reference = "",         Amount = 8840,  ReceivedBy = "Paolo Gutierrez" },
-        new() { Id = 14, SaleNo = "SO-0001", Date = new(2026, 6, 24),  Method = "gcash", Reference = "GC-96105", Amount = 8260,  ReceivedBy = "Jhoanna Reyes" },
-    };
+        try
+        {
+            await ResolveTenantAndRoleScopeAsync();
+            UpdateActiveBranchLabel();
+            await LoadActualDataAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowToast("Error loading collections: " + ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
 
-    // ---------- COMPUTED ----------
-    // Ang paid ug balance kay computed gikan sa payments nga wala pa na-void
-    decimal Paid(SaleRec s) => payments.Where(p => p.SaleNo == s.No && !p.Voided).Sum(p => p.Amount);
+    private async Task ResolveTenantAndRoleScopeAsync()
+    {
+        User? currentUser = null;
+
+        if (Auth.CurrentUserId > 0)
+        {
+            currentUser = await DbContext.Users
+                .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+        }
+        else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+        {
+            var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+            currentUser = await DbContext.Users
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+        }
+        else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+        {
+            currentUser = await DbContext.Users
+                .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                       || u.FName == Auth.CurrentUserName);
+        }
+
+        if (currentUser?.BusinessId != null)
+        {
+            currentBusinessId = currentUser.BusinessId.Value;
+            assignedBranchId = currentUser.BranchId;
+        }
+        else
+        {
+            var firstBiz = await DbContext.Businesses.FirstOrDefaultAsync();
+            if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+        }
+
+        var roleText = (currentUser?.Role ?? "").Trim().ToLowerInvariant();
+        var isTenantOwnerOrAdmin = string.IsNullOrEmpty(roleText)
+            || roleText.Contains("tenant")
+            || roleText.Contains("owner")
+            || roleText.Contains("admin")
+            || roleText.Contains("superadmin")
+            || roleText.Contains("director");
+
+        // Staff with an assigned branch only see their branch; tenant owner/admin sees all branches
+        canSelectBranch = isTenantOwnerOrAdmin || !assignedBranchId.HasValue;
+        if (!canSelectBranch && assignedBranchId.HasValue)
+        {
+            selectedBranchIdStr = assignedBranchId.Value.ToString();
+        }
+
+        businessBranches = await DbContext.Branches
+            .Where(b => b.BusinessId == currentBusinessId)
+            .OrderBy(b => b.BranchName)
+            .ToListAsync();
+
+        branchNames.Clear();
+        foreach (var b in businessBranches)
+        {
+            branchNames[b.BranchId] = b.BranchName;
+        }
+    }
+
+    private void UpdateActiveBranchLabel()
+    {
+        if (!canSelectBranch && assignedBranchId.HasValue)
+        {
+            ActiveBranch = branchNames.TryGetValue(assignedBranchId.Value, out var bName)
+                ? bName
+                : "Assigned Branch";
+            return;
+        }
+
+        if (effectiveBranchFilter.HasValue)
+        {
+            ActiveBranch = branchNames.TryGetValue(effectiveBranchFilter.Value, out var bName)
+                ? bName
+                : "Selected Branch";
+            return;
+        }
+
+        ActiveBranch = businessBranches.Count == 1
+            ? businessBranches[0].BranchName
+            : "All Branches (Overall)";
+    }
+
+    private async Task LoadActualDataAsync()
+    {
+        customerEntities.Clear();
+        customerNames.Clear();
+        allBusinessSales.Clear();
+        allBusinessPayments.Clear();
+
+        var dbCustomers = await DbContext.Customers.ToListAsync();
+        foreach (var c in dbCustomers)
+        {
+            var t = c.GetType();
+            var bizVal = GetLongProp(t, c, "BusinessId");
+            if (currentBusinessId > 0 && bizVal.HasValue && bizVal.Value > 0 && bizVal.Value != currentBusinessId)
+                continue;
+
+            var idObj = t.GetProperty("CustomerId")?.GetValue(c) ?? t.GetProperty("Id")?.GetValue(c);
+            if (idObj != null && int.TryParse(idObj.ToString(), out var cid))
+            {
+                customerEntities[cid] = c;
+                var name = t.GetProperty("CustomerName")?.GetValue(c)?.ToString()
+                        ?? t.GetProperty("FullName")?.GetValue(c)?.ToString()
+                        ?? t.GetProperty("Name")?.GetValue(c)?.ToString();
+
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    var f = t.GetProperty("FName")?.GetValue(c)?.ToString() ?? "";
+                    var l = t.GetProperty("LName")?.GetValue(c)?.ToString() ?? "";
+                    name = $"{f} {l}".Trim();
+                }
+
+                customerNames[cid] = string.IsNullOrWhiteSpace(name) ? $"Customer #{cid}" : name.Trim();
+            }
+        }
+
+        var branchIds = businessBranches.Select(b => b.BranchId).ToList();
+        var fallbackBranchId = businessBranches.FirstOrDefault()?.BranchId ?? 0L;
+
+        var orders = await DbContext.SalesOrders
+            .Where(s => branchIds.Contains(s.BranchId) || s.BranchId == 0)
+            .OrderByDescending(s => s.SaleDate)
+            .ToListAsync();
+
+        foreach (var o in orders)
+        {
+            var oType = o.GetType();
+            var oBiz = GetLongProp(oType, o, "BusinessId");
+            if (currentBusinessId > 0 && oBiz.HasValue && oBiz.Value > 0 && oBiz.Value != currentBusinessId)
+                continue;
+
+            var resolvedBranchId = o.BranchId > 0 ? o.BranchId : fallbackBranchId;
+            var resolvedBranchName = branchNames.TryGetValue(resolvedBranchId, out var bn)
+                ? bn
+                : (businessBranches.FirstOrDefault()?.BranchName ?? "Main Branch");
+
+            var total = o.NetAmount > 0
+                ? o.NetAmount
+                : Math.Max(0m, o.GrossAmount - o.DiscountAmount + o.TaxAmount);
+
+            var custLabel = o.CustomerId > 0 && customerNames.TryGetValue(o.CustomerId, out var cName)
+                ? cName
+                : "Walk-in customers";
+
+            allBusinessSales.Add(new SaleRec
+            {
+                SaleId = o.SaleId,
+                Entity = o,
+                No = string.IsNullOrWhiteSpace(o.ReferenceNumber) ? $"SO-{o.SaleId:D4}" : o.ReferenceNumber.Trim(),
+                Date = o.SaleDate,
+                Customer = custLabel,
+                CustomerId = o.CustomerId > 0 ? o.CustomerId : null,
+                BranchId = resolvedBranchId,
+                BranchName = resolvedBranchName,
+                Total = total,
+                InitialPaid = Math.Max(0m, o.AmountPaid)
+            });
+        }
+
+        var payProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.Name.Equals("PaymentRecords", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("Payments", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("SalePayments", StringComparison.OrdinalIgnoreCase));
+
+        var loadedFromDb = false;
+        if (payProp?.GetValue(DbContext) is IQueryable rawPayQuery)
+        {
+            var dbPays = await rawPayQuery.Cast<object>().ToListAsync();
+            if (dbPays.Count > 0)
+            {
+                loadedFromDb = true;
+                var idx = 1;
+                foreach (var p in dbPays)
+                {
+                    var pt = p.GetType();
+                    var pSaleId = (int)(GetLongProp(pt, p, "SaleId", "SalesOrderId", "OrderId") ?? 0);
+                    var matchedSale = allBusinessSales.FirstOrDefault(s => s.SaleId == pSaleId)
+                                   ?? allBusinessSales.FirstOrDefault(s => s.No == (pt.GetProperty("SaleNo")?.GetValue(p)?.ToString() ?? ""));
+
+                    if (pSaleId > 0 && matchedSale == null)
+                        continue;
+
+                    var pBranchId = GetLongProp(pt, p, "BranchId") ?? matchedSale?.BranchId ?? fallbackBranchId;
+                    var idVal = (int)(GetLongProp(pt, p, "PaymentId", "Id") ?? idx);
+                    var dateVal = GetDateProp(pt, p, "PaymentDate", "Date", "CreatedAt") ?? matchedSale?.Date ?? DateTime.Today;
+                    var methodVal = (pt.GetProperty("PaymentMethod")?.GetValue(p)?.ToString()
+                                  ?? pt.GetProperty("Method")?.GetValue(p)?.ToString()
+                                  ?? "cash").Trim().ToLowerInvariant();
+                    var refVal = pt.GetProperty("ReferenceNumber")?.GetValue(p)?.ToString()
+                              ?? pt.GetProperty("Reference")?.GetValue(p)?.ToString()
+                              ?? "";
+                    var amtVal = GetDecimalProp(pt, p, "Amount", "AmountPaid", "PaidAmount");
+                    var recBy = pt.GetProperty("ReceivedBy")?.GetValue(p)?.ToString()
+                             ?? pt.GetProperty("CreatedBy")?.GetValue(p)?.ToString()
+                             ?? Auth.CurrentUserName ?? "";
+                    var voidedBool = GetBoolProp(pt, p, "IsVoided", "Voided");
+                    var voidReasonStr = pt.GetProperty("VoidReason")?.GetValue(p)?.ToString() ?? "";
+
+                    allBusinessPayments.Add(new PayRec
+                    {
+                        Id = idVal,
+                        Entity = p,
+                        SaleId = matchedSale?.SaleId ?? pSaleId,
+                        SaleNo = matchedSale?.No ?? $"SO-{pSaleId:D4}",
+                        BranchId = pBranchId,
+                        Date = dateVal,
+                        Method = string.IsNullOrWhiteSpace(methodVal) ? "cash" : methodVal,
+                        Reference = refVal,
+                        Amount = amtVal,
+                        ReceivedBy = recBy,
+                        Voided = voidedBool,
+                        VoidReason = voidReasonStr
+                    });
+                    idx++;
+                }
+            }
+        }
+
+        if (!loadedFromDb)
+        {
+            var nextId = 1;
+            foreach (var s in allBusinessSales.Where(x => x.InitialPaid > 0).OrderBy(x => x.Date))
+            {
+                var methodFromOrder = "cash";
+                if (s.Entity != null)
+                {
+                    var mStr = s.Entity.GetType().GetProperty("PaymentMethod")?.GetValue(s.Entity)?.ToString();
+                    if (!string.IsNullOrWhiteSpace(mStr)) methodFromOrder = mStr.Trim().ToLowerInvariant();
+                }
+
+                allBusinessPayments.Add(new PayRec
+                {
+                    Id = nextId++,
+                    SaleId = s.SaleId,
+                    SaleNo = s.No,
+                    BranchId = s.BranchId,
+                    Date = s.Date,
+                    Method = methodFromOrder,
+                    Reference = s.No,
+                    Amount = s.InitialPaid,
+                    ReceivedBy = Auth.CurrentUserName ?? "POS"
+                });
+            }
+        }
+    }
+
+    static long? GetLongProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && long.TryParse(p.GetValue(obj)?.ToString(), out var v))
+                return v;
+        }
+        return null;
+    }
+
+    static decimal GetDecimalProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && decimal.TryParse(p.GetValue(obj)?.ToString(), NumberStyles.Any, Inv, out var v))
+                return v;
+        }
+        return 0m;
+    }
+
+    static DateTime? GetDateProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && p.GetValue(obj) is DateTime dt)
+                return dt;
+        }
+        return null;
+    }
+
+    static bool GetBoolProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && p.GetValue(obj) is bool b)
+                return b;
+        }
+        return false;
+    }
+
+    bool MatchesScope(long branchId)
+    {
+        if (!canSelectBranch && assignedBranchId.HasValue)
+            return branchId == assignedBranchId.Value;
+
+        if (effectiveBranchFilter.HasValue)
+            return branchId == effectiveBranchFilter.Value;
+
+        return true;
+    }
+
+    List<SaleRec> ScopedSales => allBusinessSales.Where(s => MatchesScope(s.BranchId)).ToList();
+    List<PayRec> ScopedPayments => allBusinessPayments.Where(p => MatchesScope(p.BranchId)).ToList();
+
+    bool IsInSelectedPeriod(DateTime date)
+    {
+        if (selectedPeriod == "all") return true;
+
+        var d = date.Date;
+        var today = DateTime.Today;
+
+        return selectedPeriod switch
+        {
+            "today" => d == today,
+            "week" => GetWeekStart(d) == GetWeekStart(today),
+            "year" => d.Year == today.Year,
+            _ => d.Year == today.Year && d.Month == today.Month,
+        };
+    }
+
+    static DateTime GetWeekStart(DateTime date)
+    {
+        var diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
+        return date.AddDays(-diff).Date;
+    }
+
+    decimal Paid(SaleRec s) => allBusinessPayments.Where(p => p.SaleNo == s.No && !p.Voided).Sum(p => p.Amount);
     decimal Balance(SaleRec s) => Math.Max(0, s.Total - Paid(s));
     string SaleStatus(SaleRec s) => Balance(s) <= 0 ? "paid" : Paid(s) > 0 ? "partial" : "unpaid";
-    string CustomerOf(string saleNo) => sales.FirstOrDefault(s => s.No == saleNo)?.Customer ?? "";
+    string CustomerOf(string saleNo) => allBusinessSales.FirstOrDefault(s => s.No == saleNo)?.Customer ?? "";
 
-    List<SaleRec> OpenSales => sales.Where(s => Balance(s) > 0).OrderByDescending(s => s.Date).ThenByDescending(s => s.No).ToList();
+    List<SaleRec> OpenSales => ScopedSales
+        .Where(s => Balance(s) > 0)
+        .OrderByDescending(s => Balance(s))
+        .ThenByDescending(s => s.Date)
+        .ToList();
 
-    List<PayRec> FilteredPayments => payments
+    List<PayRec> PeriodPayments => ScopedPayments.Where(p => IsInSelectedPeriod(p.Date)).ToList();
+
+    List<PayRec> FilteredPayments => PeriodPayments
         .Where(p => string.IsNullOrWhiteSpace(searchText)
             || p.SaleNo.Contains(searchText, StringComparison.OrdinalIgnoreCase)
             || CustomerOf(p.SaleNo).Contains(searchText, StringComparison.OrdinalIgnoreCase)
@@ -469,12 +876,33 @@
         .OrderByDescending(p => p.Date).ThenByDescending(p => p.Id)
         .ToList();
 
+    string TopBalanceBranchNote
+    {
+        get
+        {
+            var open = OpenSales;
+            if (open.Count == 0) return "0 sales with balance";
+            if (!canSelectBranch || effectiveBranchFilter.HasValue)
+                return open.Count + (open.Count == 1 ? " sale with balance" : " sales with balance");
+
+            var topBranch = open
+                .GroupBy(s => s.BranchName)
+                .Select(g => new { Branch = g.Key, Bal = g.Sum(Balance) })
+                .OrderByDescending(x => x.Bal)
+                .FirstOrDefault();
+
+            return topBranch != null && topBranch.Bal > 0
+                ? $"Top: {topBranch.Branch} ({Peso(topBranch.Bal)})"
+                : open.Count + " sales with balance";
+        }
+    }
+
     List<Stat> Stats
     {
         get
         {
             var t = DateTime.Today;
-            var live = payments.Where(p => !p.Voided).ToList();
+            var live = ScopedPayments.Where(p => !p.Voided).ToList();
             var today = live.Where(p => p.Date.Date == t).ToList();
             var month = live.Where(p => p.Date.Year == t.Year && p.Date.Month == t.Month).ToList();
             var open = OpenSales;
@@ -483,13 +911,13 @@
             {
                 new("COLLECTED TODAY", Peso(today.Sum(p => p.Amount)), today.Count + (today.Count == 1 ? " payment" : " payments"), "bi-cash", ""),
                 new("COLLECTED THIS MONTH", Peso(month.Sum(p => p.Amount)), month.Count + (month.Count == 1 ? " payment" : " payments"), "bi-calendar-check", "stat-icon-plain"),
-                new("OUTSTANDING BALANCE", Peso(open.Sum(Balance)), open.Count + " sales with balance", "bi-wallet2", "stat-icon-warn"),
-                new("PAYMENT RECORDS", payments.Count.ToString(), payments.Count(p => p.Voided) + " voided", "bi-receipt", "stat-icon-gray"),
+                new("OUTSTANDING BALANCE", Peso(open.Sum(Balance)), TopBalanceBranchNote, "bi-wallet2", "stat-icon-warn"),
+                new("PAYMENT RECORDS", PeriodPayments.Count.ToString(), PeriodPayments.Count(p => p.Voided) + " voided (" + PeriodLabel + ")", "bi-receipt", "stat-icon-gray"),
             };
         }
     }
 
-    List<DayRow> Daily => payments
+    List<DayRow> Daily => PeriodPayments
         .Where(p => !p.Voided)
         .GroupBy(p => p.Date.Date)
         .OrderByDescending(g => g.Key)
@@ -501,7 +929,7 @@
             g.Sum(p => p.Amount)))
         .ToList();
 
-    decimal MethodTotal(string m) => payments.Where(p => !p.Voided && p.Method == m).Sum(p => p.Amount);
+    decimal MethodTotal(string m) => PeriodPayments.Where(p => !p.Voided && p.Method == m).Sum(p => p.Amount);
 
     List<MethodAmt> Slices => SliceOrder.Select(m => new MethodAmt(m, MethodTotal(m))).Where(x => x.Amount > 0).ToList();
     List<MethodAmt> LegendSlices => LegendOrder.Select(m => new MethodAmt(m, MethodTotal(m))).Where(x => x.Amount > 0).ToList();
@@ -518,23 +946,33 @@
         }
     }
 
-    // ---------- HELPERS ----------
     static string F(double d) => d.ToString("0.##", Inv);
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
     static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
-
-    // 38100 -> ₱38.1K, 24020 -> ₱24K
     static string Short(decimal v) => v >= 1000 ? "₱" + (v / 1000).ToString("0.#", Inv) + "K" : "₱" + v.ToString("0", Inv);
 
     static string MethodColor(string m) => m switch
     {
-        "cash" => "#206A3B",
-        "bank" => "#62A834",
-        "gcash" => "#92D050",
-        _ => "#B7DB7E"
+        "cash" => "#1B5E34",
+        "bank" => "#4E8D2A",
+        "gcash" => "#78BE3F",
+        _ => "#A8D063"
     };
 
-    // ---------- ACTIONS ----------
+    async Task OnBranchChanged(ChangeEventArgs e)
+    {
+        if (!canSelectBranch) return;
+        selectedBranchIdStr = e.Value?.ToString() ?? "all";
+        UpdateActiveBranchLabel();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task OnPeriodChanged(ChangeEventArgs e)
+    {
+        selectedPeriod = e.Value?.ToString() ?? "all";
+        await InvokeAsync(StateHasChanged);
+    }
+
     void SetTab(string key) => activeTab = key;
 
     void CloseModal()
@@ -544,7 +982,6 @@
         voidPay = null;
     }
 
-    // New collection -> pili og sale -> Continue
     void OpenNewCollection()
     {
         newSaleNo = "";
@@ -555,16 +992,16 @@
     void ContinueNew()
     {
         showErrors = true;
-        var sale = sales.FirstOrDefault(s => s.No == newSaleNo);
+        var sale = OpenSales.FirstOrDefault(s => s.No == newSaleNo);
         if (sale == null) return;
         OpenCollect(sale);
     }
 
-    // Collect (gikan sa Partial & unpaid, o sa Continue)
     void OpenCollect(SaleRec s)
     {
+        if (!MatchesScope(s.BranchId)) return;
         collectSale = s;
-        amountInput = Balance(s);          // default: bayran ang tibuok balance
+        amountInput = Balance(s);
         method = "cash";
         payDate = DateTime.Today;
         reference = "";
@@ -576,32 +1013,91 @@
     async Task PostPayment()
     {
         showErrors = true;
-        if (collectSale == null || AmountError != null) return;
+        if (collectSale == null || AmountError != null || isSaving) return;
 
-        var amount = amountInput!.Value;
-        var sale = collectSale;
-
-        payments.Add(new PayRec
+        isSaving = true;
+        try
         {
-            Id = payments.Count == 0 ? 1 : payments.Max(p => p.Id) + 1,
-            SaleNo = sale.No,
-            Date = payDate,
-            Method = method,
-            Reference = reference?.Trim() ?? "",
-            Amount = amount,
-            ReceivedBy = string.IsNullOrWhiteSpace(receivedBy) ? (Auth.CurrentUserName ?? "") : receivedBy.Trim()
-        });
+            var amount = amountInput!.Value;
+            var sale = collectSale;
+            var recBy = string.IsNullOrWhiteSpace(receivedBy) ? (Auth.CurrentUserName ?? "") : receivedBy.Trim();
+            var refClean = reference?.Trim() ?? "";
 
-        // TODO: i-save sa database, i-update ang Sales Transactions / Customer balance,
-        // i-log sa Cash Drawer (kung cash), ug i-log sa Audit Logs
-        var left = Balance(sale);
-        CloseModal();
-        await ShowToast("Payment of " + Peso(amount) + " posted for " + sale.No + (left > 0 ? ". Balance: " + Peso(left) + "." : ". Fully paid."));
+            var newPay = new PayRec
+            {
+                Id = allBusinessPayments.Count == 0 ? 1 : allBusinessPayments.Max(p => p.Id) + 1,
+                SaleId = sale.SaleId,
+                SaleNo = sale.No,
+                BranchId = sale.BranchId,
+                Date = payDate,
+                Method = method,
+                Reference = refClean,
+                Amount = amount,
+                ReceivedBy = recBy
+            };
+
+            var payProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .FirstOrDefault(p => p.Name.Equals("PaymentRecords", StringComparison.OrdinalIgnoreCase)
+                                  || p.Name.Equals("Payments", StringComparison.OrdinalIgnoreCase)
+                                  || p.Name.Equals("SalePayments", StringComparison.OrdinalIgnoreCase));
+
+            if (payProp?.GetValue(DbContext) is object dbSetObj)
+            {
+                var elemType = dbSetObj.GetType().GetGenericArguments().FirstOrDefault();
+                if (elemType != null)
+                {
+                    var entity = Activator.CreateInstance(elemType);
+                    if (entity != null)
+                    {
+                        SetProp(entity, "SaleId", sale.SaleId);
+                        SetProp(entity, "SalesOrderId", sale.SaleId);
+                        SetProp(entity, "BusinessId", currentBusinessId);
+                        SetProp(entity, "BranchId", sale.BranchId);
+                        SetProp(entity, "PaymentDate", payDate);
+                        SetProp(entity, "PaymentMethod", method);
+                        SetProp(entity, "Method", method);
+                        SetProp(entity, "ReferenceNumber", refClean);
+                        SetProp(entity, "Reference", refClean);
+                        SetProp(entity, "Amount", amount);
+                        SetProp(entity, "ReceivedBy", recBy);
+                        SetProp(entity, "IsVoided", false);
+                        DbContext.Add(entity);
+                        newPay.Entity = entity;
+                    }
+                }
+            }
+
+            allBusinessPayments.Add(newPay);
+
+            var newPaid = Paid(sale);
+            var newBalance = Math.Max(0m, sale.Total - newPaid);
+            var dbOrder = await DbContext.SalesOrders.FindAsync(sale.SaleId);
+            if (dbOrder != null)
+            {
+                dbOrder.AmountPaid = Math.Min(newPaid, sale.Total);
+                dbOrder.Status = newBalance <= 0 ? "Paid" : "Partial";
+            }
+
+            if (sale.CustomerId.HasValue && customerEntities.TryGetValue(sale.CustomerId.Value, out var custObj))
+            {
+                AdjustCustomerBalance(custObj, -amount);
+            }
+
+            await DbContext.SaveChangesAsync();
+
+            var left = Balance(sale);
+            CloseModal();
+            await ShowToast("Payment of " + Peso(amount) + " posted for " + sale.No + (left > 0 ? ". Balance: " + Peso(left) + "." : ". Fully paid."));
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
-    // Void
     void OpenVoid(PayRec p)
     {
+        if (!MatchesScope(p.BranchId)) return;
         voidPay = p;
         voidReason = "";
         modal = "void";
@@ -609,16 +1105,94 @@
 
     async Task ConfirmVoid()
     {
-        if (voidPay == null) return;
+        if (voidPay == null || isSaving) return;
 
-        var p = voidPay;
-        p.Voided = true;
-        p.VoidReason = voidReason?.Trim() ?? "";
+        isSaving = true;
+        try
+        {
+            var p = voidPay;
+            var reasonClean = voidReason?.Trim() ?? "";
+            p.Voided = true;
+            p.VoidReason = reasonClean;
 
-        // TODO: i-reverse ang Cash Drawer entry, i-update ang Sales Transactions / Customer balance,
-        // ug i-log sa Audit Logs (Void · Payments & Collections) uban ang reason
-        CloseModal();
-        await ShowToast("Payment for " + p.SaleNo + " was voided. It no longer counts in collections.");
+            if (p.Entity != null)
+            {
+                SetProp(p.Entity, "IsVoided", true);
+                SetProp(p.Entity, "Voided", true);
+                SetProp(p.Entity, "VoidReason", reasonClean);
+            }
+
+            var sale = allBusinessSales.FirstOrDefault(s => s.SaleId == p.SaleId || s.No == p.SaleNo);
+            if (sale != null)
+            {
+                var updatedPaid = Paid(sale);
+                var updatedBalance = Math.Max(0m, sale.Total - updatedPaid);
+                var dbOrder = await DbContext.SalesOrders.FindAsync(sale.SaleId);
+                if (dbOrder != null)
+                {
+                    dbOrder.AmountPaid = Math.Min(updatedPaid, sale.Total);
+                    dbOrder.Status = updatedBalance <= 0
+                        ? "Paid"
+                        : (updatedPaid > 0 ? "Partial" : "Unpaid");
+                }
+
+                if (sale.CustomerId.HasValue && customerEntities.TryGetValue(sale.CustomerId.Value, out var custObj))
+                {
+                    AdjustCustomerBalance(custObj, p.Amount);
+                }
+            }
+
+            await DbContext.SaveChangesAsync();
+
+            CloseModal();
+            await ShowToast("Payment for " + p.SaleNo + " was voided. It no longer counts in collections.");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    static void AdjustCustomerBalance(object custObj, decimal delta)
+    {
+        var t = custObj.GetType();
+        var prop = t.GetProperty("OutstandingBalance", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                ?? t.GetProperty("Outstanding", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                ?? t.GetProperty("Balance", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                ?? t.GetProperty("AccountBalance", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+
+        if (prop == null || !prop.CanWrite) return;
+        if (decimal.TryParse(prop.GetValue(custObj)?.ToString(), NumberStyles.Any, Inv, out var cur))
+        {
+            var nextVal = Math.Max(0m, cur + delta);
+            var targetType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+            if (targetType == typeof(decimal)) prop.SetValue(custObj, nextVal);
+            else if (targetType == typeof(double)) prop.SetValue(custObj, Convert.ToDouble(nextVal, Inv));
+        }
+    }
+
+    static void SetProp(object obj, string propName, object? val)
+    {
+        var p = obj.GetType().GetProperty(propName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        if (p == null || !p.CanWrite) return;
+        if (val == null)
+        {
+            if (!p.PropertyType.IsValueType || Nullable.GetUnderlyingType(p.PropertyType) != null)
+                p.SetValue(obj, null);
+            return;
+        }
+
+        var targetType = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+        try
+        {
+            if (targetType == typeof(int) && int.TryParse(val.ToString(), out var i)) p.SetValue(obj, i);
+            else if (targetType == typeof(long) && long.TryParse(val.ToString(), out var l)) p.SetValue(obj, l);
+            else if (targetType == typeof(decimal) && decimal.TryParse(val.ToString(), NumberStyles.Any, Inv, out var d)) p.SetValue(obj, d);
+            else if (targetType == typeof(bool) && val is bool b) p.SetValue(obj, b);
+            else if (targetType == typeof(DateTime) && val is DateTime dt) p.SetValue(obj, dt);
+            else if (targetType == typeof(string)) p.SetValue(obj, val.ToString());
+        }
+        catch { }
     }
 
     async Task ShowToast(string message)

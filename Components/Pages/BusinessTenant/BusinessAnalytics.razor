@@ -1,51 +1,112 @@
 ﻿@page "/financials"
 @page "/business-analytics"
+@using System.Collections
 @using System.Globalization
+@using System.IO
+@using System.Reflection
 @using System.Text
+@using Microsoft.EntityFrameworkCore
+@using AgriNexus.DataLayer
+@using AgriNexus.DataLayer.Models
+@inject AgriNexusDbContext DbContext
+@inject AgriNexus.Services.AuthService Auth
+@inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <h2 class="page-title">Financial Reports</h2>
-        <p class="text-muted mb-0 page-sub">@BusinessName · revenue, cost, estimated profitability and collection performance.</p>
+        <p class="text-muted mb-0 page-sub">
+            <i class="bi bi-building text-success me-1"></i><strong>@BusinessName</strong> · <strong>@ActiveBranch</strong> · revenue, cost, estimated profitability and collection performance.
+        </p>
     </div>
-    <button type="button" class="btn-outline-lg" @onclick="() => showGen = !showGen">
-        <i class="bi bi-file-earmark-bar-graph"></i> Generate report
-    </button>
+
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        @if (canSelectBranch)
+        {
+            <div class="dashboard-filter-wrap">
+                <i class="bi bi-shop dashboard-filter-icon"></i>
+                <select class="dashboard-filter-select" value="@selectedBranchIdStr" @onchange="OnBranchChanged" aria-label="Filter branch">
+                    <option value="all">All Branches</option>
+                    @foreach (var b in businessBranches)
+                    {
+                        <option value="@b.BranchId">@b.BranchName</option>
+                    }
+                </select>
+                <i class="bi bi-chevron-down dashboard-filter-caret"></i>
+            </div>
+        }
+
+        <div class="dashboard-filter-wrap">
+            <i class="bi bi-funnel dashboard-filter-icon"></i>
+            <select class="dashboard-filter-select" value="@selectedPeriod" @onchange="OnPeriodChanged" aria-label="Filter period">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+            </select>
+            <i class="bi bi-chevron-down dashboard-filter-caret"></i>
+        </div>
+
+        <button type="button" class="btn-outline-lg" @onclick="() => showGen = !showGen">
+            <i class="bi bi-file-earmark-bar-graph text-success"></i> Generate report
+        </button>
+    </div>
 </div>
 
-<!-- REPORT GENERATOR (gikan sa imong code) -->
+<!-- REPORT GENERATOR -->
 @if (showGen)
 {
     <div class="card-box gen-panel mb-4">
-        <div class="panel-title mb-3"><i class="bi bi-file-earmark-bar-graph text-success me-2"></i>Generate business report</div>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="panel-title mb-0"><i class="bi bi-file-earmark-pdf text-success me-2"></i>Generate business report (PDF · A4)</div>
+            <span class="badge rounded-pill px-3 py-1 fw-semibold" style="background-color: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE; font-size: 0.72rem;">
+                @GeneratorBranchLabel
+            </span>
+        </div>
+
         <div class="row g-3 align-items-end">
-            <div class="col-12 col-md-3">
+            <div class="col-12 col-md-2">
                 <label class="form-label">Start date</label>
                 <input type="date" class="form-control" @bind="startDate" />
             </div>
-            <div class="col-12 col-md-3">
+            <div class="col-12 col-md-2">
                 <label class="form-label">End date</label>
                 <input type="date" class="form-control" @bind="endDate" />
             </div>
-            <div class="col-12 col-md-3">
+            @if (canSelectBranch)
+            {
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Branch scope</label>
+                    <select class="form-select" @bind="reportBranchIdStr">
+                        <option value="all">All Branches</option>
+                        @foreach (var b in businessBranches)
+                        {
+                            <option value="@b.BranchId">@b.BranchName</option>
+                        }
+                    </select>
+                </div>
+            }
+            <div class="col-12 @(canSelectBranch ? "col-md-3" : "col-md-5")">
                 <label class="form-label">Report type</label>
                 <select class="form-select" @bind="reportType">
                     <option>Profit &amp; Loss Summary</option>
+                    <option>Expenses Report</option>
+                    <option>Inventory Stocks &amp; Salable Value</option>
+                    <option>Sales Tax Total</option>
+                    <option>Gross &amp; Net Income</option>
+                    <option>Total Production Cost</option>
+                    <option>Sales Total</option>
                     <option>Branch Performance</option>
                     <option>Collections Report</option>
                 </select>
             </div>
-            <div class="col-12 col-md-3">
-                <label class="form-label">Format</label>
-                <div class="d-flex gap-2">
-                    <select class="form-select" style="width:100px" @bind="format">
-                        <option>PDF</option>
-                        <option>Excel</option>
-                    </select>
-                    <button type="button" class="btn-generate flex-grow-1" @onclick="GenerateReport" disabled="@generating">
-                        <i class="bi bi-download"></i> @(generating ? "Generating…" : "Generate")
-                    </button>
-                </div>
+            <div class="col-12 col-md-2">
+                <label class="form-label d-none d-md-block">&nbsp;</label>
+                <button type="button" class="btn-generate w-100" @onclick="GeneratePdfReportAsync" disabled="@generating">
+                    <i class="bi bi-file-earmark-pdf-fill"></i> @(generating ? "Generating…" : "PDF")
+                </button>
             </div>
         </div>
         @if (!string.IsNullOrEmpty(genError))
@@ -55,399 +116,451 @@
     </div>
 }
 
-<!-- STAT CARDS -->
-<div class="row g-3 mb-3">
-    @foreach (var s in Stats)
-    {
-        <div class="col-12 col-sm-6 col-xl-3">
-            <div class="stat-card h-100">
-                <div class="d-flex justify-content-between align-items-start gap-2">
-                    <span class="card-title">@s.Title</span>
-                    <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
-                </div>
-                <div class="mt-3">
-                    <div class="card-value">@s.Value</div>
-                    <div class="text-muted small mt-1">@s.Note</div>
-                </div>
-            </div>
-        </div>
-    }
-</div>
-
-<!-- MINI KPIs (gikan sa imong code, karon computed) -->
-<div class="row g-2 mb-4">
-    @foreach (var k in MiniKpis)
-    {
-        <div class="col-6 col-md-3">
-            <div class="mini-kpi-card">
-                <span class="text-muted small fw-bold">@k.Label</span>
-                <span class="fw-bold @k.Class">@k.Value</span>
-            </div>
-        </div>
-    }
-</div>
-
-<!-- TABS -->
-<div class="tabs mb-4">
-    <button type="button" class="tab-btn @(activeTab == "revenue" ? "active" : "")" @onclick='() => activeTab = "revenue"'>Revenue &amp; profit</button>
-    <button type="button" class="tab-btn @(activeTab == "profit" ? "active" : "")" @onclick='() => activeTab = "profit"'>Profit estimation</button>
-    <button type="button" class="tab-btn @(activeTab == "collections" ? "active" : "")" @onclick='() => activeTab = "collections"'>Collections report</button>
-</div>
-
-<!-- ======================= REVENUE & PROFIT ======================= -->
-@if (activeTab == "revenue")
+@if (isLoading)
 {
-    <div class="row g-3 mb-4">
-        <div class="col-12 col-lg-8">
-            <div class="card-box h-100">
-                <div class="panel-title">Revenue, cost and profit</div>
-                <div class="panel-sub">Last 6 months</div>
-
-                <svg viewBox="0 0 640 300" class="w-100" style="max-height:340px" role="img" aria-label="Revenue, cost and profit">
-                    @for (int i = 0; i <= 4; i++)
-                    {
-                        var y = 20 + i * 60;
-                        var val = BarMax / 4 * (4 - i);
-                        <g>
-                            <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
-                            <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
-                        </g>
-                    }
-                    @for (int i = 0; i < months.Count; i++)
-                    {
-                        var m = months[i];
-                        var slot = 568.0 / months.Count;
-                        var bw = slot * 0.27;
-                        var gap = slot * 0.05;
-                        var start = 62 + i * slot + (slot - (bw * 2 + gap)) / 2;
-                        var hR = (double)m.Revenue / BarMax * 240;
-                        var hE = (double)m.Expenses / BarMax * 240;
-                        <g>
-                            <rect x="@F(start)" y="@F(260 - hR)" width="@F(bw)" height="@F(hR)" rx="4" fill="#62A834" />
-                            <rect x="@F(start + bw + gap)" y="@F(260 - hE)" width="@F(bw)" height="@F(hE)" rx="4" fill="#A86B4C" />
-                            <text x="@F(62 + i * slot + slot / 2)" y="282" text-anchor="middle" font-size="11" fill="#475569">@m.Label</text>
-                        </g>
-                    }
-                </svg>
-
-                <div class="d-flex justify-content-center gap-3 small mt-1">
-                    <span class="lg" style="color:#6FA82E"><span class="swatch" style="background:#62A834"></span>Revenue</span>
-                    <span class="lg" style="color:#A86B4C"><span class="swatch" style="background:#A86B4C"></span>Expenses</span>
-                </div>
-            </div>
+    <div class="panel">
+        <div class="text-muted py-5 text-center">
+            <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+            Loading financial reports...
         </div>
-
-        <div class="col-12 col-lg-4">
-            <div class="card-box h-100">
-                <div class="panel-title">Profit trend</div>
-                <div class="panel-sub">Estimated profit per month</div>
-
-                <svg viewBox="0 0 400 300" class="w-100" style="max-height:340px" role="img" aria-label="Profit trend">
-                    @for (int i = 0; i <= 4; i++)
-                    {
-                        var y = 20 + i * 60;
-                        var val = ProfitMax - i * ProfitMax / 2;
-                        <g>
-                            <line x1="62" x2="390" y1="@y" y2="@y" stroke="#E2E8F0" stroke-dasharray="3 4" />
-                            <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
-                        </g>
-                    }
-                    <path d="@SmoothPath(ProfitPoints)" fill="none" stroke="#206A3B" stroke-width="2.5" stroke-linecap="round" />
-                    @for (int i = 0; i < ProfitPoints.Count; i++)
-                    {
-                        <g>
-                            <circle cx="@F(ProfitPoints[i].X)" cy="@F(ProfitPoints[i].Y)" r="3.5" fill="#fff" stroke="#206A3B" stroke-width="2" />
-                            <text x="@F(ProfitPoints[i].X)" y="282" text-anchor="middle" font-size="11" fill="#64748B">@months[i].Label</text>
-                        </g>
-                    }
-                </svg>
-            </div>
-        </div>
-    </div>
-
-    <div class="panel mb-4">
-        <div class="panel-head">
-            <div class="panel-title">Monthly financial summary</div>
-            <div class="panel-sub mb-0">Revenue, collections, cost and margin per month</div>
-        </div>
-        <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th>Month</th>
-                        <th>Revenue</th>
-                        <th>Collections</th>
-                        <th>Expenses</th>
-                        <th>Estimated profit</th>
-                        <th>Margin</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var m in months)
-                    {
-                        <tr>
-                            <td>@m.Label</td>
-                            <td class="text-nowrap">@Peso(m.Revenue)</td>
-                            <td class="text-nowrap">@Peso(m.Collections)</td>
-                            <td class="text-nowrap">@Peso(m.Expenses)</td>
-                            <td class="text-nowrap @(m.Profit < 0 ? "neg" : m.Profit > 0 ? "pos" : "")">@PesoSigned(m.Profit)</td>
-                            <td>@m.Margin%</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- BRANCH PERFORMANCE (gikan sa imong code) -->
-    <div class="card-box">
-        <div class="panel-title">Branch performance</div>
-        <div class="panel-sub">Sales per branch</div>
-
-        <svg viewBox="0 0 640 250" class="w-100" style="max-height:240px" role="img" aria-label="Branch performance">
-            @for (int i = 0; i < branches.Count; i++)
-            {
-                var b = branches[i];
-                var slot = 640.0 / branches.Count;
-                var x = i * slot + (slot - 80) / 2;
-                var h = (double)b.Sales / BranchMax * 150;
-                var y = 200 - h;
-                <g>
-                    <rect x="@F(x)" y="20" width="80" height="180" fill="#F1F5F9" rx="8" />
-                    <rect x="@F(x)" y="@F(y)" width="80" height="@F(h)" fill="#62A834" rx="8" />
-                    <text x="@F(x + 40)" y="@F(y - 8)" text-anchor="middle" font-size="12" fill="#1E293B" font-weight="700">@Short(b.Sales)</text>
-                    <text x="@F(x + 40)" y="222" text-anchor="middle" font-size="12" fill="#64748B" font-weight="600">@b.Name</text>
-                </g>
-            }
-        </svg>
     </div>
 }
-
-<!-- BAG-ONG DUNGAG NGA MGA GRAPHS -->
-<div class="row g-3 mt-1 mb-4">
-    <!-- Sales by Crop (Donut Chart) -->
-    <div class="col-12 col-lg-4">
-        <div class="card-box h-100">
-            <div class="panel-title">Sales by Crop</div>
-            <div class="panel-sub">Top harvest products</div>
-            <div class="d-flex justify-content-center my-3 position-relative">
-                <svg viewBox="0 0 200 200" width="190" height="190">
-                    @{
-                        double offsetCrop = 0;
-                    }
-                    @foreach (var c in CropSales)
-                    {
-                        var len = c.Value / TotalCropSales * Circ;
-                        var dash = Math.Max(len - 4, 0.5);
-                        <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@c.Color" stroke-width="25"
-                                stroke-dasharray="@($"{dash} {Circ - dash}")"
-                                stroke-dashoffset="@(-offsetCrop)"
-                                transform="rotate(-90 100 100)" />
-                        offsetCrop += len;
-                    }
-                </svg>
-                <div class="position-absolute top-50 start-50 translate-middle text-center">
-                    <h4 class="fw-bold mb-0 text-dark">18.5k</h4>
-                    <span class="text-muted" style="font-size: 0.75rem;">Total kg</span>
-                </div>
-            </div>
-            <div class="d-flex flex-column gap-2 small fw-semibold mt-2">
-                @foreach (var c in CropSales)
-                {
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span><span class="legend-dot" style="background:@c.Color"></span>@c.Label</span>
-                        <span class="text-muted">@c.Value.ToString("N0") kg</span>
+else
+{
+    <!-- STAT CARDS -->
+    <div class="row g-3 mb-3">
+        @foreach (var s in Stats)
+        {
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="stat-card h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <span class="card-title">@s.Title</span>
+                        <div class="stat-icon @s.IconClass"><i class="bi @s.Icon"></i></div>
                     </div>
-                }
-            </div>
-        </div>
-    </div>
-
-    <!-- Harvest Yield Trend (Area Chart) -->
-    <div class="col-12 col-lg-8">
-        <div class="card-box h-100">
-            <div class="panel-title">Harvest Yield Trend</div>
-            <div class="panel-sub">Monthly kg harvested</div>
-            <svg viewBox="0 0 600 250" class="w-100 mt-3" style="max-height: 240px;">
-                <defs>
-                    <linearGradient id="yieldGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="#62A834" stop-opacity="0.4" />
-                        <stop offset="100%" stop-color="#62A834" stop-opacity="0" />
-                    </linearGradient>
-                </defs>
-                <path d="M 50,200 L 150,170 L 250,120 L 350,150 L 450,80 L 550,50 L 550,230 L 50,230 Z" fill="url(#yieldGrad)" />
-                <polyline points="50,200 150,170 250,120 350,150 450,80 550,50" fill="none" stroke="#62A834" stroke-width="4" stroke-linecap="round" />
-                <g>
-                    <circle cx="50" cy="200" r="5" fill="white" stroke="#62A834" stroke-width="3" />
-                    <circle cx="150" cy="170" r="5" fill="white" stroke="#62A834" stroke-width="3" />
-                    <circle cx="250" cy="120" r="5" fill="white" stroke="#62A834" stroke-width="3" />
-                    <circle cx="350" cy="150" r="5" fill="white" stroke="#62A834" stroke-width="3" />
-                    <circle cx="450" cy="80" r="5" fill="white" stroke="#62A834" stroke-width="3" />
-                    <circle cx="550" cy="50" r="6" fill="#62A834" stroke="white" stroke-width="2" />
-                </g>
-                <g>
-                    <text x="50" y="245" text-anchor="middle" font-size="11" fill="#64748B">Jan</text>
-                    <text x="150" y="245" text-anchor="middle" font-size="11" fill="#64748B">Feb</text>
-                    <text x="250" y="245" text-anchor="middle" font-size="11" fill="#64748B">Mar</text>
-                    <text x="350" y="245" text-anchor="middle" font-size="11" fill="#64748B">Apr</text>
-                    <text x="450" y="245" text-anchor="middle" font-size="11" fill="#64748B">May</text>
-                    <text x="550" y="245" text-anchor="middle" font-size="11" fill="#64748B">Jun</text>
-                </g>
-            </svg>
-        </div>
-    </div>
-</div>
-
-<!-- ======================= PROFIT ESTIMATION ======================= -->
-@if (activeTab == "profit")
-{
-    <div class="row g-3">
-        <div class="col-12 col-lg-6">
-            <div class="panel h-100">
-                <div class="panel-head">
-                    <div class="panel-title">Top customers by sales value</div>
-                    <div class="panel-sub mb-0">Contribution to revenue</div>
-                </div>
-                <div class="table-wrap">
-                    <table class="table data-table align-middle mb-0">
-                        <thead><tr><th>Customer</th><th>Sales value</th><th>Share</th></tr></thead>
-                        <tbody>
-                            @foreach (var c in customers)
-                            {
-                                <tr>
-                                    <td class="col-name">@c.Name</td>
-                                    <td class="text-nowrap">@Peso(c.Value)</td>
-                                    <td>@Share(c.Value, CustomerTotal)%</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                    <div class="mt-3">
+                        <div class="card-value @s.ValueClass">@s.Value</div>
+                        <div class="text-muted small mt-1">@s.Note</div>
+                    </div>
                 </div>
             </div>
-        </div>
+        }
+    </div>
 
-        <div class="col-12 col-lg-6">
-            <div class="panel h-100">
-                <div class="panel-head">
-                    <div class="panel-title">Cost by category</div>
-                    <div class="panel-sub mb-0">Operating cost allocation</div>
-                </div>
-                <div class="table-wrap">
-                    <table class="table data-table align-middle mb-0">
-                        <thead><tr><th>Category</th><th>Amount</th><th>Share</th></tr></thead>
-                        <tbody>
-                            @foreach (var c in costs)
-                            {
-                                <tr>
-                                    <td class="col-name">@c.Name</td>
-                                    <td class="text-nowrap">@Peso(c.Value)</td>
-                                    <td>@Share(c.Value, CostTotal)%</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+    <!-- MINI KPIs -->
+    <div class="row g-2 mb-4">
+        @foreach (var k in MiniKpis)
+        {
+            <div class="col-6 col-md-3">
+                <div class="mini-kpi-card">
+                    <span class="text-muted small fw-bold">@k.Label</span>
+                    <span class="fw-bold @k.Class">@k.Value</span>
                 </div>
             </div>
-        </div>
+        }
     </div>
-}
 
-<!-- ======================= COLLECTIONS REPORT ======================= -->
-@if (activeTab == "collections")
-{
-    <div class="row g-3 mb-4">
-        <div class="col-12 col-lg-4">
-            <div class="card-box h-100">
-                <div class="panel-title">Collections by method</div>
-                <div class="panel-sub">Cash, GCash, bank and check</div>
+    <!-- TABS -->
+    <div class="tabs mb-4">
+        <button type="button" class="tab-btn @(activeTab == "revenue" ? "active" : "")" @onclick='() => activeTab = "revenue"'>Revenue &amp; profit</button>
+        <button type="button" class="tab-btn @(activeTab == "profit" ? "active" : "")" @onclick='() => activeTab = "profit"'>Profit estimation</button>
+        <button type="button" class="tab-btn @(activeTab == "collections" ? "active" : "")" @onclick='() => activeTab = "collections"'>Collections report</button>
+    </div>
 
-                <div class="d-flex justify-content-center my-3">
-                    <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Collections by method">
-                        @{
-                            double offset = 0;
-                        }
-                        @foreach (var m in methods)
+    <!-- ======================= REVENUE & PROFIT ======================= -->
+    @if (activeTab == "revenue")
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-lg-8">
+                <div class="card-box h-100">
+                    <div class="panel-title">Revenue, cost and profit</div>
+                    <div class="panel-sub">@TrendSubtitle (@ActiveBranch)</div>
+
+                    <svg viewBox="0 0 640 300" class="w-100" style="max-height:340px" role="img" aria-label="Revenue, cost and profit">
+                        <defs>
+                            <linearGradient id="finRevGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#78BE3F" />
+                                <stop offset="100%" stop-color="#1B5E34" />
+                            </linearGradient>
+                            <linearGradient id="finExpGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#9B6E46" />
+                                <stop offset="100%" stop-color="#5C3A1E" />
+                            </linearGradient>
+                        </defs>
+                        @for (int i = 0; i <= 4; i++)
                         {
-                            var len = (double)(m.Value / MethodTotal) * Circ;
-                            var dash = Math.Max(len - 2, 0.5);
-                            <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@m.Color" stroke-width="30"
-                                    stroke-dasharray="@F(dash) @F(Circ - dash)"
-                                    stroke-dashoffset="@F(-offset)"
-                                    transform="rotate(-90 100 100)" />
-                            offset += len;
+                            var y = 20 + i * 60;
+                            var val = BarMax / 4 * (4 - i);
+                            <g>
+                                <line x1="62" x2="630" y1="@y" y2="@y" stroke="#E2ECE6" stroke-dasharray="3 4" />
+                                <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
+                            </g>
+                        }
+                        @for (int i = 0; i < trendBuckets.Count; i++)
+                        {
+                            var m = trendBuckets[i];
+                            var slot = 568.0 / Math.Max(trendBuckets.Count, 1);
+                            var bw = slot * 0.27;
+                            var gap = slot * 0.05;
+                            var start = 62 + i * slot + (slot - (bw * 2 + gap)) / 2;
+                            var hR = BarMax > 0 ? Math.Min((double)m.Revenue / BarMax * 240, 240) : 0;
+                            var hE = BarMax > 0 ? Math.Min((double)m.Expenses / BarMax * 240, 240) : 0;
+                            <g>
+                                @if (hR > 0)
+                                {
+                                    <rect x="@F(start)" y="@F(260 - hR)" width="@F(bw)" height="@F(hR)" rx="4" fill="url(#finRevGrad)" />
+                                }
+                                @if (hE > 0)
+                                {
+                                    <rect x="@F(start + bw + gap)" y="@F(260 - hE)" width="@F(bw)" height="@F(hE)" rx="4" fill="url(#finExpGrad)" />
+                                }
+                                <text x="@F(62 + i * slot + slot / 2)" y="282" text-anchor="middle" font-size="11" font-weight="600" fill="#475569">@m.Label</text>
+                            </g>
+                        }
+                    </svg>
+
+                    <div class="d-flex justify-content-center gap-4 small mt-1 fw-medium">
+                        <span class="lg" style="color:#1B5E34"><span class="swatch" style="background:#1B5E34"></span>Revenue</span>
+                        <span class="lg" style="color:#5C3A1E"><span class="swatch" style="background:#5C3A1E"></span>Expenses</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-4">
+                <div class="card-box h-100">
+                    <div class="panel-title">Profit trend</div>
+                    <div class="panel-sub">Estimated profit per period</div>
+
+                    <svg viewBox="0 0 400 300" class="w-100" style="max-height:340px" role="img" aria-label="Profit trend">
+                        @for (int i = 0; i <= 4; i++)
+                        {
+                            var y = 20 + i * 60;
+                            var val = ProfitMax - i * ProfitMax / 2;
+                            <g>
+                                <line x1="62" x2="390" y1="@y" y2="@y" stroke="#E2ECE6" stroke-dasharray="3 4" />
+                                <text x="52" y="@(y + 4)" text-anchor="end" font-size="11" fill="#64748B">@AxisLabel(val)</text>
+                            </g>
+                        }
+                        <path d="@SmoothPath(ProfitPoints)" fill="none" stroke="#1B5E34" stroke-width="2.5" stroke-linecap="round" />
+                        @for (int i = 0; i < ProfitPoints.Count; i++)
+                        {
+                            <g>
+                                <circle cx="@F(ProfitPoints[i].X)" cy="@F(ProfitPoints[i].Y)" r="3.5" fill="#FFFFFF" stroke="#78BE3F" stroke-width="2.5" />
+                                <text x="@F(ProfitPoints[i].X)" y="282" text-anchor="middle" font-size="11" fill="#64748B">@trendBuckets[i].Label</text>
+                            </g>
                         }
                     </svg>
                 </div>
-
-                <div class="d-flex justify-content-center gap-3 small text-muted flex-wrap">
-                    @foreach (var m in methods.OrderBy(x => x.Order))
-                    {
-                        <span><span class="legend-dot" style="background:@m.Color"></span>@m.Name</span>
-                    }
-                </div>
             </div>
         </div>
 
-        <div class="col-12 col-lg-8">
-            <div class="panel h-100">
-                <div class="panel-head">
-                    <div class="panel-title">Sales and collection report</div>
-                    <div class="panel-sub mb-0">Recorded by cashier</div>
-                </div>
-                <div class="table-wrap">
-                    <table class="table data-table align-middle mb-0">
-                        <thead><tr><th>Cashier</th><th>Collected</th><th>Payments</th></tr></thead>
-                        <tbody>
-                            @foreach (var c in cashiers)
-                            {
-                                <tr>
-                                    <td>@c.Name</td>
-                                    <td class="text-nowrap">@Peso(c.Collected)</td>
-                                    <td>@c.Payments</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+        <div class="panel mb-4">
+            <div class="panel-head">
+                <div class="panel-title">Financial summary table</div>
+                <div class="panel-sub mb-0">Revenue, collections, cost and margin (@ActiveBranch · @PeriodLabel)</div>
             </div>
-        </div>
-    </div>
-
-    <div class="panel">
-        <div class="panel-head">
-            <div class="panel-title">Outstanding receivables</div>
-            <div class="panel-sub mb-0">Balances still to be collected, largest first</div>
-        </div>
-        <div class="table-wrap">
-            <table class="table data-table align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th>Sale no.</th>
-                        <th>Date</th>
-                        <th>Customer</th>
-                        <th>Total</th>
-                        <th>Paid</th>
-                        <th>Balance</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var r in Receivables)
-                    {
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
                         <tr>
-                            <td class="text-nowrap">@r.No</td>
-                            <td class="text-nowrap">@r.Date.ToString("MMM d, yyyy", Inv)</td>
-                            <td class="col-name">@r.Customer</td>
-                            <td class="text-nowrap">@Peso(r.Total)</td>
-                            <td class="text-nowrap">@Peso(r.Paid)</td>
-                            <td class="text-nowrap neg fw-medium">@Peso(r.Balance)</td>
-                            <td><span class="pill @(r.Paid > 0 ? "pill-yellow" : "pill-red")">@(r.Paid > 0 ? "Partial" : "Unpaid")</span></td>
+                            <th>Period</th>
+                            <th>Revenue</th>
+                            <th>Collections</th>
+                            <th>Expenses</th>
+                            <th>Estimated profit</th>
+                            <th>Margin</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in trendBuckets)
+                        {
+                            <tr>
+                                <td class="fw-medium">@m.Label</td>
+                                <td class="text-nowrap">@Peso(m.Revenue)</td>
+                                <td class="text-nowrap">@Peso(m.Collections)</td>
+                                <td class="text-nowrap">@Peso(m.Expenses)</td>
+                                <td class="text-nowrap fw-semibold @(m.Profit < 0 ? "neg" : m.Profit > 0 ? "pos" : "")">@PesoSigned(m.Profit)</td>
+                                <td>@m.Margin%</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </div>
+
+        <!-- BRANCH PERFORMANCE -->
+        <div class="card-box mb-4">
+            <div class="panel-title">Branch performance</div>
+            <div class="panel-sub">Sales per branch (@PeriodLabel)</div>
+
+            <svg viewBox="0 0 640 250" class="w-100" style="max-height:240px" role="img" aria-label="Branch performance">
+                <defs>
+                    <linearGradient id="finBranchGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#78BE3F" />
+                        <stop offset="100%" stop-color="#1B5E34" />
+                    </linearGradient>
+                </defs>
+                @for (int i = 0; i < branches.Count; i++)
+                {
+                    var b = branches[i];
+                    var slot = 640.0 / Math.Max(branches.Count, 1);
+                    var x = i * slot + (slot - 80) / 2;
+                    var h = BranchMax > 0 ? Math.Min((double)b.Sales / BranchMax * 150, 150) : 0;
+                    var y = 200 - h;
+                    <g>
+                        <rect x="@F(x)" y="20" width="80" height="180" fill="#F4F8F5" rx="8" />
+                        @if (h > 0)
+                        {
+                            <rect x="@F(x)" y="@F(y)" width="80" height="@F(h)" fill="url(#finBranchGrad)" rx="8" />
+                        }
+                        <text x="@F(x + 40)" y="@F(y - 8)" text-anchor="middle" font-size="12" fill="#0A2B1D" font-weight="700">@Short(b.Sales)</text>
+                        <text x="@F(x + 40)" y="222" text-anchor="middle" font-size="12" fill="#475569" font-weight="600">@ShortLabel(b.Name, 14)</text>
+                    </g>
+                }
+            </svg>
+        </div>
+
+        <!-- SALES BY CROP & HARVEST YIELD TREND -->
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-lg-4">
+                <div class="card-box h-100 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="panel-title">Sales / Harvest by Crop</div>
+                        <div class="panel-sub">Recorded harvest quantities (@ActiveBranch · @PeriodLabel)</div>
+                        <div class="d-flex justify-content-center my-3 position-relative">
+                            <svg viewBox="0 0 200 200" width="195" height="195">
+                                @if (TotalCropKg > 0)
+                                {
+                                    double offsetCrop = 0;
+                                    @foreach (var c in CropSales.Where(x => x.Value > 0))
+                                    {
+                                        var len = c.Value / TotalCropKg * Circ;
+                                        var dash = Math.Max(len - 3, 0.5);
+                                        <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@c.Color" stroke-width="26"
+                                                stroke-dasharray="@F(dash) @F(Circ - dash)"
+                                                stroke-dashoffset="@F(-offsetCrop)"
+                                                transform="rotate(-90 100 100)" />
+                                        offsetCrop += len;
+                                    }
+                                }
+                                else
+                                {
+                                    <circle cx="100" cy="100" r="@Radius" fill="none" stroke="#E2ECE6" stroke-width="26" />
+                                }
+                            </svg>
+                            <div class="position-absolute top-50 start-50 translate-middle text-center">
+                                <div class="fw-bolder" style="font-size: 1.05rem; color: #0A2B1D;">@((TotalCropKg / 1000.0).ToString("0.#", Inv))k</div>
+                                <div class="text-muted fw-semibold" style="font-size: 0.72rem;">Total kg</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex flex-column gap-2 small fw-semibold mt-2">
+                        @foreach (var c in CropSales)
+                        {
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><span class="legend-dot" style="background:@c.Color"></span>@c.Label</span>
+                                <span class="text-muted">@c.Value.ToString("N0", Inv) kg</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-8">
+                <div class="card-box h-100">
+                    <div class="panel-title">Harvest Yield Trend</div>
+                    <div class="panel-sub">Kg harvested across periods (@ActiveBranch)</div>
+                    <svg viewBox="0 0 600 250" class="w-100 mt-3" style="max-height: 240px;">
+                        <defs>
+                            <linearGradient id="finYieldGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#78BE3F" stop-opacity="0.35" />
+                                <stop offset="100%" stop-color="#1B5E34" stop-opacity="0.02" />
+                            </linearGradient>
+                        </defs>
+                        @if (YieldPoints.Count > 0)
+                        {
+                            <path d="@YieldAreaPath" fill="url(#finYieldGrad)" />
+                            <polyline points="@YieldPolylinePoints" fill="none" stroke="#1B5E34" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+                            @for (int i = 0; i < YieldPoints.Count; i++)
+                            {
+                                <g>
+                                    <circle cx="@F(YieldPoints[i].X)" cy="@F(YieldPoints[i].Y)" r="5" fill="#FFFFFF" stroke="#78BE3F" stroke-width="3" />
+                                    <text x="@F(YieldPoints[i].X)" y="242" text-anchor="middle" font-size="11" font-weight="600" fill="#475569">@YieldPoints[i].Label</text>
+                                </g>
+                            }
+                        }
+                    </svg>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ======================= PROFIT ESTIMATION ======================= -->
+    @if (activeTab == "profit")
+    {
+        <div class="row g-3">
+            <div class="col-12 col-lg-6">
+                <div class="panel h-100">
+                    <div class="panel-head">
+                        <div class="panel-title">Top customers by sales value</div>
+                        <div class="panel-sub mb-0">Contribution to revenue (@ActiveBranch · @PeriodLabel)</div>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="table data-table align-middle mb-0">
+                            <thead><tr><th>Customer</th><th>Sales value</th><th>Share</th></tr></thead>
+                            <tbody>
+                                @foreach (var c in customers)
+                                {
+                                    <tr>
+                                        <td class="col-name fw-medium">@c.Name</td>
+                                        <td class="text-nowrap">@Peso(c.Value)</td>
+                                        <td>@Share(c.Value, CustomerTotal)%</td>
+                                    </tr>
+                                }
+                                @if (customers.Count == 0)
+                                {
+                                    <tr><td colspan="3" class="text-center text-muted py-4">No customer sales for this filter.</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-6">
+                <div class="panel h-100">
+                    <div class="panel-head">
+                        <div class="panel-title">Cost by category</div>
+                        <div class="panel-sub mb-0">Operating cost allocation (@ActiveBranch · @PeriodLabel)</div>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="table data-table align-middle mb-0">
+                            <thead><tr><th>Category</th><th>Amount</th><th>Share</th></tr></thead>
+                            <tbody>
+                                @foreach (var c in costs)
+                                {
+                                    <tr>
+                                        <td class="col-name fw-medium">@c.Name</td>
+                                        <td class="text-nowrap">@Peso(c.Value)</td>
+                                        <td>@Share(c.Value, CostTotal)%</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ======================= COLLECTIONS REPORT ======================= -->
+    @if (activeTab == "collections")
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-lg-4">
+                <div class="card-box h-100">
+                    <div class="panel-title">Collections by method</div>
+                    <div class="panel-sub">Cash, GCash, bank and check (@ActiveBranch · @PeriodLabel)</div>
+
+                    <div class="d-flex justify-content-center my-3">
+                        <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Collections by method">
+                            @if (methods.Sum(x => x.Value) > 0)
+                            {
+                                double offset = 0;
+                                @foreach (var m in methods.Where(x => x.Value > 0))
+                                {
+                                    var len = (double)(m.Value / MethodTotal) * Circ;
+                                    var dash = Math.Max(len - 2, 0.5);
+                                    <circle cx="100" cy="100" r="@Radius" fill="none" stroke="@m.Color" stroke-width="28"
+                                            stroke-dasharray="@F(dash) @F(Circ - dash)"
+                                            stroke-dashoffset="@F(-offset)"
+                                            transform="rotate(-90 100 100)" />
+                                    offset += len;
+                                }
+                            }
+                            else
+                            {
+                                <circle cx="100" cy="100" r="@Radius" fill="none" stroke="#E2ECE6" stroke-width="28" />
+                            }
+                        </svg>
+                    </div>
+
+                    <div class="d-flex flex-column gap-2 small fw-semibold mt-3 px-1">
+                        @foreach (var m in methods.OrderBy(x => x.Order))
+                        {
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><span class="legend-dot" style="background:@m.Color"></span>@m.Name</span>
+                                <span class="text-muted">@Peso(m.Value)</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-8">
+                <div class="panel h-100">
+                    <div class="panel-head">
+                        <div class="panel-title">Sales and collection report</div>
+                        <div class="panel-sub mb-0">Recorded by cashier / order (@ActiveBranch · @PeriodLabel)</div>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="table data-table align-middle mb-0">
+                            <thead><tr><th>Cashier</th><th>Collected</th><th>Payments</th></tr></thead>
+                            <tbody>
+                                @foreach (var c in cashiers)
+                                {
+                                    <tr>
+                                        <td class="fw-medium">@c.Name</td>
+                                        <td class="text-nowrap">@Peso(c.Collected)</td>
+                                        <td>@c.Payments</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-head">
+                <div class="panel-title">Outstanding receivables</div>
+                <div class="panel-sub mb-0">Balances still to be collected, largest first (@ActiveBranch · @PeriodLabel)</div>
+            </div>
+            <div class="table-wrap">
+                <table class="table data-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Sale no.</th>
+                            <th>Date</th>
+                            <th>Customer</th>
+                            <th>Total</th>
+                            <th>Paid</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Receivables)
+                        {
+                            <tr>
+                                <td class="text-nowrap fw-semibold" style="color:#1B5E34;">@r.No</td>
+                                <td class="text-nowrap">@r.Date.ToString("MMM d, yyyy", Inv)</td>
+                                <td class="col-name">@r.Customer</td>
+                                <td class="text-nowrap">@Peso(r.Total)</td>
+                                <td class="text-nowrap">@Peso(r.Paid)</td>
+                                <td class="text-nowrap neg fw-semibold">@Peso(r.Balance)</td>
+                                <td><span class="pill @(r.Paid > 0 ? "pill-yellow" : "pill-red")">@(r.Paid > 0 ? "Partial" : "Unpaid")</span></td>
+                            </tr>
+                        }
+                        @if (Receivables.Count == 0)
+                        {
+                            <tr><td colspan="7" class="text-center text-muted py-4">No receivables for this filter.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 }
 
 @if (!string.IsNullOrEmpty(toast))
@@ -457,14 +570,13 @@
 
 @code {
     // ---------- MODELS ----------
-    record MonthRow(int Year, int Month, decimal Revenue, decimal Collections, decimal Expenses)
+    record BucketRow(string Label, decimal Revenue, decimal Collections, decimal Expenses, decimal HarvestKg)
     {
-        public string Label => new DateTime(Year, Month, 1).ToString("MMM", CultureInfo.InvariantCulture);
         public decimal Profit => Revenue - Expenses;
         public int Margin => Revenue <= 0 ? 0 : (int)Math.Round(Profit * 100 / Revenue, MidpointRounding.AwayFromZero);
     }
 
-    record Stat(string Title, string Value, string Note, string Icon, string IconClass);
+    record Stat(string Title, string Value, string Note, string Icon, string IconClass, string ValueClass = "");
     record Kpi(string Label, string Value, string Class);
     record NamedAmt(string Name, decimal Value);
     record BranchAmt(string Name, decimal Sales);
@@ -472,17 +584,68 @@
     record CashierRow(string Name, decimal Collected, int Payments);
     record RecvRow(string No, DateTime Date, string Customer, decimal Total, decimal Paid)
     {
-        public decimal Balance => Total - Paid;
+        public decimal Balance => Math.Max(0m, Total - Paid);
     }
+    record CropStat(string Label, double Value, string Color);
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     const double Radius = 70;
     static readonly double Circ = 2 * Math.PI * Radius;
 
-    // TODO: kuhaa gikan sa naka-login nga tenant
-    const string BusinessName = "Verdant Agri Ventures";
+    static readonly string[] Palette =
+    {
+        "#1B5E34",
+        "#78BE3F",
+        "#5C3A1E",
+        "#2E7D43",
+        "#8BA896",
+        "#9B6E46",
+        "#123D24",
+        "#A8D063"
+    };
 
-    // ---------- STATE ----------
+    static readonly (string Key, string Label)[] CostCategoryDefs =
+    {
+        ("labor", "Labor"),
+        ("supplies", "Supplies"),
+        ("fuel", "Fuel"),
+        ("utilities", "Utilities"),
+        ("transport", "Transport"),
+        ("equipment", "Equipment"),
+        ("maintenance", "Maintenance"),
+        ("other", "Other"),
+    };
+
+    // ---------- SCOPE & FILTERS ----------
+    long currentBusinessId;
+    long? assignedBranchId;
+    bool canSelectBranch;
+    string selectedBranchIdStr = "all";
+    string reportBranchIdStr = "all";
+    string selectedPeriod = "all";
+    bool isLoading = true;
+
+    string BusinessName = "AgriNexus";
+    string BusinessLogoUrl = "";
+    string ActiveBranch = "All Branches";
+
+    long? effectiveBranchFilter => canSelectBranch
+        ? (long.TryParse(selectedBranchIdStr, out var bid) && bid > 0 ? bid : null)
+        : assignedBranchId;
+
+    string GeneratorBranchLabel
+    {
+        get
+        {
+            if (!canSelectBranch && assignedBranchId.HasValue)
+                return branchNames.GetValueOrDefault(assignedBranchId.Value, "Assigned Branch");
+            if (long.TryParse(reportBranchIdStr, out var bid) && bid > 0)
+                return branchNames.GetValueOrDefault(bid, "Selected Branch");
+            return "All Branches";
+        }
+    }
+
+    // ---------- GENERATOR STATE ----------
     string activeTab = "revenue";
     bool showGen;
     bool generating;
@@ -491,81 +654,577 @@
     DateTime startDate = DateTime.Today.AddDays(-30);
     DateTime endDate = DateTime.Today;
     string reportType = "Profit & Loss Summary";
-    string format = "PDF";
 
-    // ---------- TEMPORARY DATA (ilisi sa database later) ----------
-    // Total: revenue 123,280 · collections 92,120 · expenses 96,710
-    readonly List<MonthRow> months = new()
+    // ---------- DATA ----------
+    List<Branch> businessBranches = new();
+    readonly Dictionary<long, string> branchNames = new();
+
+    List<SalesOrder> rawOrders = new();
+    List<Expense> rawExpenses = new();
+    List<HarvestRecord> rawHarvests = new();
+    List<CropCycle> rawCropCycles = new();
+    List<Plot> rawPlots = new();
+    Dictionary<int, long> farmToBranch = new();
+    Dictionary<int, decimal> saleItemTotals = new();
+    List<(string Name, decimal Qty, decimal UnitPrice, decimal TotalValue, long? BranchId)> inventorySnapshot = new();
+
+    List<BucketRow> trendBuckets = new();
+    List<NamedAmt> customers = new();
+    List<NamedAmt> costs = new();
+    List<BranchAmt> branches = new();
+    List<MethodAmt> methods = new();
+    List<CashierRow> cashiers = new();
+    List<RecvRow> receivables = new();
+    List<CropStat> CropSales = new();
+
+    int expenseEntriesCount;
+    int totalWorkersCount;
+    int cropCyclesCount;
+    decimal periodRevenue;
+    decimal periodExpenses;
+    decimal periodCollections;
+    decimal periodTax;
+    decimal periodProductionCost;
+    decimal salableStockValue;
+    int salableStockItemsCount;
+    decimal salableStockQtyTotal;
+
+    string PeriodLabel => selectedPeriod switch
     {
-        new(2026, 6,  8800,  8800,  3300),
-        new(2026, 7,  14000, 11300, 3200),
-        new(2026, 8,  22920, 16920, 4200),
-        new(2026, 9,  25140, 9680,  6500),
-        new(2026, 10, 52420, 45420, 79510),
-        new(2026, 11, 0,     0,     0),
+        "today" => "Today",
+        "week" => "This Week",
+        "month" => "This Month",
+        "year" => "This Year",
+        _ => "All Time"
     };
 
-    // Total: 123,280
-    readonly List<NamedAmt> customers = new()
+    string TrendSubtitle => selectedPeriod switch
     {
-        new("Bayanihan Trading", 32800),
-        new("Rural Bank Cooperative Store", 28860),
-        new("Municipal Market Vendors", 20260),
-        new("Barangay Nutrition Program", 18500),
-        new("Verdant Fresh Retail", 15580),
-        new("Walk-in customers", 7280),
+        "today" => "Hourly sales vs expenses (Today)",
+        "week" => "Daily sales vs expenses (This Week)",
+        "year" => "Monthly sales vs expenses (This Year)",
+        _ => "Last 6 months sales vs expenses"
     };
 
-    // Total: 96,710
-    readonly List<NamedAmt> costs = new()
+    protected override async Task OnInitializedAsync()
     {
-        new("Labor", 21360), new("Supplies", 44300), new("Fuel", 11700), new("Utilities", 7000),
-        new("Transport", 2800), new("Equipment", 1250), new("Maintenance", 6500), new("Other", 1800),
-    };
+        try
+        {
+            await ResolveScopeAsync();
+            UpdateActiveBranchLabel();
+            await LoadFinancialDataAsync();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
 
-    // Total: 123,280 (mohaum sa Branch performance sa Business Dashboard)
-    readonly List<BranchAmt> branches = new()
+    private async Task ResolveScopeAsync()
     {
-        new("North Field", 50680), new("South Valley", 55300), new("Central Packing", 17300),
-    };
+        User? currentUser = null;
 
-    // Total: 92,120 (mohaum sa Payments & Collections)
-    readonly List<MethodAmt> methods = new()
+        if (Auth.CurrentUserId > 0)
+        {
+            currentUser = await DbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.UserId == Auth.CurrentUserId);
+        }
+        else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserEmail))
+        {
+            var cleanEmail = Auth.CurrentUserEmail.Trim().ToLower();
+            currentUser = await DbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == cleanEmail);
+        }
+        else if (!string.IsNullOrWhiteSpace(Auth.CurrentUserName))
+        {
+            currentUser = await DbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => (u.FName + " " + u.LName) == Auth.CurrentUserName
+                                       || u.FName == Auth.CurrentUserName);
+        }
+
+        if (currentUser?.BusinessId != null)
+        {
+            currentBusinessId = currentUser.BusinessId.Value;
+            assignedBranchId = currentUser.BranchId;
+        }
+        else
+        {
+            var firstBiz = await DbContext.Businesses
+                .AsNoTracking()
+                .Where(b => !b.IsArchived)
+                .FirstOrDefaultAsync();
+            if (firstBiz != null) currentBusinessId = firstBiz.BusinessId;
+        }
+
+        var biz = await DbContext.Businesses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.BusinessId == currentBusinessId);
+
+        if (biz != null)
+        {
+            if (!string.IsNullOrWhiteSpace(biz.BusinessName))
+                BusinessName = biz.BusinessName.Trim();
+            BusinessLogoUrl = GetStringProp(biz.GetType(), biz, "LogoUrl", "LogoPath", "Logo", "ProfileImage") ?? "";
+        }
+
+        var roleText = (currentUser?.Role ?? "").Trim().ToLowerInvariant();
+        var isTenantOwnerOrAdmin = string.IsNullOrEmpty(roleText)
+            || roleText.Contains("tenant")
+            || roleText.Contains("owner")
+            || roleText.Contains("admin")
+            || roleText.Contains("superadmin")
+            || roleText.Contains("director");
+
+        canSelectBranch = isTenantOwnerOrAdmin || !assignedBranchId.HasValue;
+        if (!canSelectBranch && assignedBranchId.HasValue)
+        {
+            selectedBranchIdStr = assignedBranchId.Value.ToString();
+            reportBranchIdStr = assignedBranchId.Value.ToString();
+        }
+
+        businessBranches = await DbContext.Branches
+            .AsNoTracking()
+            .Where(b => b.BusinessId == currentBusinessId)
+            .OrderBy(b => b.BranchName)
+            .ToListAsync();
+
+        branchNames.Clear();
+        foreach (var b in businessBranches)
+        {
+            branchNames[b.BranchId] = b.BranchName;
+        }
+    }
+
+    private void UpdateActiveBranchLabel()
     {
-        new("Cash", 38100, "#206A3B", 1),
-        new("Gcash", 30000, "#92D050", 3),
-        new("Bank", 24020, "#62A834", 2),
-    };
+        if (!canSelectBranch && assignedBranchId.HasValue)
+        {
+            ActiveBranch = branchNames.TryGetValue(assignedBranchId.Value, out var bName)
+                ? bName
+                : "Assigned Branch";
+            return;
+        }
 
-    readonly List<CashierRow> cashiers = new()
+        if (effectiveBranchFilter.HasValue)
+        {
+            ActiveBranch = branchNames.TryGetValue(effectiveBranchFilter.Value, out var bName)
+                ? bName
+                : "Selected Branch";
+            return;
+        }
+
+        ActiveBranch = businessBranches.Count == 1
+            ? businessBranches[0].BranchName
+            : "All Branches (Overall)";
+    }
+
+    bool MatchesScope(long branchId, long? overrideBranchId = null)
     {
-        new("Noel Bautista", 9400, 2),
-        new("Paolo Gutierrez", 47980, 7),
-        new("Jhoanna Reyes", 34740, 5),
-    };
+        if (!canSelectBranch && assignedBranchId.HasValue)
+            return branchId == assignedBranchId.Value;
 
-    readonly List<RecvRow> receivables = new()
+        if (overrideBranchId.HasValue)
+            return branchId == overrideBranchId.Value;
+
+        if (effectiveBranchFilter.HasValue)
+            return branchId == effectiveBranchFilter.Value;
+
+        return true;
+    }
+
+    bool IsInSelectedPeriod(DateTime date)
     {
-        new("SO-0006", new(2026, 9, 2),  "Bayanihan Trading",            12900, 5000),
-        new("SO-0008", new(2026, 9, 27), "Municipal Market Vendors",      7560, 0),
-        new("SO-0010", new(2026, 10, 12), "Rural Bank Cooperative Store", 13860, 6860),
-        new("SO-0004", new(2026, 8, 5),  "Rural Bank Cooperative Store", 15000, 9000),
-        new("SO-0003", new(2026, 7, 19), "Verdant Fresh Retail",          5700, 3000),
-    };
+        if (selectedPeriod == "all") return true;
+        var d = date.Date;
+        var today = DateTime.Today;
 
-    // Constants hangtod naa na ang ubang modules
-    const int ExpenseEntries = 15;
-    const int TotalWorkers = 9;
-    const string TopCrop = "Rice";
+        return selectedPeriod switch
+        {
+            "today" => d == today,
+            "week" => GetWeekStart(d) == GetWeekStart(today),
+            "year" => d.Year == today.Year,
+            _ => d.Year == today.Year && d.Month == today.Month,
+        };
+    }
+
+    static DateTime GetWeekStart(DateTime date)
+    {
+        var diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
+        return date.AddDays(-diff).Date;
+    }
+
+    private async Task LoadFinancialDataAsync()
+    {
+        var branchIds = businessBranches.Select(b => b.BranchId).ToList();
+        var defaultBranchId = businessBranches.FirstOrDefault()?.BranchId ?? 0L;
+
+        var farms = await DbContext.Farms
+            .AsNoTracking()
+            .Where(f => branchIds.Contains(f.BranchId))
+            .ToListAsync();
+
+        var farmIds = farms.Select(f => f.FarmId).ToList();
+        farmToBranch = farms.ToDictionary(f => f.FarmId, f => f.BranchId);
+
+        rawPlots = await DbContext.Plots
+            .AsNoTracking()
+            .Where(p => farmIds.Contains(p.FarmId))
+            .ToListAsync();
+
+        saleItemTotals = await DbContext.SalesItems
+            .AsNoTracking()
+            .GroupBy(si => si.SaleId)
+            .Select(g => new { SaleId = g.Key, Total = g.Sum(x => x.Subtotal) })
+            .ToDictionaryAsync(x => x.SaleId, x => x.Total);
+
+        rawOrders = await DbContext.SalesOrders
+            .AsNoTracking()
+            .Where(s => branchIds.Contains(s.BranchId) || s.BranchId == 0)
+            .ToListAsync();
+
+        rawExpenses = await DbContext.Expenses
+            .AsNoTracking()
+            .Where(e => e.BusinessId == currentBusinessId && !e.IsArchived)
+            .ToListAsync();
+
+        rawHarvests = await DbContext.HarvestRecords
+            .AsNoTracking()
+            .Where(h => h.BusinessId == currentBusinessId)
+            .ToListAsync();
+
+        rawCropCycles = await DbContext.CropCycles
+            .AsNoTracking()
+            .Where(c => !c.IsArchived)
+            .ToListAsync();
+
+        var workers = await DbContext.Workers
+            .AsNoTracking()
+            .Where(w => branchIds.Contains(w.BranchId))
+            .ToListAsync();
+
+        // Inventory snapshot via DbSet reflection
+        inventorySnapshot.Clear();
+        var invProp = DbContext.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.Name.Equals("InventoryItems", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("Inventories", StringComparison.OrdinalIgnoreCase)
+                              || p.Name.Equals("Products", StringComparison.OrdinalIgnoreCase));
+
+        if (invProp?.GetValue(DbContext) is IQueryable rawInvQuery)
+        {
+            var invList = await rawInvQuery.Cast<object>().ToListAsync();
+            foreach (var item in invList)
+            {
+                var it = item.GetType();
+                var name = GetStringProp(it, item, "ItemName", "ProductName", "Name", "Title") ?? "Inventory Item";
+                var qty = GetDecimalProp(it, item, "QuantityOnHand", "Quantity", "StockQty", "AvailableQty", "CurrentStock");
+                var price = GetDecimalProp(it, item, "SellingPrice", "UnitPrice", "Price", "UnitCost", "CostPrice");
+                var bId = GetLongProp(it, item, "BranchId");
+                if (qty > 0)
+                {
+                    inventorySnapshot.Add((name, qty, price, Math.Round(qty * price, 2), bId));
+                }
+            }
+        }
+
+        // Scoped items for active display filters
+        var scopedOrders = rawOrders
+            .Where(s => MatchesScope(s.BranchId == 0 ? defaultBranchId : s.BranchId))
+            .ToList();
+
+        var scopedExpenses = rawExpenses
+            .Where(e => MatchesScope(e.BranchId == 0 ? defaultBranchId : e.BranchId))
+            .ToList();
+
+        var periodOrders = scopedOrders.Where(s => IsInSelectedPeriod(s.SaleDate)).ToList();
+        var periodExpList = scopedExpenses.Where(e => IsInSelectedPeriod(e.ExpenseDate)).ToList();
+
+        var plotById = rawPlots.ToDictionary(p => p.PlotId, p => p);
+        var scopedHarvests = rawHarvests.Where(h =>
+        {
+            var hBranchId = GetLongProp(h.GetType(), h, "BranchId");
+            if (hBranchId.HasValue && hBranchId.Value > 0) return MatchesScope(hBranchId.Value);
+            var hPlotId = (int)(GetLongProp(h.GetType(), h, "PlotId") ?? 0);
+            if (hPlotId > 0 && plotById.TryGetValue(hPlotId, out var p) && farmToBranch.TryGetValue(p.FarmId, out var fb))
+                return MatchesScope(fb);
+            return MatchesScope(defaultBranchId);
+        }).ToList();
+
+        var periodHarvList = scopedHarvests.Where(h => IsInSelectedPeriod(h.HarvestDate)).ToList();
+
+        var scopedCycles = rawCropCycles.Where(c =>
+        {
+            var cPlotId = (int)(GetLongProp(c.GetType(), c, "PlotId") ?? 0);
+            var bId = cPlotId > 0 && plotById.TryGetValue(cPlotId, out var p) && farmToBranch.TryGetValue(p.FarmId, out var fb)
+                ? fb
+                : defaultBranchId;
+            return MatchesScope(bId);
+        }).ToList();
+
+        cropCyclesCount = scopedCycles.Count;
+        totalWorkersCount = workers.Count(w => MatchesScope(w.BranchId));
+        expenseEntriesCount = periodExpList.Count;
+
+        periodRevenue = periodOrders.Sum(OrderTotal);
+        periodExpenses = periodExpList.Sum(e => e.Amount);
+        periodCollections = periodOrders.Sum(s => s.AmountPaid);
+        periodTax = periodOrders.Sum(s => s.TaxAmount > 0
+            ? s.TaxAmount
+            : Math.Round(OrderTotal(s) - (OrderTotal(s) / 1.12m), 2, MidpointRounding.AwayFromZero));
+
+        var harvCost = periodHarvList.Sum(h => h.QuantityKg * h.UnitValue);
+        periodProductionCost = harvCost > 0 ? harvCost : periodExpenses;
+
+        var scopedInv = inventorySnapshot.Where(x => !x.BranchId.HasValue || MatchesScope(x.BranchId.Value)).ToList();
+        if (scopedInv.Count > 0)
+        {
+            salableStockItemsCount = scopedInv.Count;
+            salableStockQtyTotal = scopedInv.Sum(x => x.Qty);
+            salableStockValue = scopedInv.Sum(x => x.TotalValue);
+        }
+        else
+        {
+            var approvedHarv = periodHarvList.Where(h => string.Equals(h.Status, "Approved", StringComparison.OrdinalIgnoreCase)).ToList();
+            salableStockItemsCount = approvedHarv.Count;
+            salableStockQtyTotal = approvedHarv.Sum(h => h.QuantityKg);
+            salableStockValue = approvedHarv.Sum(h => h.QuantityKg * (h.SellingPrice > 0 ? h.SellingPrice : h.UnitValue));
+        }
+
+        BuildTrendBuckets(scopedOrders, scopedExpenses, scopedHarvests);
+
+        // Cost by category
+        var expByCat = periodExpList
+            .GroupBy(e => (e.Category ?? "other").Trim().ToLowerInvariant())
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+
+        costs = CostCategoryDefs
+            .Select(c => new NamedAmt(c.Label, expByCat.GetValueOrDefault(c.Key, 0m)))
+            .ToList();
+
+        // Top customers
+        customers = periodOrders
+            .GroupBy(s => $"Customer #{s.CustomerId}")
+            .Select(g => new NamedAmt(g.Key, g.Sum(OrderTotal)))
+            .OrderByDescending(x => x.Value)
+            .Take(6)
+            .ToList();
+
+        // Branch performance
+        var visibleBranches = businessBranches.Where(b => MatchesScope(b.BranchId)).ToList();
+        branches = visibleBranches.Select(b =>
+        {
+            var bSales = rawOrders
+                .Where(s => (s.BranchId == 0 ? defaultBranchId : s.BranchId) == b.BranchId && IsInSelectedPeriod(s.SaleDate))
+                .Sum(OrderTotal);
+            return new BranchAmt(b.BranchName, bSales);
+        }).ToList();
+
+        // Collections by method
+        string GetPayMethod(SalesOrder order) =>
+            (GetStringProp(order.GetType(), order, "PaymentMethod", "PaymentMode", "Method", "PayMethod") ?? "")
+            .Trim()
+            .ToLowerInvariant();
+
+        decimal EffectivePaid(SalesOrder order)
+        {
+            if (order.AmountPaid > 0) return order.AmountPaid;
+            var statusText = (GetStringProp(order.GetType(), order, "Status", "PaymentStatus") ?? "")
+                .Trim()
+                .ToLowerInvariant();
+            if (statusText == "paid") return OrderTotal(order);
+            return 0m;
+        }
+
+        var cashSum = periodOrders
+            .Where(s => GetPayMethod(s).Contains("cash"))
+            .Sum(EffectivePaid);
+
+        var gcashSum = periodOrders
+            .Where(s => GetPayMethod(s).Contains("gcash"))
+            .Sum(EffectivePaid);
+
+        var bankSum = periodOrders
+            .Where(s =>
+            {
+                var pm = GetPayMethod(s);
+                return pm.Contains("bank") || pm.Contains("transfer") || pm.Contains("card") || pm.Contains("check");
+            })
+            .Sum(EffectivePaid);
+
+        var unrecordedSum = periodOrders
+            .Where(s =>
+            {
+                var pm = GetPayMethod(s);
+                return !pm.Contains("cash")
+                    && !pm.Contains("gcash")
+                    && !pm.Contains("bank")
+                    && !pm.Contains("transfer")
+                    && !pm.Contains("card")
+                    && !pm.Contains("check");
+            })
+            .Sum(EffectivePaid);
+
+        methods = new()
+        {
+            new("Cash", cashSum, "#1B5E34", 1),
+            new("GCash", gcashSum, "#78BE3F", 3),
+            new("Bank", bankSum, "#5C3A1E", 2),
+            new("Unspecified", unrecordedSum, "#8BA896", 4),
+        };
+
+        // Cashiers
+        cashiers = periodOrders
+            .GroupBy(s =>
+            {
+                var cName = GetStringProp(s.GetType(), s, "CashierName", "CreatedByName", "ProcessedBy");
+                return string.IsNullOrWhiteSpace(cName) ? $"Branch #{(s.BranchId == 0 ? defaultBranchId : s.BranchId)} Cashier" : cName;
+            })
+            .Select(g => new CashierRow(g.Key, g.Sum(x => x.AmountPaid), g.Count(x => x.AmountPaid > 0)))
+            .OrderByDescending(x => x.Collected)
+            .ToList();
+
+        // Receivables
+        receivables = periodOrders
+            .Where(s => OrderBalance(s) > 0m)
+            .Select(s => new RecvRow(
+                string.IsNullOrWhiteSpace(s.ReferenceNumber) ? $"SO-{s.SaleId:D4}" : s.ReferenceNumber,
+                s.SaleDate,
+                $"Customer #{s.CustomerId}",
+                OrderTotal(s),
+                s.AmountPaid
+            ))
+            .OrderByDescending(r => r.Balance)
+            .ToList();
+
+        // Crop donut
+        CropSales = periodHarvList
+            .GroupBy(h => GetStringProp(h.GetType(), h, "CropName", "CropType", "Crop", "Name") ?? "Crop")
+            .Select((g, i) => new CropStat(g.Key, (double)g.Sum(x => x.QuantityKg), Palette[i % Palette.Length]))
+            .Where(c => c.Value > 0)
+            .ToList();
+    }
+
+    void BuildTrendBuckets(List<SalesOrder> scopedOrders, List<Expense> scopedExpenses, List<HarvestRecord> scopedHarvests)
+    {
+        var today = DateTime.Today;
+
+        if (selectedPeriod == "today")
+        {
+            var blocks = new[]
+            {
+                ("12AM", 0, 3), ("3AM", 3, 6), ("6AM", 6, 9), ("9AM", 9, 12),
+                ("12PM", 12, 15), ("3PM", 15, 18), ("6PM", 18, 21), ("9PM", 21, 24)
+            };
+            trendBuckets = blocks.Select(b =>
+            {
+                var rev = scopedOrders.Where(s => s.SaleDate.Date == today && s.SaleDate.Hour >= b.Item2 && s.SaleDate.Hour < b.Item3).Sum(OrderTotal);
+                var col = scopedOrders.Where(s => s.SaleDate.Date == today && s.SaleDate.Hour >= b.Item2 && s.SaleDate.Hour < b.Item3).Sum(s => s.AmountPaid);
+                var exp = scopedExpenses.Where(e => e.ExpenseDate.Date == today && e.ExpenseDate.Hour >= b.Item2 && e.ExpenseDate.Hour < b.Item3).Sum(e => e.Amount);
+                var kg = scopedHarvests.Where(h => h.HarvestDate.Date == today && h.HarvestDate.Hour >= b.Item2 && h.HarvestDate.Hour < b.Item3).Sum(h => h.QuantityKg);
+                return new BucketRow(b.Item1, rev, col, exp, kg);
+            }).ToList();
+            return;
+        }
+
+        if (selectedPeriod == "week")
+        {
+            var weekStart = GetWeekStart(today);
+            trendBuckets = Enumerable.Range(0, 7).Select(offset =>
+            {
+                var d = weekStart.AddDays(offset);
+                var rev = scopedOrders.Where(s => s.SaleDate.Date == d).Sum(OrderTotal);
+                var col = scopedOrders.Where(s => s.SaleDate.Date == d).Sum(s => s.AmountPaid);
+                var exp = scopedExpenses.Where(e => e.ExpenseDate.Date == d).Sum(e => e.Amount);
+                var kg = scopedHarvests.Where(h => h.HarvestDate.Date == d).Sum(h => h.QuantityKg);
+                return new BucketRow(d.ToString("ddd", Inv), rev, col, exp, kg);
+            }).ToList();
+            return;
+        }
+
+        if (selectedPeriod == "year")
+        {
+            trendBuckets = Enumerable.Range(1, 12).Select(m =>
+            {
+                var rev = scopedOrders.Where(s => s.SaleDate.Year == today.Year && s.SaleDate.Month == m).Sum(OrderTotal);
+                var col = scopedOrders.Where(s => s.SaleDate.Year == today.Year && s.SaleDate.Month == m).Sum(s => s.AmountPaid);
+                var exp = scopedExpenses.Where(e => e.ExpenseDate.Year == today.Year && e.ExpenseDate.Month == m).Sum(e => e.Amount);
+                var kg = scopedHarvests.Where(h => h.HarvestDate.Year == today.Year && h.HarvestDate.Month == m).Sum(h => h.QuantityKg);
+                return new BucketRow(new DateTime(today.Year, m, 1).ToString("MMM", Inv), rev, col, exp, kg);
+            }).ToList();
+            return;
+        }
+
+        var months = Enumerable.Range(0, 6)
+            .Select(offset => today.AddMonths(-(5 - offset)))
+            .Select(d => new DateTime(d.Year, d.Month, 1))
+            .ToList();
+
+        trendBuckets = months.Select(m =>
+        {
+            var rev = scopedOrders.Where(s => s.SaleDate.Year == m.Year && s.SaleDate.Month == m.Month).Sum(OrderTotal);
+            var col = scopedOrders.Where(s => s.SaleDate.Year == m.Year && s.SaleDate.Month == m.Month).Sum(s => s.AmountPaid);
+            var exp = scopedExpenses.Where(e => e.ExpenseDate.Year == m.Year && e.ExpenseDate.Month == m.Month).Sum(e => e.Amount);
+            var kg = scopedHarvests.Where(h => h.HarvestDate.Year == m.Year && h.HarvestDate.Month == m.Month).Sum(h => h.QuantityKg);
+            return new BucketRow(m.ToString("MMM", Inv), rev, col, exp, kg);
+        }).ToList();
+    }
+
+    decimal OrderTotal(SalesOrder s)
+    {
+        if (s.NetAmount > 0) return s.NetAmount;
+        var computed = s.GrossAmount - s.DiscountAmount + s.TaxAmount;
+        if (computed > 0) return computed;
+        if (saleItemTotals.TryGetValue(s.SaleId, out var itemsSum) && itemsSum > 0) return itemsSum;
+        return s.AmountPaid;
+    }
+
+    decimal OrderBalance(SalesOrder s) => Math.Max(0m, OrderTotal(s) - s.AmountPaid);
+
+    static string? GetStringProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null)
+            {
+                var v = p.GetValue(obj)?.ToString();
+                if (!string.IsNullOrWhiteSpace(v)) return v.Trim();
+            }
+        }
+        return null;
+    }
+
+    static long? GetLongProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && long.TryParse(p.GetValue(obj)?.ToString(), out var v)) return v;
+        }
+        return null;
+    }
+
+    static decimal GetDecimalProp(Type t, object obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var p = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && decimal.TryParse(p.GetValue(obj)?.ToString(), NumberStyles.Any, Inv, out var v)) return v;
+        }
+        return 0m;
+    }
 
     // ---------- COMPUTED ----------
-    decimal TotalRevenue => months.Sum(m => m.Revenue);
-    decimal TotalExpenses => months.Sum(m => m.Expenses);
+    decimal TotalRevenue => periodRevenue;
+    decimal TotalExpenses => periodExpenses;
     decimal TotalProfit => TotalRevenue - TotalExpenses;
     decimal CustomerTotal => customers.Sum(c => c.Value);
     decimal CostTotal => costs.Sum(c => c.Value);
-    decimal MethodTotal => Math.Max(1, methods.Sum(m => m.Value));
-    double BranchMax => Math.Max(10000, Math.Ceiling((double)branches.Max(b => b.Sales) / 10000) * 10000);
+    decimal MethodTotal => Math.Max(1m, methods.Sum(m => m.Value));
+    double BranchMax => Math.Max(10000, Math.Ceiling((double)(branches.Count > 0 ? branches.Max(b => b.Sales) : 0) / 10000) * 10000);
+    double TotalCropKg => CropSales.Sum(c => c.Value);
 
     List<RecvRow> Receivables => receivables.OrderByDescending(r => r.Balance).ToList();
 
@@ -573,63 +1232,73 @@
     {
         get
         {
-            var t = DateTime.Today;
-            var m = months.FirstOrDefault(x => x.Year == t.Year && x.Month == t.Month);
-            var rev = m?.Revenue ?? 0;
-            var exp = m?.Expenses ?? 0;
-            var profit = rev - exp;
-            var margin = rev <= 0 ? 0 : (int)Math.Round(profit * 100 / rev, MidpointRounding.AwayFromZero);
-
+            var margin = TotalRevenue <= 0 ? 0 : (int)Math.Round(TotalProfit * 100 / TotalRevenue, MidpointRounding.AwayFromZero);
             return new()
             {
-                new("REVENUE THIS MONTH", Peso(rev), t.ToString("MMMM yyyy", Inv), "bi-graph-up-arrow", ""),
-                new("COST THIS MONTH", Peso(exp), ExpenseEntries + " expense entries", "bi-coin", "stat-icon-plain"),
-                new("ESTIMATED PROFIT", PesoSigned(profit), margin + "% margin", "bi-piggy-bank", "stat-icon-plain"),
-                new("RECEIVABLES", Peso(receivables.Sum(r => r.Balance)), receivables.Count + " sales with balance", "bi-cash-stack", "stat-icon-warn"),
+                new("SALES / REVENUE (" + PeriodLabel.ToUpperInvariant() + ")", Peso(TotalRevenue), "Tax: " + Peso(periodTax) + " · Salable stock: " + Peso(salableStockValue), "bi-graph-up-arrow", ""),
+                new("EXPENSES (" + PeriodLabel.ToUpperInvariant() + ")", Peso(TotalExpenses), expenseEntriesCount + " expense entries · Prod. cost: " + Peso(periodProductionCost), "bi-coin", "stat-icon-leaf"),
+                new("ESTIMATED NET PROFIT", PesoSigned(TotalProfit), margin + "% margin", "bi-piggy-bank", TotalProfit < 0 ? "stat-icon-earth" : "stat-icon-leaf", TotalProfit < 0 ? "neg" : "pos"),
+                new("RECEIVABLES", Peso(receivables.Sum(r => r.Balance)), receivables.Count + " sales with balance", "bi-cash-stack", "stat-icon-earth"),
             };
         }
     }
 
-    // Mini KPIs: ROI = profit ÷ expenses
     List<Kpi> MiniKpis => new()
     {
         new("ROI", (TotalExpenses <= 0 ? 0 : TotalProfit * 100 / TotalExpenses).ToString("0.0", Inv) + "%", TotalProfit >= 0 ? "text-success" : "text-danger"),
-        new("Active Branches", branches.Count.ToString(), "text-dark"),
-        new("Top Crop", TopCrop, "text-dark"),
-        new("Total Workers", TotalWorkers.ToString(), "text-dark"),
+        new("Salable Stock", Peso(salableStockValue), "text-dark"),
+        new("Crop Cycles", cropCyclesCount.ToString(), "text-dark"),
+        new("Total Workers", totalWorkersCount.ToString(), "text-dark"),
     };
 
-    // Bar chart axis (i-round up sa 20K)
-    double BarMax => Math.Max(20000, Math.Ceiling((double)months.Max(m => Math.Max(m.Revenue, m.Expenses)) / 20000) * 20000);
-
-    // Profit chart axis (±, i-round up sa 15K)
-    double ProfitMax => Math.Max(15000, Math.Ceiling((double)months.Max(m => Math.Abs(m.Profit)) / 15000) * 15000);
+    double BarMax => Math.Max(20000, Math.Ceiling((double)(trendBuckets.Count > 0 ? trendBuckets.Max(m => Math.Max(m.Revenue, m.Expenses)) : 0) / 20000) * 20000);
+    double ProfitMax => Math.Max(15000, Math.Ceiling((double)(trendBuckets.Count > 0 ? trendBuckets.Max(m => Math.Abs(m.Profit)) : 0) / 15000) * 15000);
 
     List<(double X, double Y)> ProfitPoints
     {
         get
         {
             var list = new List<(double, double)>();
-            var step = 316.0 / Math.Max(1, months.Count - 1);
-            for (int i = 0; i < months.Count; i++)
-                list.Add((70 + i * step, 140 - (double)months[i].Profit / ProfitMax * 120));
+            var step = 316.0 / Math.Max(1, trendBuckets.Count - 1);
+            for (int i = 0; i < trendBuckets.Count; i++)
+                list.Add((70 + i * step, 140 - Math.Max(-120, Math.Min(120, (double)trendBuckets[i].Profit / ProfitMax * 120))));
             return list;
         }
     }
 
+    List<(double X, double Y, string Label)> YieldPoints
+    {
+        get
+        {
+            var maxKg = Math.Max(100.0, trendBuckets.Count > 0 ? trendBuckets.Max(b => (double)b.HarvestKg) : 100.0);
+            var list = new List<(double, double, string)>();
+            var count = Math.Max(1, trendBuckets.Count);
+            var step = count > 1 ? 500.0 / (count - 1) : 0;
+            for (int i = 0; i < trendBuckets.Count; i++)
+            {
+                var x = 50 + i * step;
+                var h = Math.Min((double)trendBuckets[i].HarvestKg / maxKg * 165, 165);
+                var y = 215 - h;
+                list.Add((x, y, trendBuckets[i].Label));
+            }
+            return list;
+        }
+    }
+
+    string YieldPolylinePoints => string.Join(" ", YieldPoints.Select(p => $"{F(p.X)},{F(p.Y)}"));
+    string YieldAreaPath => YieldPoints.Count == 0
+        ? ""
+        : $"M {F(YieldPoints[0].X)},215 L " + string.Join(" L ", YieldPoints.Select(p => $"{F(p.X)},{F(p.Y)}")) + $" L {F(YieldPoints[^1].X)},215 Z";
+
     // ---------- HELPERS ----------
     static string F(double d) => d.ToString("0.##", Inv);
     static string Peso(decimal v) => "₱" + v.ToString("N2", Inv);
-    static string PesoSigned(decimal v) => v < 0 ? "-₱" + (-v).ToString("N2", Inv) : Peso(v);
+    static string PesoSigned(decimal v) => v < 0 ? "−₱" + (-v).ToString("N2", Inv) : Peso(v);
     static string Short(decimal v) => v >= 1000 ? "₱" + (v / 1000).ToString("0.#", Inv) + "K" : "₱" + v.ToString("0", Inv);
+    static string ShortLabel(string s, int max) => s.Length <= max ? s : s[..(max - 1)] + "…";
+    static string AxisLabel(double v) => v == 0 ? "₱0" : (v < 0 ? "−₱" : "₱") + (Math.Abs(v) / 1000).ToString("0", Inv) + "K";
+    static int Share(decimal value, decimal total) => total <= 0 ? 0 : (int)Math.Round(value * 100 / total, MidpointRounding.AwayFromZero);
 
-    static string AxisLabel(double v) =>
-        v == 0 ? "₱0" : (v < 0 ? "-₱" : "₱") + (Math.Abs(v) / 1000).ToString("0", Inv) + "K";
-
-    static int Share(decimal value, decimal total) =>
-        total <= 0 ? 0 : (int)Math.Round(value * 100 / total, MidpointRounding.AwayFromZero);
-
-    // Smooth curve (Catmull-Rom -> cubic bezier)
     static string SmoothPath(List<(double X, double Y)> p)
     {
         if (p.Count == 0) return "";
@@ -652,34 +1321,383 @@
         return sb.ToString();
     }
 
-    // ---------- ACTIONS ----------
-    async Task GenerateReport()
+    // ---------- EVENTS & PDF GENERATION ----------
+    async Task OnBranchChanged(ChangeEventArgs e)
+    {
+        if (!canSelectBranch) return;
+        selectedBranchIdStr = e.Value?.ToString() ?? "all";
+        reportBranchIdStr = selectedBranchIdStr;
+        UpdateActiveBranchLabel();
+        await LoadFinancialDataAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task OnPeriodChanged(ChangeEventArgs e)
+    {
+        selectedPeriod = e.Value?.ToString() ?? "all";
+        await LoadFinancialDataAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task GeneratePdfReportAsync()
     {
         genError = "";
-        if (endDate < startDate)
+        if (endDate.Date < startDate.Date)
         {
             genError = "End date can’t be earlier than the start date.";
             return;
         }
 
         generating = true;
-        await Task.Delay(1200);
-        // TODO: himoa ang tinuod nga PDF / Excel gikan sa data sa napiling petsa ug report type
-        generating = false;
+        try
+        {
+            long? genBranchId = null;
+            if (!canSelectBranch && assignedBranchId.HasValue)
+                genBranchId = assignedBranchId.Value;
+            else if (long.TryParse(reportBranchIdStr, out var bid) && bid > 0)
+                genBranchId = bid;
 
-        toast = reportType + " (" + format + ") for " + startDate.ToString("MMM d", Inv) + " – " + endDate.ToString("MMM d, yyyy", Inv) + " is ready.";
-        await InvokeAsync(StateHasChanged);
-        await Task.Delay(3500);
-        toast = "";
-        await InvokeAsync(StateHasChanged);
+            var branchLabel = genBranchId.HasValue
+                ? branchNames.GetValueOrDefault(genBranchId.Value, "Selected Branch")
+                : "All Branches";
+
+            var defaultBranchId = businessBranches.FirstOrDefault()?.BranchId ?? 0L;
+
+            var rangeOrders = rawOrders.Where(s =>
+            {
+                var bId = s.BranchId == 0 ? defaultBranchId : s.BranchId;
+                return (!genBranchId.HasValue || bId == genBranchId.Value)
+                    && s.SaleDate.Date >= startDate.Date
+                    && s.SaleDate.Date <= endDate.Date;
+            }).ToList();
+
+            var rangeExpenses = rawExpenses.Where(e =>
+            {
+                var bId = e.BranchId == 0 ? defaultBranchId : e.BranchId;
+                return (!genBranchId.HasValue || bId == genBranchId.Value)
+                    && e.ExpenseDate.Date >= startDate.Date
+                    && e.ExpenseDate.Date <= endDate.Date;
+            }).ToList();
+
+            var plotById = rawPlots.ToDictionary(p => p.PlotId, p => p);
+            var rangeHarvests = rawHarvests.Where(h =>
+            {
+                var hBranchId = GetLongProp(h.GetType(), h, "BranchId");
+                long bId = hBranchId.HasValue && hBranchId.Value > 0 ? hBranchId.Value : defaultBranchId;
+                var hPlotId = (int)(GetLongProp(h.GetType(), h, "PlotId") ?? 0);
+                if (hPlotId > 0 && plotById.TryGetValue(hPlotId, out var p) && farmToBranch.TryGetValue(p.FarmId, out var fb))
+                    bId = fb;
+                return (!genBranchId.HasValue || bId == genBranchId.Value)
+                    && h.HarvestDate.Date >= startDate.Date
+                    && h.HarvestDate.Date <= endDate.Date;
+            }).ToList();
+
+            var rangeInv = inventorySnapshot
+                .Where(x => !genBranchId.HasValue || !x.BranchId.HasValue || x.BranchId.Value == genBranchId.Value)
+                .ToList();
+
+            var grossSales = rangeOrders.Sum(s => s.GrossAmount > 0 ? s.GrossAmount : OrderTotal(s));
+            var netSales = rangeOrders.Sum(OrderTotal);
+            var taxTotal = rangeOrders.Sum(s => s.TaxAmount > 0
+                ? s.TaxAmount
+                : Math.Round(OrderTotal(s) - (OrderTotal(s) / 1.12m), 2, MidpointRounding.AwayFromZero));
+            var expTotal = rangeExpenses.Sum(e => e.Amount);
+            var netIncome = netSales - expTotal;
+            var prodCost = rangeHarvests.Sum(h => h.QuantityKg * h.UnitValue);
+            if (prodCost <= 0) prodCost = expTotal;
+            var salableVal = rangeInv.Count > 0
+                ? rangeInv.Sum(x => x.TotalValue)
+                : rangeHarvests.Where(h => string.Equals(h.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+                    .Sum(h => h.QuantityKg * (h.SellingPrice > 0 ? h.SellingPrice : h.UnitValue));
+
+            var html = BuildPdfHtml(
+                reportType,
+                branchLabel,
+                rangeOrders,
+                rangeExpenses,
+                rangeHarvests,
+                rangeInv,
+                grossSales,
+                netSales,
+                taxTotal,
+                expTotal,
+                netIncome,
+                prodCost,
+                salableVal);
+
+            await JS.InvokeVoidAsync("eval", @"
+                if (typeof window.openPdfPrintWindow !== 'function') {
+                    window.openPdfPrintWindow = function (htmlContent) {
+                        const win = window.open('', '_blank', 'width=900,height=700');
+                        if (win) {
+                            win.document.open();
+                            win.document.write(htmlContent);
+                            win.document.close();
+                            win.focus();
+                            setTimeout(() => { win.print(); }, 300);
+                            return;
+                        }
+                        const iframe = document.createElement('iframe');
+                        iframe.style.position = 'fixed';
+                        iframe.style.right = '0';
+                        iframe.style.bottom = '0';
+                        iframe.style.width = '0';
+                        iframe.style.height = '0';
+                        iframe.style.border = '0';
+                        document.body.appendChild(iframe);
+                        const doc = iframe.contentWindow.document;
+                        doc.open();
+                        doc.write(htmlContent);
+                        doc.close();
+                        iframe.contentWindow.focus();
+                        setTimeout(() => {
+                            iframe.contentWindow.print();
+                            setTimeout(() => iframe.remove(), 1000);
+                        }, 300);
+                    };
+                }
+            ");
+
+            await JS.InvokeVoidAsync("openPdfPrintWindow", html);
+
+            toast = $"{reportType} (PDF · A4) for {branchLabel} ({startDate:MMM d} – {endDate:MMM d, yyyy}) ready.";
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(3500);
+            toast = "";
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            genError = "Unable to generate PDF: " + ex.Message;
+        }
+        finally
+        {
+            generating = false;
+        }
     }
 
-    record CropStat(string Label, double Value, string Color);
+    string GetLogoDataUri()
+    {
+        try
+        {
+            var candidates = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "wwwroot", "images", "AgriNexus_finalogo.png"),
+                Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "AgriNexus_finalogo.png")
+            };
 
-    List<CropStat> CropSales => new() {
-        new("Rice", 45000, "#1B5E34"),
-        new("Corn", 32000, "#4CAF50"),
-        new("Vegetables", 18000, "#81C784")
-    };
-    double TotalCropSales => CropSales.Sum(c => c.Value);
+            foreach (var path in candidates)
+            {
+                if (File.Exists(path))
+                {
+                    var bytes = File.ReadAllBytes(path);
+                    return "data:image/png;base64," + Convert.ToBase64String(bytes);
+                }
+            }
+        }
+        catch
+        {
+            // Fallback if the URL connot read the local file path
+        }
+
+        return Nav.ToAbsoluteUri("images/AgriNexus_finalogo.png").ToString();
+    }
+
+    string BuildPdfHtml(
+        string type,
+        string branchLabel,
+        List<SalesOrder> rOrders,
+        List<Expense> rExpenses,
+        List<HarvestRecord> rHarvests,
+        List<(string Name, decimal Qty, decimal UnitPrice, decimal TotalValue, long? BranchId)> rInv,
+        decimal grossSales,
+        decimal netSales,
+        decimal taxTotal,
+        decimal expTotal,
+        decimal netIncome,
+        decimal prodCost,
+        decimal salableVal)
+    {
+        var sb = new StringBuilder();
+        var safeBiz = System.Net.WebUtility.HtmlEncode(BusinessName);
+        var safeBranch = System.Net.WebUtility.HtmlEncode(branchLabel);
+        var safeType = System.Net.WebUtility.HtmlEncode(type);
+
+        var logoSrc = GetLogoDataUri();
+        var brandLockupHtml = $@"
+            <div style=""display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;margin-bottom:10px;"">
+                <img src=""{System.Net.WebUtility.HtmlEncode(logoSrc)}"" alt=""AgriNexus Logo"" style=""height:42px;max-width:120px;object-fit:contain;display:block;"" />
+                <div style=""font-size:18px;font-weight:900;letter-spacing:-0.5px;line-height:1.1;"">
+                    <span style=""color:#0A2B1D;"">Agri</span><span style=""color:#78BE3F;"">Nexus</span>
+                </div>
+                <div style=""font-size:12px;font-weight:700;color:#1B5E34;"">{safeBiz}</div>
+            </div>";
+
+        var collectedTotal = rOrders.Sum(s => s.AmountPaid);
+        var balanceTotal = rOrders.Sum(s => Math.Max(0m, OrderTotal(s) - s.AmountPaid));
+        var paidCount = rOrders.Count(s => Math.Max(0m, OrderTotal(s) - s.AmountPaid) <= 0m);
+        var unpaidOrPartialCount = rOrders.Count(s => Math.Max(0m, OrderTotal(s) - s.AmountPaid) > 0m);
+        var stockQtySum = rInv.Count > 0 ? rInv.Sum(x => x.Qty) : salableStockQtyTotal;
+        var stockItemsSum = rInv.Count > 0 ? rInv.Count : salableStockItemsCount;
+
+        string kpi1Label, kpi1Val, kpi2Label, kpi2Val, kpi3Label, kpi3Val, kpi4Label, kpi4Val;
+        string kpi2Color = "#5C3A1E", kpi3Color = "#1B5E34", kpi4Color = "#2E7D43";
+
+        if (type.Contains("Collection", StringComparison.OrdinalIgnoreCase))
+        {
+            kpi1Label = "Total Collected (Paid)";
+            kpi1Val = Peso(collectedTotal);
+            kpi2Label = "Total Net Sales";
+            kpi2Val = Peso(netSales);
+            kpi3Label = "Outstanding Balance";
+            kpi3Val = Peso(balanceTotal);
+            kpi4Label = "Paid / Unpaid-Partial";
+            kpi4Val = $"{paidCount} / {unpaidOrPartialCount}";
+            kpi2Color = "#1B5E34";
+            kpi3Color = balanceTotal > 0 ? "#5C3A1E" : "#1B5E34";
+        }
+        else if (type.Contains("Inventory", StringComparison.OrdinalIgnoreCase))
+        {
+            kpi1Label = "Salable Stock Value";
+            kpi1Val = Peso(salableVal);
+            kpi2Label = "Total Stock Qty";
+            kpi2Val = stockQtySum.ToString("N2", Inv) + " kg";
+            kpi3Label = "Stock Items";
+            kpi3Val = stockItemsSum.ToString();
+            kpi4Label = "Net Sales";
+            kpi4Val = Peso(netSales);
+        }
+        else if (type.Contains("Expense", StringComparison.OrdinalIgnoreCase) || type.Contains("Production Cost", StringComparison.OrdinalIgnoreCase))
+        {
+            kpi1Label = "Total Expenses";
+            kpi1Val = Peso(expTotal);
+            kpi2Label = "Production Cost";
+            kpi2Val = Peso(prodCost);
+            kpi3Label = "Net Income";
+            kpi3Val = PesoSigned(netIncome);
+            kpi4Label = "Expense Entries";
+            kpi4Val = rExpenses.Count.ToString();
+        }
+        else if (type.Contains("Tax", StringComparison.OrdinalIgnoreCase))
+        {
+            kpi1Label = "Sales Tax Total";
+            kpi1Val = Peso(taxTotal);
+            kpi2Label = "Gross Sales";
+            kpi2Val = Peso(grossSales);
+            kpi3Label = "Net Sales";
+            kpi3Val = Peso(netSales);
+            kpi4Label = "Total Collected";
+            kpi4Val = Peso(collectedTotal);
+        }
+        else
+        {
+            kpi1Label = "Gross / Net Sales";
+            kpi1Val = $"{Peso(grossSales)} / {Peso(netSales)}";
+            kpi2Label = "Expenses / Prod. Cost";
+            kpi2Val = $"{Peso(expTotal)} / {Peso(prodCost)}";
+            kpi3Label = "Net Income / Tax";
+            kpi3Val = $"{PesoSigned(netIncome)} / {Peso(taxTotal)}";
+            kpi4Label = "Salable Stock Value";
+            kpi4Val = Peso(salableVal);
+        }
+
+        sb.Append($@"<!DOCTYPE html>
+<html>
+<head>
+<meta charset=""utf-8"" />
+<title>{safeType}</title>
+<style>
+  @page {{ size: A4 portrait; margin: 14mm; }}
+  body {{ font-family: 'Segoe UI', Arial, sans-serif; color: #0A2B1D; margin: 0; padding: 0; font-size: 11px; }}
+  .header {{ border-bottom: 3px solid #1B5E34; padding-bottom: 8px; margin-bottom: 14px; }}
+  .meta-row {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px; }}
+  .sub {{ font-size: 10px; color: #475569; }}
+  .badge {{ background: #E8F3EC; color: #1B5E34; border: 1px solid #C6DFCE; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 10px; }}
+  .kpi-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }}
+  .kpi {{ border: 1px solid #E2ECE6; border-radius: 10px; padding: 8px 10px; background: #FAFDFB; }}
+  .kpi-lbl {{ font-size: 8.5px; font-weight: 700; text-transform: uppercase; color: #64748B; }}
+  .kpi-val {{ font-size: 13px; font-weight: 800; color: #1B5E34; margin-top: 2px; }}
+  table {{ width: 100%; border-collapse: collapse; margin-top: 8px; }}
+  th {{ background: #1B5E34; color: #FFFFFF; text-align: left; padding: 7px 8px; font-size: 9.5px; text-transform: uppercase; }}
+  td {{ border-bottom: 1px solid #E2ECE6; padding: 6px 8px; font-size: 10px; }}
+  tr:nth-child(even) td {{ background: #F7FAF8; }}
+  .num {{ text-align: right; }}
+  .footer {{ margin-top: 16px; border-top: 1px solid #E2ECE6; padding-top: 8px; font-size: 9px; color: #64748B; display: flex; justify-content: space-between; }}
+</style>
+</head>
+<body>
+  <div class=""header"">
+    {brandLockupHtml}
+    <div class=""meta-row"">
+      <div class=""sub"">Branch: <strong>{safeBranch}</strong> · Period: <strong>{startDate:MMM d, yyyy}</strong> – <strong>{endDate:MMM d, yyyy}</strong></div>
+      <div class=""badge"">{safeType} · A4 PDF</div>
+    </div>
+  </div>
+
+  <div class=""kpi-grid"">
+    <div class=""kpi""><div class=""kpi-lbl"">{System.Net.WebUtility.HtmlEncode(kpi1Label)}</div><div class=""kpi-val"">{System.Net.WebUtility.HtmlEncode(kpi1Val)}</div></div>
+    <div class=""kpi""><div class=""kpi-lbl"">{System.Net.WebUtility.HtmlEncode(kpi2Label)}</div><div class=""kpi-val"" style=""color:{kpi2Color};"">{System.Net.WebUtility.HtmlEncode(kpi2Val)}</div></div>
+    <div class=""kpi""><div class=""kpi-lbl"">{System.Net.WebUtility.HtmlEncode(kpi3Label)}</div><div class=""kpi-val"" style=""color:{kpi3Color};"">{System.Net.WebUtility.HtmlEncode(kpi3Val)}</div></div>
+    <div class=""kpi""><div class=""kpi-lbl"">{System.Net.WebUtility.HtmlEncode(kpi4Label)}</div><div class=""kpi-val"" style=""color:{kpi4Color};"">{System.Net.WebUtility.HtmlEncode(kpi4Val)}</div></div>
+  </div>");
+
+        if (type.Contains("Inventory", StringComparison.OrdinalIgnoreCase))
+        {
+            sb.Append("<table><thead><tr><th>Item / Stock</th><th class=\"num\">Qty</th><th class=\"num\">Unit Price</th><th class=\"num\">Salable Amount</th></tr></thead><tbody>");
+            foreach (var it in rInv)
+                sb.Append($"<tr><td>{System.Net.WebUtility.HtmlEncode(it.Name)}</td><td class=\"num\">{it.Qty.ToString("N2", Inv)}</td><td class=\"num\">{Peso(it.UnitPrice)}</td><td class=\"num\">{Peso(it.TotalValue)}</td></tr>");
+            if (rInv.Count == 0)
+                sb.Append($"<tr><td colspan=\"4\">Total salable stock value: {Peso(salableVal)} ({salableStockQtyTotal.ToString("N2", Inv)} kg across {salableStockItemsCount} records)</td></tr>");
+            sb.Append("</tbody></table>");
+        }
+        else if (type.Contains("Expense", StringComparison.OrdinalIgnoreCase) || type.Contains("Production Cost", StringComparison.OrdinalIgnoreCase))
+        {
+            sb.Append("<table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th class=\"num\">Amount</th></tr></thead><tbody>");
+            foreach (var e in rExpenses.OrderByDescending(x => x.ExpenseDate))
+                sb.Append($"<tr><td>{e.ExpenseDate:MMM d, yyyy}</td><td>{System.Net.WebUtility.HtmlEncode(e.Category ?? "General")}</td><td>{System.Net.WebUtility.HtmlEncode(e.Description ?? "")}</td><td class=\"num\">{Peso(e.Amount)}</td></tr>");
+            sb.Append("</tbody></table>");
+        }
+        else if (type.Contains("Collection", StringComparison.OrdinalIgnoreCase))
+        {
+            sb.Append("<table><thead><tr><th>Sale No.</th><th>Date</th><th>Method</th><th class=\"num\">Net Total</th><th class=\"num\">Collected (Paid)</th><th class=\"num\">Balance</th><th>Status</th></tr></thead><tbody>");
+            foreach (var s in rOrders.OrderByDescending(x => x.SaleDate))
+            {
+                var total = OrderTotal(s);
+                var paid = s.AmountPaid;
+                var bal = Math.Max(0m, total - paid);
+                var method = GetStringProp(s.GetType(), s, "PaymentMethod", "PaymentMode", "Method", "PayMethod");
+                var methodLabel = string.IsNullOrWhiteSpace(method) ? "Unspecified" : method;
+                var refNo = string.IsNullOrWhiteSpace(s.ReferenceNumber) ? $"SO-{s.SaleId:D4}" : s.ReferenceNumber;
+                var statusLabel = bal <= 0m ? "Paid" : (paid > 0m ? "Partial" : "Unpaid");
+
+                sb.Append($"<tr><td>{System.Net.WebUtility.HtmlEncode(refNo)}</td><td>{s.SaleDate:MMM d, yyyy}</td><td>{System.Net.WebUtility.HtmlEncode(methodLabel)}</td><td class=\"num\">{Peso(total)}</td><td class=\"num\">{Peso(paid)}</td><td class=\"num\">{Peso(bal)}</td><td>{statusLabel}</td></tr>");
+            }
+            if (rOrders.Count == 0)
+                sb.Append("<tr><td colspan=\"7\">No collection records for this date range and branch.</td></tr>");
+            sb.Append("</tbody></table>");
+        }
+        else
+        {
+            sb.Append("<table><thead><tr><th>Sale No.</th><th>Date</th><th class=\"num\">Gross</th><th class=\"num\">Tax</th><th class=\"num\">Net Total</th><th class=\"num\">Paid</th></tr></thead><tbody>");
+            foreach (var s in rOrders.OrderByDescending(x => x.SaleDate))
+            {
+                var t = OrderTotal(s);
+                var g = s.GrossAmount > 0 ? s.GrossAmount : t;
+                var tx = s.TaxAmount > 0 ? s.TaxAmount : Math.Round(t - (t / 1.12m), 2, MidpointRounding.AwayFromZero);
+                var refNo = string.IsNullOrWhiteSpace(s.ReferenceNumber) ? $"SO-{s.SaleId:D4}" : s.ReferenceNumber;
+                sb.Append($"<tr><td>{System.Net.WebUtility.HtmlEncode(refNo)}</td><td>{s.SaleDate:MMM d, yyyy}</td><td class=\"num\">{Peso(g)}</td><td class=\"num\">{Peso(tx)}</td><td class=\"num\">{Peso(t)}</td><td class=\"num\">{Peso(s.AmountPaid)}</td></tr>");
+            }
+            sb.Append("</tbody></table>");
+        }
+
+        sb.Append($@"
+  <div class=""footer"">
+    <span>AgriNexus Financial Report · Generated {DateTime.Now:MMM d, yyyy h:mm tt}</span>
+    <span>Save as PDF in print dialog (Paper size: A4)</span>
+  </div>
+</body>
+</html>");
+
+        return sb.ToString();
+    }
 }
